@@ -542,3 +542,14 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 .historique-tete { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e3); flex-wrap: wrap; font-family: var(--police-titre); font-size: var(--t-l); font-weight: 600; }
 .historique-tete small { font-family: var(--police); font-size: var(--t-s); font-weight: 600; color: var(--encre-3); }
 .historique-tete small b { color: var(--encre); font-weight: 750; }
+
+/* ---- En stock / Importés de Chine : bande de couleur (couleurs.css) et titre cliquable ---- */
+.rangee-source { --c: var(--marque-texte); padding-block: var(--e5) var(--e4); background: var(--c-doux, transparent); box-shadow: 0 0 0 100vmax var(--c-doux, transparent); clip-path: inset(0 -100vmax); }
+.rangee-source .section-sous .ic { color: var(--c); }
+.titre-lien { display: inline-block; padding-block: 6px; color: inherit; text-decoration: none; }
+.titre-lien .insecable { white-space: nowrap; }
+.titre-lien .ic { --ic: 22px; display: inline-block; margin-left: 4px; vertical-align: -3px; color: var(--c, var(--marque-texte)); transition: transform .2s var(--ressort, ease); }
+.titre-lien:hover .ic, .titre-lien:focus-visible .ic { transform: translateX(3px); }
+.rangee-source .titre-section { color: var(--c); }
+.provenance-sous { display: flex; align-items: center; gap: 8px; padding: 10px 14px; margin: var(--e3) 0 var(--e4); border-radius: var(--r-m); background: var(--c-doux, var(--surface-2)); border-left: 3px solid var(--c, var(--marque-texte)); color: var(--encre-2); font-size: var(--t-s); font-weight: 600; }
+.provenance-sous .ic { --ic: 16px; color: var(--c, var(--marque-texte)); }

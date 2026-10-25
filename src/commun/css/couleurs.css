@@ -97,3 +97,11 @@
 :root:not([data-theme="dark"]) .avantages-compte li:nth-child(3n+3) { --c: var(--c3); --c-doux: var(--c3-doux); }
 :root:not([data-theme="dark"]) .avantages-compte .menu-icone { background: var(--c-doux); color: var(--c); }
 :root:not([data-theme="dark"]) .invitation-compte, :root:not([data-theme="dark"]) .page-connexion > .carte { border-top: 3px solid var(--c1); }
+
+/* ---- Accueil : « En stock » (vert forêt) et « Importés de Chine » (bleu ardoise), chacun sa bande de couleur ---- */
+:root:not([data-theme="dark"]) .rangee-source[data-source="local"], :root:not([data-theme="dark"]) .page-provenance[data-source="local"] { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .rangee-source[data-source="import"], :root:not([data-theme="dark"]) .page-provenance[data-source="import"] { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .rangee-source .titre-section::after { background: var(--c); }
+/* Thème sombre : mêmes repères, en teintes éteintes (le reste du thème sombre ne change pas). */
+:root[data-theme="dark"] .rangee-source[data-source="local"], :root[data-theme="dark"] .page-provenance[data-source="local"] { --c: #9FC6A2; --c-doux: #18211A; }
+:root[data-theme="dark"] .rangee-source[data-source="import"], :root[data-theme="dark"] .page-provenance[data-source="import"] { --c: #A3BAD4; --c-doux: #171F29; }
