@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
+import { Cabas } from '../../commun/js/logo.jsx';
 import { Photo, compresser } from '../../commun/js/medias.jsx';
 import { envoyerPhoto } from '../../commun/js/api.js';
 import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer } from '../../commun/js/interface.jsx';
@@ -131,7 +132,7 @@ function FormBanniere({ id, source }) {
             <div class="apercu-heros">
               {f.image ? <Photo m={f.image} alt="" tailles="640px" /> : <div class="media-vide"><Icone n="image" /></div>}
               <div class="ah-voile" />
-              <div class="ah-texte"><span class="ah-marque">{c.name}<i>.</i></span><small>{c.tagline}</small>{f.eyebrow ? <em>{f.eyebrow}</em> : null}<b>{f.title || 'Votre titre'}</b>{f.cta ? <span class="ah-cta">{f.cta}</span> : null}</div>
+              <div class="ah-texte"><span class="ah-marque"><Cabas taille={48} />{c.name}</span><small>{c.tagline}</small>{f.eyebrow ? <em>{f.eyebrow}</em> : null}<b>{f.title || 'Votre titre'}</b>{f.cta ? <span class="ah-cta">{f.cta}</span> : null}</div>
             </div>
           </section>
           <section class="carte formulaire">

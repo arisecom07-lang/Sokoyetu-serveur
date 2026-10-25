@@ -1,5 +1,6 @@
 // Sokoyetu (administration) — cadre : barre latérale (ordinateur), navigation du bas (téléphone), en-têtes de page.
 import { Icone } from '../../commun/js/icones.jsx';
+import { Cabas } from '../../commun/js/logo.jsx';
 import { classes } from '../../commun/js/outils.js';
 import { route, lien, retour } from '../routeur.js';
 import { cfg, aTraiter, compte } from '../etat.js';
@@ -34,7 +35,7 @@ export function BarreLaterale() {
   const actif = sectionActive(); const n = aTraiter.value; const c = cfg.value;
   return (
     <aside class="laterale" aria-label="Navigation de l’administration">
-      <a href={lien('/')} class="laterale-marque"><span class="marque">{c.name}<i>.</i></span><small>Gestion</small></a>
+      <a href={lien('/')} class="laterale-marque"><span class="marque"><Cabas taille={30} />{c.name}</span><small>Gestion</small></a>
       <nav>
         {SECTIONS.map(([chemin, cle, texte, icone]) => (
           <a key={cle} href={lien(chemin)} aria-current={actif === cle ? 'page' : undefined}>

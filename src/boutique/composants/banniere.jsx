@@ -57,7 +57,7 @@ export function Banniere() {
       <div class="heros-voile" aria-hidden="true" />
       <div class="heros-contenu">
         <p class="heros-kicker"><Icone n="avion" />Chine → {zones || c.city}</p>
-        <h1 class="heros-marque"><Marque /></h1>
+        <h1 class="heros-marque"><Marque grande /></h1>
         <p class="heros-slogan">{c.tagline}</p>
         <div class="heros-legende" key={k} aria-live="off">
           {b.eyebrow ? <span class="heros-surtitre">{b.eyebrow}</span> : null}

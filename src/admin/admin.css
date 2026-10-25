@@ -78,6 +78,12 @@
 /* Marque (mot « Sokoyetu ») */
 .marque { font-family: var(--police-titre); font-weight: 650; font-optical-sizing: auto; letter-spacing: -.02em; line-height: 1; white-space: nowrap; }
 .marque i { font-style: normal; color: var(--or); }
+.marque .cabas, .ah-marque .cabas { flex: none; max-width: none; width: auto; height: 1.12em; margin-top: -.12em; }
+.laterale-marque .marque, .ah-marque { display: inline-flex; align-items: center; gap: .3em; }
+.ah-marque { flex-direction: column; }
+.ah-marque .cabas { height: .6em; margin: 0; }
+.laterale-marque .marque .cabas { height: 30px; }
+.laterale-marque { align-items: center; }
 
 /* ---------- En-tête de page ---------- */
 .tete-page { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3); min-height: 56px; margin-bottom: var(--e5); }

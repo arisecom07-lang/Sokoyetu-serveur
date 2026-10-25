@@ -64,7 +64,7 @@ function Recu({ o }) {
   return (
     <article class="recu" aria-labelledby="recu-titre">
       <header class="recu-tete">
-        <Marque />
+        <Marque slogan />
         <div><h2 id="recu-titre">Reçu de commande</h2><small>{dateHeure(p.paidAt || o.createdAt)}</small></div>
       </header>
       <div class="recu-numero">
@@ -82,6 +82,12 @@ function Recu({ o }) {
       <div class="recu-trait" aria-hidden="true" />
       <Articles o={o} />
       <Montants o={o} libelleTotal="Total payé" />
+      {p.status !== 'refunded' ? (
+        <div class="recu-cachet">
+          <p><b>Payée et confirmée</b><small>{dateHeure(p.paidAt || o.createdAt)}</small></p>
+          <span class="recu-timbre" role="img" aria-label={`Timbre ${c.name} : commande payée`} />
+        </div>
+      ) : null}
       <footer class="recu-pied">
         {p.test ? <p><b>Commande de test :</b> aucun argent n’a été débité.</p> : null}
         <p>Gardez ce numéro : avec votre téléphone, il permet de retrouver la commande depuis n’importe quel appareil (Mon compte → Retrouver une commande).</p>
