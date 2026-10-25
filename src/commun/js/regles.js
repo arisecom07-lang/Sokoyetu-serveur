@@ -17,7 +17,17 @@ const OPERATEURS = {
   mpesa: { label: 'M-Pesa', sub: 'Vodacom', color: '#E11D2A', init: 'M' },
   airtel: { label: 'Airtel Money', sub: 'Airtel', color: '#D9001B', init: 'A' },
   orange: { label: 'Orange Money', sub: 'Orange', color: '#F07800', init: 'O' },
+  afrimoney: { label: 'Afrimoney', sub: 'Africell', color: '#6B2C91', init: 'A' },
   illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I' }
+};
+
+/*
+ * Fournisseurs de paiement automatique. Le serveur choisit le sien (fichier sokoyetu.env, script paiement.sh) ;
+ * sans fournisseur, la boutique n'encaisse pas. « simulation » sert aux essais : aucun argent ne circule.
+ */
+const FOURNISSEURS = {
+  simulation: { label: 'Mode test (simulation)', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'illico'] },
+  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney'] }
 };
 
 const ZONES_DEFAUT = [
@@ -41,11 +51,12 @@ const CONFIG_DEFAUT = {
   returns: 'Échange possible sous 7 jours sur les articles non portés, avec leur étiquette.',
   zones: ZONES_DEFAUT,
   payments: {
-    mpesa: { enabled: true, number: '', accountName: '', ussd: '' },
-    airtel: { enabled: true, number: '', accountName: '', ussd: '' },
-    orange: { enabled: true, number: '', accountName: '', ussd: '' },
-    illico: { enabled: false, number: '', accountName: '', ussd: '' }
+    mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false }
   },
+  /* Paiement automatique : le client paie dans l'application, la commande n'est validée qu'après confirmation du fournisseur. */
+  payment: { provider: '', holdMinutes: 30 },
+  /* Frais de service de la boutique, ajoutés au montant du panier (articles, après réduction). */
+  serviceFeePct: 2,
   legal: { company: '', address: '', email: '', rccm: '', idnat: '', nif: '', texts: {}, updatedAt: 0 },
   analytics: { provider: '', id: '' },
   setup: {}
@@ -54,6 +65,8 @@ const CONFIG_DEFAUT = {
 const MAX_LIGNES = 50;
 const MAX_QTE = 20;
 const ALPHABET_NUMERO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const MAX_TENTATIVES = 5;
+const JOUR = 864e5;
 
 /* ---------- Outils ---------- */
 
@@ -101,6 +114,11 @@ const valider = {
     if ((/^\+/.test(brut) || /^00/.test(chiffres(brut))) && d.length >= 10 && d.length <= 15) return '+' + d;
     return '';
   },
+  /* Numéro Mobile Money à débiter : numéro congolais 08… ou 09… (10 chiffres). */
+  mobileMoney(s) {
+    const t = valider.telephone(s);
+    return /^0[89]\d{8}$/.test(t) ? t : '';
+  },
   nom(s) {
     const v = nettoyer(s, 80).replace(/\s+/g, ' ');
     return v.length >= 2 && v.length <= 60 && /^[A-Za-zÀ-ÖØ-öø-ÿŒœŸ'’ .-]+$/.test(v) && /[A-Za-zÀ-ÖØ-öø-ÿŒœŸ]/.test(v) ? v : '';
@@ -138,14 +156,22 @@ function config(brut) {
   c.importDays = int(c.importDays) || 20;
   c.lowStock = int(c.lowStock);
   c.freeShippingOver = Math.max(0, arrondi(c.freeShippingOver));
+  c.serviceFeePct = Math.min(20, Math.max(0, arrondi(c.serviceFeePct)));
+  c.payment = estObjet(c.payment) ? c.payment : {};
+  c.payment.provider = FOURNISSEURS[c.payment.provider] ? c.payment.provider : '';
+  c.payment.holdMinutes = Math.min(120, Math.max(5, int(c.payment.holdMinutes) || 30));
   return c;
 }
 const zoneDe = (cfg, id) => (cfg.zones || []).find((z) => z.id === id) || null;
 const estRetrait = (z) => !!z && (typeof z.pickup === 'boolean' ? z.pickup : (!num(z.fee) && !num(z.days)));
+/* Opérateurs proposés au client : activés dans les réglages et pris en charge par le fournisseur choisi. */
 function moyensDePaiement(cfg) {
-  return Object.keys(OPERATEURS).filter((k) => cfg.payments && cfg.payments[k] && cfg.payments[k].enabled && chiffres(cfg.payments[k].number))
-    .map((k) => Object.assign({ k }, OPERATEURS[k], { number: cfg.payments[k].number, accountName: cfg.payments[k].accountName || '', ussd: cfg.payments[k].ussd || '' }));
+  const f = FOURNISSEURS[cfg.payment && cfg.payment.provider];
+  if (!f) return [];
+  return Object.keys(OPERATEURS).filter((k) => f.operateurs.indexOf(k) >= 0 && cfg.payments && cfg.payments[k] && cfg.payments[k].enabled)
+    .map((k) => Object.assign({ k }, OPERATEURS[k]));
 }
+const fraisService = (cfg, montantPanier) => arrondi(Math.max(0, num(montantPanier)) * num(cfg.serviceFeePct) / 100);
 
 /* ---------- Produits ---------- */
 
@@ -212,7 +238,8 @@ function verifierRemise(remise, code, sousTotal, maintenant) {
 /*
  * opts = { cfg, produit: (id) => doc|null, lignes: [{ productId, color, size, qty, title? }], zoneId,
  *          code: 'BIENVENUE10', remise: doc|null, maintenant }
- * Renvoie { lignes, problemes, sousTotal, remise, livraison, total, zone }.
+ * Renvoie { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct, total, zone }.
+ * frais : frais de service de la boutique (cfg.serviceFeePct % du panier, après réduction).
  * Chaque problème = { code, message, ligne? } ; aucun problème = la commande peut être payée telle quelle.
  */
 function devis(opts) {
@@ -263,10 +290,11 @@ function devis(opts) {
   const zone = zoneDe(cfg, opts.zoneId);
   if (!zone) problemes.push({ code: 'zone', message: 'Choisissez une zone de livraison.' });
   let livraison = zone ? arrondi(zone.fee) : 0;
-  const net = sousTotal - (remise ? remise.amount : 0);
+  const net = Math.max(0, sousTotal - (remise ? remise.amount : 0));
   if (num(cfg.freeShippingOver) > 0 && net >= num(cfg.freeShippingOver)) livraison = 0;
-  const total = arrondi(Math.max(0, net + livraison));
-  return { lignes, problemes, sousTotal, remise, livraison, total, zone };
+  const frais = fraisService(cfg, net);
+  const total = arrondi(net + livraison + frais);
+  return { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, zone };
 }
 
 /* ---------- Commande ---------- */
@@ -283,37 +311,47 @@ function reservations(lignes, produit) {
   });
 }
 
+/* Livraison estimée : délai de la zone, plus le délai d'import si un article vient de Chine. Au moins un jour, sauf retrait. */
+function livraisonEstimee(cfg, lignes, zone, maintenant) {
+  const importe = (lignes || []).some((l) => l && l.source === 'import');
+  let jours = int(zone && zone.days) + (importe ? int(cfg.importDays) : 0);
+  if (!jours && !estRetrait(zone)) jours = 1;
+  return { days: jours, at: (maintenant || Date.now()) + jours * JOUR, import: importe };
+}
+
 /*
- * Construit la commande d'un client à partir de sa saisie (corps de la requête).
- * Les erreurs de saisie (nom, téléphone, adresse, paiement…) bloquent : ErreurCommande.
- * Un changement de catalogue survenu après le paiement (stock, prix, code promo) ne bloque pas :
- * la commande est enregistrée avec ses « points à vérifier », pour que l'argent envoyé ne soit jamais perdu.
+ * Prépare la commande d'un client à partir de sa saisie (corps de la requête), avant la demande de paiement.
+ * Tout ce qui empêcherait de livrer exactement ce qui est payé bloque ici (ErreurCommande) : saisie invalide,
+ * stock, prix ou code promo changés, total différent de celui affiché. Le client ne paie jamais un autre montant.
+ * La commande naît « en attente de paiement », stock réservé ; elle n'est validée qu'à la confirmation du fournisseur.
  */
 function preparerCommande(opts) {
   const cfg = opts.cfg; const d = estObjet(opts.saisie) ? opts.saisie : {};
   const now = opts.maintenant || Date.now();
   const stop = (m, champ) => { throw new ErreurCommande(m, champ); };
-  if (!d.termsAccepted) stop('Acceptez les conditions de vente pour confirmer.', 'terms');
+  if (!d.termsAccepted) stop('Acceptez les conditions de vente pour payer.', 'terms');
   const client = estObjet(d.customer) ? d.customer : {}; const liv = estObjet(d.shipping) ? d.shipping : {}; const pay = estObjet(d.payment) ? d.payment : {};
   const name = valider.nom(client.name); if (!name) stop('Indiquez votre nom (2 à 60 lettres).', 'name');
   const phone = valider.telephone(client.phone); if (!phone) stop('Numéro de téléphone invalide. Exemple : 099 123 4567.', 'phone');
   const zone = zoneDe(cfg, liv.zoneId); if (!zone) stop('Choisissez une zone de livraison.', 'zone');
   const retrait = estRetrait(zone);
   const address = nettoyer(liv.address, 120); if (!retrait && address.length < 4) stop('Indiquez votre adresse de livraison.', 'address');
-  if (!Array.isArray(d.items) || !d.items.length) stop('Votre panier est vide.');
-  if (d.items.length > MAX_LIGNES) stop('Trop d’articles dans une seule commande.');
-  for (const it of d.items) { const q = Number(it && it.qty); if (!(q >= 1 && q <= MAX_QTE && Math.floor(q) === q)) stop('Quantité invalide dans le panier.'); }
+  if (!Array.isArray(d.items) || !d.items.length) stop('Votre panier est vide.', 'panier');
+  if (d.items.length > MAX_LIGNES) stop('Trop d’articles dans une seule commande.', 'panier');
+  for (const it of d.items) { const q = Number(it && it.qty); if (!(q >= 1 && q <= MAX_QTE && Math.floor(q) === q)) stop('Quantité invalide dans le panier.', 'panier'); }
+  if (!cfg.payment || !FOURNISSEURS[cfg.payment.provider]) stop('Le paiement en ligne n’est pas encore ouvert. Revenez bientôt.', 'method');
   const moyen = moyensDePaiement(cfg).find((m) => m.k === pay.method);
   if (!moyen) stop('Ce mode de paiement n’est pas disponible. Choisissez-en un autre.', 'method');
-  const ref = valider.reference(pay.ref); if (!ref) stop('Code de transaction invalide : 4 à 30 lettres ou chiffres, tel qu’il figure dans le SMS.', 'ref');
-  let sender = phone;
-  if (String(pay.sender || '').trim()) { sender = valider.telephone(pay.sender); if (!sender) stop('Numéro d’envoi invalide.', 'sender'); }
+  const payeur = valider.mobileMoney(pay.phone || client.phone);
+  if (!payeur) stop(`Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, 'payphone');
 
   const dv = devis({ cfg, produit: opts.produit, lignes: d.items, zoneId: zone.id, code: d.discountCode, remise: opts.remise, maintenant: now });
-  const problemes = dv.problemes.filter((p) => p.code !== 'zone').map((p) => p.message);
+  const bloquants = dv.problemes.filter((p) => p.code !== 'zone');
+  if (bloquants.length) stop(bloquants.map((p) => p.message).join(' '), bloquants.some((p) => p.code === 'remise') && bloquants.length === 1 ? 'remise' : 'panier');
   const annonce = d.total === undefined || d.total === null || d.total === '' ? null : arrondi(d.total);
-  if (annonce === null || Math.abs(annonce - dv.total) > 0.009) problemes.push(`Le client a vu un total de ${annonce === null ? '?' : dollars(annonce)} ; le total recalculé est de ${dollars(dv.total)}. Vérifiez le montant reçu.`);
+  if (annonce === null || Math.abs(annonce - dv.total) > 0.009) stop(`Le montant à payer est maintenant de ${dollars(dv.total)}. Vérifiez-le avant de payer.`, 'total');
   const reserve = reservations(dv.lignes, opts.produit);
+  const fournisseur = cfg.payment.provider;
 
   const doc = {
     number: opts.numero, createdAt: now, termsAcceptedAt: now, phone: chiffres(phone),
@@ -322,39 +360,50 @@ function preparerCommande(opts) {
     note: nettoyer(d.note, 300),
     items: dv.lignes.map((l) => { const o = Object.assign({}, l); delete o.available; return o; }),
     subtotal: dv.sousTotal, discount: dv.remise ? { code: dv.remise.code, amount: dv.remise.amount } : null,
-    shippingFee: dv.livraison, total: dv.total, declaredTotal: annonce,
-    payment: { method: moyen.k, label: moyen.label, ref, sender, status: 'pending' },
-    fulfillment: 'unfulfilled', status: 'open', issues: problemes,
+    shippingFee: dv.livraison, serviceFee: dv.frais, serviceFeePct: dv.fraisPct, total: dv.total,
+    payment: { method: moyen.k, label: moyen.label, phone: payeur, provider: fournisseur, test: fournisseur === 'simulation', status: 'pending', attempts: 0, startedAt: now, providerId: '', reference: '', error: '' },
+    expiresAt: now + cfg.payment.holdMinutes * 60000,
+    delivery: livraisonEstimee(cfg, dv.lignes, zone, now),
+    fulfillment: 'unfulfilled', status: 'open', issues: [],
     stockApplied: true, reserved: reserve,
-    timeline: [{ at: now, text: 'Commande passée par le client' }].concat(problemes.length ? [{ at: now, text: 'Points à vérifier signalés automatiquement' }] : [])
+    timeline: [{ at: now, text: 'Commande enregistrée, en attente du paiement' }]
   };
   return { commande: doc, reserve };
 }
 
+/* Numéro de commande : 6 caractères faciles à lire et à dicter (le serveur vérifie qu'il n'existe pas déjà). */
 function numeroCommande(aleatoire) {
   let s = '';
-  for (let i = 0; i < 5; i++) s += ALPHABET_NUMERO[Math.floor((aleatoire ? aleatoire() : Math.random()) * ALPHABET_NUMERO.length) % ALPHABET_NUMERO.length];
+  for (let i = 0; i < 6; i++) s += ALPHABET_NUMERO[Math.floor((aleatoire ? aleatoire() : Math.random()) * ALPHABET_NUMERO.length) % ALPHABET_NUMERO.length];
   return s;
 }
+const numeroValide = (s) => /^[A-Z0-9]{5,8}$/.test(String(s || '').trim().replace(/^#/, '').toUpperCase());
+const numeroNettoye = (s) => String(s || '').trim().replace(/^#/, '').replace(/\s+/g, '').toUpperCase();
 
 /* ---------- Statuts ---------- */
 
 const estAnnulee = (o) => o.status === 'cancelled';
 const estPayee = (o) => !!o.payment && o.payment.status === 'paid';
 const estRetraitCmd = (o) => !!(o.shipping && o.shipping.pickup);
-const aVerifier = (o) => o.status === 'open' && !!o.payment && o.payment.status === 'pending';
+/* Paiement demandé au client, pas encore confirmé (ou refusé, avec une nouvelle tentative possible). */
+const enAttentePaiement = (o) => o.status === 'open' && !!o.payment && (o.payment.status === 'pending' || o.payment.status === 'failed');
+/* Commande annulée d'elle-même : le paiement n'est jamais arrivé. */
+const nonAboutie = (o) => o.status === 'cancelled' && !!o.payment && o.payment.status === 'expired';
+const aVerifier = enAttentePaiement;
 const aPreparer = (o) => o.status === 'open' && estPayee(o) && (o.fulfillment === 'unfulfilled' || o.fulfillment === 'preparing' || !o.fulfillment);
 const aExpedier = (o) => o.status === 'open' && estPayee(o) && o.fulfillment === 'shipped';
-const aTraiter = (o) => aVerifier(o) || aPreparer(o);
+const aTraiter = (o) => aPreparer(o);
 
 function statutClient(o) {
   const r = estRetraitCmd(o);
+  if (nonAboutie(o)) return { label: 'Annulée : paiement non reçu', ton: 'danger', etape: -1 };
   if (estAnnulee(o)) return { label: o.payment && o.payment.status === 'refunded' ? 'Annulée · remboursée' : 'Annulée', ton: 'danger', etape: -1 };
   if (o.fulfillment === 'delivered') return { label: r ? 'Retirée' : 'Livrée', ton: 'ok', etape: 4 };
   if (o.fulfillment === 'shipped') return { label: r ? 'Prête au retrait' : 'En route', ton: 'info', etape: 3 };
   if (o.fulfillment === 'preparing') return { label: 'En préparation', ton: 'info', etape: 2 };
-  if (estPayee(o)) return { label: 'Paiement confirmé', ton: 'ok', etape: 1 };
-  return { label: 'Paiement en vérification', ton: 'warn', etape: 0 };
+  if (estPayee(o)) return { label: 'Payée', ton: 'ok', etape: 1 };
+  if (o.payment && o.payment.status === 'failed') return { label: 'Paiement non abouti', ton: 'danger', etape: 0 };
+  return { label: 'Paiement en cours', ton: 'warn', etape: 0 };
 }
 function etapesSuivi(o) {
   const r = estRetraitCmd(o);
@@ -367,10 +416,68 @@ function etapesSuivi(o) {
   ];
 }
 
+/* ---------- Paiement automatique (exécuté par le serveur, à partir des réponses du fournisseur) ---------- */
+
+/* '' si une nouvelle demande de paiement est possible, sinon la raison. */
+function relancePossible(o, maintenant) {
+  const now = maintenant || Date.now();
+  if (o.status !== 'open') return 'Cette commande est annulée.';
+  if (estPayee(o)) return 'Cette commande est déjà payée.';
+  if (num(o.expiresAt) && now > num(o.expiresAt)) return 'Le délai de paiement est dépassé. Repassez votre commande.';
+  if (int(o.payment && o.payment.attempts) >= MAX_TENTATIVES) return 'Trop de tentatives de paiement pour cette commande. Repassez votre commande.';
+  return '';
+}
+/* Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, methode, label, telephone } */
+function paiementEnvoye(o, opts) {
+  const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
+  const relance = int(c.payment.attempts) > 0;
+  if (opts.methode) { c.payment.method = opts.methode; c.payment.label = opts.label || c.payment.label; }
+  if (opts.telephone) c.payment.phone = opts.telephone;
+  if (c.payment.providerId) c.payment.previous = (Array.isArray(c.payment.previous) ? c.payment.previous : []).concat([c.payment.providerId]).slice(-MAX_TENTATIVES);
+  c.payment.status = 'pending'; c.payment.providerId = String(opts.providerId || ''); c.payment.attempts = int(c.payment.attempts) + 1;
+  c.payment.startedAt = now; c.payment.error = ''; c.payment.checkedAt = 0;
+  c.timeline.push({ at: now, text: `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
+  return c;
+}
+/* Le fournisseur confirme le paiement. Renvoie { commande, stock, entrees } : un paiement arrivé après l'annulation automatique rouvre la commande. */
+function paiementConfirme(o, opts) {
+  const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
+  if (estPayee(c)) return { commande: c, stock: '', entrees: [] };
+  let stock = ''; let entrees = [];
+  if (c.status === 'cancelled') {
+    c.status = 'open'; delete c.cancelledAt; delete c.cancelReason;
+    if (!c.stockApplied) { entrees = Array.isArray(c.reserved) ? c.reserved : []; c.stockApplied = true; stock = 'reserver'; }
+    c.issues = (c.issues || []).concat(['Paiement confirmé après l’annulation automatique : vérifiez que les articles sont toujours disponibles.']);
+  }
+  c.payment.status = 'paid'; c.payment.paidAt = now; c.payment.error = '';
+  if (opts.reference) c.payment.reference = String(opts.reference).slice(0, 80);
+  // Le délai de livraison court à partir du paiement.
+  if (c.delivery && c.delivery.days !== undefined) c.delivery = Object.assign({}, c.delivery, { at: now + int(c.delivery.days) * JOUR });
+  c.timeline.push({ at: now, text: `Paiement ${c.payment.label} confirmé${c.payment.test ? ' (mode test)' : ''}` });
+  return { commande: c, stock, entrees };
+}
+/* Le fournisseur refuse le paiement (solde insuffisant, code annulé…) : le client peut réessayer tant que la commande n'a pas expiré. */
+function paiementEchoue(o, opts) {
+  const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
+  if (estPayee(c) || c.status !== 'open') return c;
+  c.payment.status = 'failed'; c.payment.error = nettoyer(opts.raison, 160) || 'Paiement refusé ou annulé.'; c.payment.failedAt = now;
+  c.timeline.push({ at: now, text: `Paiement non abouti : ${c.payment.error}` });
+  return c;
+}
+/* Délai dépassé sans paiement : la commande est annulée et ses articles remis en vente. */
+function paiementExpire(o, opts) {
+  const c = copie(o); const now = (opts && opts.maintenant) || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
+  if (estPayee(c) || c.status !== 'open') return { commande: c, stock: '', entrees: [] };
+  const entrees = c.stockApplied && Array.isArray(c.reserved) ? c.reserved : [];
+  c.status = 'cancelled'; c.cancelledAt = now; c.cancelReason = 'paiement'; c.payment.status = 'expired'; c.stockApplied = false;
+  c.timeline.push({ at: now, text: 'Paiement non reçu dans le délai : commande annulée, articles remis en vente' });
+  return { commande: c, stock: entrees.length ? 'restituer' : '', entrees };
+}
+
 /* ---------- Étapes de commande (administration, exécutées par le serveur) ---------- */
 
 const ACTIONS = {
-  paid: 'Paiement confirmé', preparing: 'Préparation commencée', shipped: 'Commande expédiée', delivered: 'Commande livrée',
+  paid: 'Paiement confirmé manuellement par la boutique', preparing: 'Préparation commencée', shipped: 'Commande expédiée', delivered: 'Commande livrée',
   cancel: 'Commande annulée', reopen: 'Commande rouverte', refund: 'Remboursement effectué', note: 'Note enregistrée'
 };
 
@@ -403,17 +510,17 @@ function etapeCommande(o, action, opts) {
   if (action === 'paid') {
     if (!ouverte) stop('Cette commande est annulée.');
     if (c.payment.status === 'paid') stop('Le paiement est déjà confirmé.');
-    c.payment.status = 'paid'; c.payment.paidAt = now; reserver();
+    c.payment.status = 'paid'; c.payment.paidAt = now; c.payment.manual = true; reserver();
   } else if (action === 'preparing') {
-    if (!ouverte || c.payment.status !== 'paid') stop('Confirmez d’abord le paiement.');
+    if (!ouverte || c.payment.status !== 'paid') stop('Le paiement n’est pas encore confirmé.');
     if (c.fulfillment && c.fulfillment !== 'unfulfilled') stop('La préparation a déjà commencé.');
     c.fulfillment = 'preparing'; c.preparingAt = now; reserver();
   } else if (action === 'shipped') {
-    if (!ouverte || c.payment.status !== 'paid') stop('Confirmez d’abord le paiement.');
+    if (!ouverte || c.payment.status !== 'paid') stop('Le paiement n’est pas encore confirmé.');
     if (c.fulfillment === 'shipped' || c.fulfillment === 'delivered') stop('La commande est déjà partie.');
     c.fulfillment = 'shipped'; c.shippedAt = now; reserver();
   } else if (action === 'delivered') {
-    if (!ouverte || c.payment.status !== 'paid') stop('Confirmez d’abord le paiement.');
+    if (!ouverte || c.payment.status !== 'paid') stop('Le paiement n’est pas encore confirmé.');
     if (c.fulfillment === 'delivered') stop('La commande est déjà livrée.');
     c.fulfillment = 'delivered'; c.deliveredAt = now; reserver();
   } else if (action === 'cancel') {
@@ -424,6 +531,7 @@ function etapeCommande(o, action, opts) {
     c.stockApplied = false;
   } else if (action === 'reopen') {
     if (ouverte) stop('La commande est déjà ouverte.');
+    if (c.payment.status === 'expired') stop('Le paiement de cette commande n’est jamais arrivé : le client doit repasser commande.');
     c.status = 'open'; delete c.cancelledAt; reserver();
   } else if (action === 'refund') {
     if (ouverte || c.payment.status !== 'paid') stop('Seule une commande annulée et payée peut être remboursée.');
@@ -445,23 +553,25 @@ function incoherences(o) {
   const items = o.items || [];
   const st = arrondi(items.reduce((a, i) => a + num(i.price) * int(i.qty), 0));
   if (Math.abs(st - num(o.subtotal)) > 0.01) out.push(`Le sous-total (${dollars(o.subtotal)}) ne correspond pas aux articles (${dollars(st)}).`);
-  const calc = arrondi(st - num(o.discount && o.discount.amount) + num(o.shippingFee));
+  const calc = arrondi(st - num(o.discount && o.discount.amount) + num(o.shippingFee) + num(o.serviceFee));
   if (Math.abs(calc - num(o.total)) > 0.01) out.push(`Le total (${dollars(o.total)}) ne correspond pas au calcul (${dollars(calc)}).`);
   return out.filter((v, i, a) => a.indexOf(v) === i);
 }
 
 function margeCommande(o) {
   const couts = (o.items || []).reduce((a, i) => a + num(i.cost) * int(i.qty), 0);
-  return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - num(o.discount && o.discount.amount) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
+  /* Les frais de service reviennent à la boutique : ils s'ajoutent à la marge. */
+  return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - num(o.discount && o.discount.amount) + num(o.serviceFee) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
 }
 
 module.exports = {
-  OPERATEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, ACTIONS,
+  OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, ACTIONS, JOUR,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
-  config, zoneDe, estRetrait, moyensDePaiement,
+  config, zoneDe, estRetrait, moyensDePaiement, fraisService,
   cleVariante, couleursDe, taillesDe, aDesOptions, estImport, estEnVente, clesVariantes, stockDe, stockTotal, prixBarre, pourcentRemise, imagePrincipale, ajusterStock,
   montantRemise, verifierRemise, devis,
-  ErreurCommande, reservations, preparerCommande, numeroCommande,
-  estAnnulee, estPayee, estRetraitCmd, aVerifier, aPreparer, aExpedier, aTraiter, statutClient, etapesSuivi,
+  ErreurCommande, reservations, livraisonEstimee, preparerCommande, numeroCommande, numeroValide, numeroNettoye,
+  estAnnulee, estPayee, estRetraitCmd, enAttentePaiement, nonAboutie, aVerifier, aPreparer, aExpedier, aTraiter, statutClient, etapesSuivi,
+  relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire,
   etapeCommande, reservationsAnciennes, incoherences, margeCommande
 };

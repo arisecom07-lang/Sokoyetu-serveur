@@ -1,3 +1,26 @@
+# Sokoyetu — version 2.1 (octobre 2026) : paiement automatique
+
+## Ce qui change pour vous
+
+- **Le client paie dans l'application.** Il choisit son opérateur (M-Pesa, Airtel Money, Orange Money, Afrimoney), indique le numéro à débiter et touche **Payer** ; la demande s'affiche sur son téléphone, il la valide avec son code PIN. Plus de numéro à recopier, plus de code de transaction à saisir, plus de WhatsApp dans l'achat.
+- **La commande n'est validée qu'à la confirmation de l'opérateur.** Le serveur interroge FlexPay (agrégateur Mobile Money de la RDC) et ne croit jamais une notification sans la revérifier.
+- **Reçu de commande** dès le paiement : numéro unique de 6 caractères, articles, frais, total payé, opérateur, référence de la transaction, date de livraison prévue. À partager ou enregistrer en PDF.
+- **Retrouver une commande** depuis n'importe quel téléphone avec son numéro et le téléphone du client (Mon compte → Retrouver une commande).
+- **Frais de service de 2 %** ajoutés au panier (après réduction, hors livraison) et affichés avant de payer : ils reviennent à la boutique, réglables de 0 à 20 % dans Réglages → Paiements.
+- **Paiement refusé ?** Le client réessaie sur la même commande, avec le même numéro ou un autre opérateur (5 tentatives). **Jamais payé ?** La commande s'annule seule après 30 minutes (réglable) et le stock revient en vente.
+- **Administration** : l'alerte sonne à la **commande payée** (plus à la commande commencée) ; plus de paiement à vérifier à la main ; nouveaux filtres « Paiement en cours » et « Non abouties » ; le tableau de bord ne compte que les ventes payées, frais de service inclus dans la marge. Un bouton de secours « Marquer comme payée à la main » reste disponible, avec confirmation.
+- **Brancher le paiement** : une commande sur le serveur, `sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'` (le jeton reste sur le serveur). Un **mode test** sans argent permet d'essayer tout le parcours.
+
+## Détails techniques
+
+- Nouvelles routes : `paiement/{id}` (état, revérifié auprès du fournisseur), `paiement/{id}/relancer`, `notification/{fournisseur}`, `retrouver` ; tâche chaque minute pour les paiements en cours et les échéances.
+- Les commandes ne se modifient plus que par les routes du serveur (règle de mise à jour fermée, même pour l'administration).
+- Délai de livraison prévu calculé au moment du paiement (zone + délai d'import le cas échéant).
+- Case « J'accepte les conditions » refaite : plus de liens à l'intérieur d'un bouton (accessibilité).
+- Tests : 20 tests du serveur (paiement accepté, refusé puis relancé, expiré, notification forgée, numéro retrouvé), parcours complet dans de vrais navigateurs, démo, contrôle d'accessibilité des nouvelles pages en clair et en sombre.
+
+---
+
 # Sokoyetu — version 2.0 (octobre 2026)
 
 Refonte complète, même concept : la boutique d'import Chine → Bukavu / Goma, payée par Mobile Money à la commande, et son administration. Une seule base de code remplace les deux versions qui existaient (l'interface d'essai dans Claude et le paquet serveur, plus ancien).

@@ -76,8 +76,10 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 .case { display: grid; grid-template-columns: auto 1fr; gap: var(--e3); align-items: start; text-align: left; font-size: var(--t-m); line-height: 1.45; cursor: pointer; }
 .case-boite { width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--ligne-saisie); background: var(--surface); display: grid; place-items: center; color: var(--sur-ebene); transition: background-color var(--rapide), border-color var(--rapide); }
 .case-boite .ic { --ic: 16px; opacity: 0; transform: scale(.6); transition: opacity var(--rapide), transform var(--moyen) var(--ressort); }
-.case[aria-checked="true"] .case-boite { background: var(--ebene); border-color: var(--ebene); }
-.case[aria-checked="true"] .case-boite .ic { opacity: 1; transform: none; }
+.case > button.case-boite { position: relative; padding: 0; cursor: pointer; }
+.case > button.case-boite::after { content: ''; position: absolute; inset: -10px; } /* cible tactile de 44 px */
+.case[data-coche="oui"] .case-boite { background: var(--ebene); border-color: var(--ebene); }
+.case[data-coche="oui"] .case-boite .ic { opacity: 1; transform: none; }
 
 .bascule-ligne { display: flex; align-items: center; gap: var(--e3); width: 100%; text-align: left; padding: var(--e1) 0; min-height: var(--cible); cursor: pointer; }
 .bascule-ligne .texte { flex: 1; min-width: 0; }

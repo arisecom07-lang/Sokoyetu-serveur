@@ -28,6 +28,28 @@ await controler('Boutique · produit', BASE + '/p/ex-p08/chemise-en-chambray', '
 await controler('Boutique · recherche', BASE + '/recherche?q=sac', '.page');
 await controler('Boutique · panier', BASE + '/panier', '.page', async () => { });
 await controler('Boutique · infos', BASE + '/infos/conditions', '.page');
+// Paiement, reçu et suivi : deux commandes de test (paiement accepté, paiement refusé), suivies sur ce téléphone.
+const json = (corps) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
+async function commande(payeur) {
+  const items = [{ productId: 'ex-p15', qty: 1 }];
+  const dv = await (await fetch(BASE + '/api/sokoyetu/devis', json({ items, zoneId: 'retrait' }))).json();
+  const t = 'axe' + Date.now() + Math.random().toString(16).slice(2, 12) + 'abcdefghij';
+  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: '0991231234' }, shipping: { zoneId: 'retrait' }, items, payment: { method: 'mpesa', phone: payeur }, total: dv.total }))).json();
+  return { id: r.id, t };
+}
+const jetonAdmin = (await (await fetch(BASE + '/api/collections/admins/auth-with-password', json({ identity: 'admin@sokoyetu.test', password: 'Sokoyetu-2026' }))).json()).token;
+const article = await (await fetch(BASE + '/api/collections/products/records/ex-p15', { headers: { Authorization: jetonAdmin } })).json();
+await fetch(BASE + '/api/collections/products/records/ex-p15', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc: { ...article.doc, stock: 10 } }) });
+const payee = await commande('0991231234'); const refusee = await commande('0991230000');
+await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee]);
+await controler('Boutique · commande, paiement', BASE + '/commander', '.page-commande', async () => {
+  await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
+  await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement');
+});
+await controler('Boutique · paiement refusé', BASE + '/paiement/' + refusee.id, '.paiement-attente.en-echec');
+await controler('Boutique · reçu', BASE + '/merci/' + payee.id, '.recu');
+await controler('Boutique · suivi', BASE + '/suivi/' + payee.id, '.page-suivi');
+await controler('Boutique · retrouver une commande', BASE + '/compte/retrouver', '.page-retrouver');
 await controler('Admin · connexion', ADMIN + '/', '.connexion-carte');
 await p.fill('input[type=email]', 'admin@sokoyetu.test'); await p.fill('input[autocomplete="current-password"]', 'Sokoyetu-2026'); await p.click('button[type=submit]'); await p.waitForSelector('.kpis');
 await controler('Admin · tableau de bord', ADMIN + '/#/', '.kpis');

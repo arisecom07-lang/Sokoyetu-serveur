@@ -6,10 +6,15 @@ import { toast } from '../commun/js/interface.jsx';
 
 export const compte = signal(Auth.charger() ? Auth.compte : null);
 export const pret = signal(false);          // données chargées
-export const etatServeur = signal({ version: '', ia: false });
+export const etatServeur = signal({ version: '', ia: false, paiement: { fournisseur: '', pret: false, test: false } });
 
 export const donnees = signal({ config: null, collections: [], banners: [], products: [], discounts: [], orders: [] });
-export const cfg = computed(() => R.config(donnees.value.config || {}));
+// Le fournisseur de paiement se règle sur le serveur (paiement.sh) : l'administration le lit dans l'état du serveur.
+export const paiementServeur = computed(() => etatServeur.value.paiement || { fournisseur: '', pret: false, test: false });
+export const cfg = computed(() => {
+  const c = donnees.value.config || {}; const p = paiementServeur.value;
+  return R.config({ ...c, payment: { ...(c.payment || {}), provider: p.pret ? p.fournisseur : '' } });
+});
 const parOrdre = (a, b) => (R.num(a.order) || 0) - (R.num(b.order) || 0);
 export const produits = computed(() => [...donnees.value.products].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)));
 export const rayons = computed(() => [...donnees.value.collections].sort(parOrdre));
@@ -26,7 +31,7 @@ export const clients = computed(() => {
     const k = o.phone || R.chiffres(o.customer && o.customer.phone); if (!k) continue;
     const c = m.get(k) || { tel: k, affiche: (o.customer && o.customer.phone) || k, nom: '', commandes: [], depense: 0, derniere: 0, zone: '' };
     c.commandes.push(o);
-    if (o.status !== 'cancelled') c.depense += R.num(o.total);
+    if (o.status !== 'cancelled' && R.estPayee(o)) c.depense += R.num(o.total);
     if ((o.createdAt || 0) >= c.derniere) { c.derniere = o.createdAt || 0; c.nom = (o.customer && o.customer.name) || c.nom; c.zone = (o.shipping && o.shipping.zoneName) || c.zone; c.affiche = (o.customer && o.customer.phone) || c.affiche; }
     m.set(k, c);
   }
@@ -62,9 +67,11 @@ export function suivreEnDirect() {
   COLLECTIONS.forEach((col) => TempsReel.abonner(col + '/*', (m) => {
     if (!m || !m.record) return;
     const ligne = versLigne(m.record);
-    const nouvelle = col === 'orders' && m.action === 'create' && !donnees.value.orders.some((o) => o.id === ligne.id);
+    // Alerte quand une commande vient d'être payée (confirmée par l'opérateur), pas quand le client commence à payer.
+    const avant = col === 'orders' ? donnees.value.orders.find((o) => o.id === ligne.id) : null;
+    const payee = col === 'orders' && m.action !== 'delete' && R.estPayee(ligne) && !(avant && R.estPayee(avant)) && !(ligne.payment && ligne.payment.manual);
     poser(col, ligne, m.action === 'delete');
-    if (nouvelle) surNouvelleCommande(ligne);
+    if (payee) surNouvelleCommande(ligne);
   }));
   TempsReel.apresReconnexion(() => charger().catch(() => { }));
 }

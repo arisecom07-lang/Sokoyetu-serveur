@@ -27,23 +27,24 @@ await client.click('.barre-action .btn-primaire'); await client.waitForTimeout(4
 await client.goto(BASE + '/boutique/index.html#/commander'); await client.waitForSelector('.page-commande');
 await client.fill('input[autocomplete="name"]', 'Amani Bahati'); await client.fill('input[type=tel]', '0997654321');
 await client.click('[aria-label="Zone de livraison"] .choix >> nth=0'); await client.fill('input[autocomplete="street-address"]', 'Nguba, av. de la Mission 7');
-await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Mode de paiement"]');
-await client.click('[aria-label="Mode de paiement"] .choix >> nth=0');
+await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Opérateur Mobile Money"]');
+await client.click('[aria-label="Opérateur Mobile Money"] .choix >> nth=0');
 await client.fill('[aria-label="Code promo"]', 'BIENVENUE10'); await client.click('button:has-text("Appliquer")'); await client.waitForSelector('text=Code BIENVENUE10 appliqué');
-await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.carte-paiement');
-await client.fill('.saisie-code', 'MP2610.AB12'); await client.click('.case .case-boite');
-await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.page-merci', { timeout: 15000 });
-const numero = (await client.locator('.merci-tete .code').innerText()).replace('#', '').trim();
-etape(`commande passée dans la boutique de la démo : #${numero}`);
+await client.click('.case .case-boite');
+await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.paiement-attente', { timeout: 15000 });
+etape('paiement demandé dans la démo : écran d’attente');
+await client.waitForSelector('.recu', { timeout: 20000 });
+const numero = (await client.locator('.recu-numero .code').innerText()).trim();
+etape(`paiement de test confirmé, reçu de la commande #${numero}`);
 
 await admin.bringToFront();
-await admin.waitForSelector(`.toast:has-text("Nouvelle commande #${numero}")`, { timeout: 8000 });
+await admin.waitForSelector(`.toast:has-text("Commande payée #${numero}")`, { timeout: 8000 });
 assert.equal(await admin.locator('.liste .ligne').count(), n0 + 1);
-etape('alerte reçue en direct dans l’autre onglet');
-await client.click('a:has-text("Suivre ma commande")'); await client.waitForSelector('.page-suivi');
-await admin.click(`.liste .ligne:has-text("#${numero}")`); await admin.click('button:has-text("Paiement reçu")');
-await client.waitForSelector('.page-suivi .pastille:has-text("Paiement confirmé")', { timeout: 8000 });
-etape('paiement confirmé : suivi du client mis à jour en direct');
+etape('alerte « Commande payée » reçue en direct dans l’autre onglet');
+await client.click('a:has-text("Suivre ma commande")'); await client.waitForSelector('.page-suivi .pastille:has-text("Payée")');
+await admin.click(`.liste .ligne:has-text("#${numero}")`); await admin.click('button:has-text("Commencer la préparation")');
+await client.waitForSelector('.page-suivi .pastille:has-text("En préparation")', { timeout: 8000 });
+etape('préparation commencée : suivi du client mis à jour en direct');
 
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.

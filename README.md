@@ -1,6 +1,6 @@
 # Sokoyetu
 
-Boutique en ligne d'import Chine → Bukavu et Goma, payée par Mobile Money à la commande, et son administration.
+Boutique en ligne d'import Chine → Bukavu et Goma, payée par Mobile Money directement dans l'application (FlexPay), et son administration.
 
 | Adresse | Application |
 |---|---|
@@ -14,7 +14,7 @@ https://github.com/arisecom07-lang/Sokoyetu-serveur/raw/main/sokoyetu-serveur.zi
 ```
 
 - Installation et mise à jour, pas à pas depuis un téléphone : [LISEZMOI.md](LISEZMOI.md)
-- Ce qui a changé dans la version 2 : [CHANGEMENTS.md](CHANGEMENTS.md)
+- Ce qui a changé (version 2.1 : paiement automatique, reçu, frais de service) : [CHANGEMENTS.md](CHANGEMENTS.md)
 - Notes techniques pour reprendre le code : [A-LIRE-CLAUDE-CODE.md](A-LIRE-CLAUDE-CODE.md)
 
 Reconstruire le paquet : `npm install && npm run build` (résultat dans `dist/sokoyetu-serveur.zip`, à copier à la racine).

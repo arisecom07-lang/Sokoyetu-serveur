@@ -180,6 +180,20 @@ export async function actualiserMesCommandes() {
 }
 export function recevoirCommande(id, doc) { poserCommande(id, doc); }
 
+/* Commande passée sur un autre téléphone (ou historique effacé) : retrouvée avec son numéro et le téléphone du client. */
+export async function retrouverCommande(numero, tel) {
+  const r = await requete('sokoyetu/retrouver', { method: 'POST', corps: { numero, telephone: tel } });
+  suivreCommande(r.id, r.token);
+  return r.id;
+}
+
+/* Paiement non abouti : les articles de la commande reviennent dans le panier (ceux encore en vente). */
+export function remettreAuPanier(o) {
+  const m = produitsParId.value; let n = 0;
+  (o.items || []).forEach((i) => { const p = m.get(i.productId); if (p) { ajouterAuPanier(p, i.color, i.size, R.int(i.qty) || 1); n++; } });
+  return n;
+}
+
 export function effacerAppareil() {
   ['panier', 'favoris', 'profil', 'recherches', 'mesCommandes', 'consentement', 'installMasque', 'commandeEnCours'].forEach((k) => Local.retirer(k));
   desabonnements.forEach((f) => f()); desabonnements.clear();

@@ -1,13 +1,15 @@
 // Sokoyetu — démonstration sans serveur : remplace src/commun/js/api.js à la construction (npm run demo).
 // Le « serveur » vit dans le navigateur (localStorage), applique les mêmes règles métier que le vrai
-// (regles.js : devis, commandes, stock, étapes, réductions) et prévient en direct les autres onglets
-// ouverts sur la démo : une commande passée dans la boutique apparaît aussitôt dans l'administration.
+// (regles.js : devis, commandes, paiement, stock, étapes, réductions) et prévient en direct les autres onglets
+// ouverts sur la démo : une commande payée dans la boutique apparaît aussitôt dans l'administration.
+// Paiement en mode test, comme SOKOYETU_PAIEMENT=simulation : confirmé après quelques secondes, refusé si le numéro finit par 0000.
 import R from '../src/commun/js/regles.js';
 import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 4;
+const VERSION_BASE = 5;
+const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
 const COMPTE = { id: 'demo-gerant', email: 'demo@sokoyetu.com', collectionName: 'admins', collectionId: 'admins' };
@@ -24,22 +26,21 @@ export class ErreurApi extends Error {
 
 const CONFIG_DEMO = {
   name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir', setup: { livraison: true },
-  payments: {
-    mpesa: { enabled: true, number: '0991234567', accountName: 'Sokoyetu SARL', ussd: '*1222#' },
-    airtel: { enabled: true, number: '0971234567', accountName: 'Sokoyetu SARL', ussd: '*501#' },
-    orange: { enabled: true, number: '0891234567', accountName: 'Sokoyetu SARL', ussd: '#144#' },
-    illico: { enabled: false }
-  },
+  payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false } },
+  serviceFeePct: 2, payment: { holdMinutes: 30 },
   legal: { company: 'Sokoyetu SARL', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu', email: 'contact@sokoyakwetu.com', rccm: 'CD/BKV/RCCM/26-B-0000' }
 };
+// [nom, téléphone, zone, adresse, articles, opérateur, paiement (payé, refusé, jamais reçu), étapes, âge en jours]
 const CLIENTS = [
-  ['Grâce Mapendo', '0991234501', 'bukavu', 'Nyawera, av. Lumumba 12', [{ productId: 'ex-p08', size: 'L', qty: 2 }, { productId: 'ex-p17', qty: 1 }], 'mpesa', ['paid', 'preparing', 'shipped', 'delivered'], 9],
-  ['Patient Bisimwa', '0971234502', 'goma', 'Himbi, av. du Lac 4', [{ productId: 'ex-p10', qty: 1 }], 'airtel', ['paid'], 6],
-  ['Esther Furaha', '0891234503', 'bukavu', 'Ibanda, Q. Ndendere 33', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 1 }], 'orange', [], 4],
-  ['Josué Mugisho', '0991234504', 'retrait', '', [{ productId: 'ex-p15', qty: 1 }], 'mpesa', ['paid', 'preparing', 'shipped'], 2],
-  ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', ['paid', 'preparing'], 1],
-  ['Didier Kambale', '0821234506', 'goma', 'Katindo, av. Mapendo 21', [{ productId: 'ex-p18', qty: 2 }], 'mpesa', [], 0]
+  ['Grâce Mapendo', '0991234501', 'bukavu', 'Nyawera, av. Lumumba 12', [{ productId: 'ex-p08', size: 'L', qty: 2 }, { productId: 'ex-p17', qty: 1 }], 'mpesa', 'paye', ['preparing', 'shipped', 'delivered'], 9],
+  ['Patient Bisimwa', '0971234502', 'goma', 'Himbi, av. du Lac 4', [{ productId: 'ex-p10', qty: 1 }], 'airtel', 'paye', [], 6],
+  ['Esther Furaha', '0891234503', 'bukavu', 'Ibanda, Q. Ndendere 33', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 1 }], 'orange', 'refuse', [], 0],
+  ['Josué Mugisho', '0991234504', 'retrait', '', [{ productId: 'ex-p15', qty: 1 }], 'mpesa', 'paye', ['preparing', 'shipped'], 2],
+  ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', 'paye', ['preparing'], 1],
+  ['Didier Kambale', '0821234506', 'goma', 'Katindo, av. Mapendo 21', [{ productId: 'ex-p18', qty: 2 }], 'mpesa', 'echu', [], 3]
 ];
+/* Configuration telle que le serveur la voit : paiement en mode test. */
+const configPaiement = (doc) => R.config({ ...(doc || {}), payment: { ...((doc && doc.payment) || {}), provider: 'simulation' } });
 
 function creerBase() {
   const now = Date.now();
@@ -54,14 +55,18 @@ function creerBase() {
     }
   }
   // Quelques commandes déjà passées, pour que le tableau de bord ait de quoi montrer.
-  const cfg = R.config(b.cols.config.store.doc);
+  const cfg = configPaiement(b.cols.config.store.doc);
   const produit = (id) => (b.cols.products[id] ? b.cols.products[id].doc : null);
-  CLIENTS.forEach(([name, phone, zoneId, address, items, method, suites, age], i) => {
-    const t = now - age * JOUR - (5 - i) * 3600e3;
+  CLIENTS.forEach(([name, phone, zoneId, address, items, method, mode, suites, age], i) => {
+    const t = mode === 'refuse' ? now - 6 * 60000 : now - age * JOUR - (5 - i) * 3600e3;
     const dv = R.devis({ cfg, produit, lignes: items, zoneId, maintenant: t });
-    const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: { termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address }, items, payment: { method, ref: `TX${2410 + i}.${(1000 + i * 37).toString(36).toUpperCase()}` }, total: dv.total, note: i === 1 ? 'Appelez avant de passer, merci.' : '' }, maintenant: t, numero: R.numeroCommande() });
+    const payeur = mode === 'paye' ? phone : phone.slice(0, 6) + '0000';
+    const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: { termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address }, items, payment: { method, phone: payeur }, total: dv.total, note: i === 1 ? 'Appelez avant de passer, merci.' : '' }, maintenant: t, numero: R.numeroCommande() });
     stock(b, reserve, -1);
-    let o = commande;
+    let o = R.paiementEnvoye(commande, { maintenant: t + 2000, providerId: `SIM-${commande.number}-1` });
+    if (mode === 'paye') o = R.paiementConfirme(o, { maintenant: t + 45000, reference: 'TEST' + String(t).slice(-8) }).commande;
+    else o = R.paiementEchoue(o, { maintenant: t + 45000, raison: 'Solde insuffisant (simulation).' });
+    if (mode === 'echu') { const x = R.paiementExpire(o, { maintenant: t + 31 * 60000 }); stock(b, x.entrees, 1); o = x.commande; }
     suites.forEach((a, j) => { const r = R.etapeCommande(o, a, { maintenant: t + (j + 1) * 5400e3, produit }); o = r.commande; });
     poser('orders', 'cmd' + uid().slice(0, 12), o, { token: jeton(), phone: o.phone, status: o.status, created: t });
   });
@@ -106,6 +111,7 @@ function commandePublique(doc) {
   const d = R.copie(doc);
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
@@ -117,6 +123,8 @@ function vue(col, rec, gerant) {
   if (col === 'products') r.active = rec.active !== false;
   if (col === 'media') r.file = rec.file;
   if (!gerant) { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = commandePublique(rec.doc); }
+  // Comme le serveur : la boutique apprend quel paiement est ouvert (ici, le mode test).
+  if (col === 'config') { const c = configPaiement(rec.doc); r.doc.payment = { provider: 'simulation', holdMinutes: c.payment.holdMinutes, test: true }; }
   return r;
 }
 const remiseParCode = (b, code) => { const c = R.valider.codePromo(code); const rec = c && Object.values(b.cols.discounts).find((x) => x.code === c); return rec ? rec.doc : null; };
@@ -202,6 +210,8 @@ function routeRecords(b, col, id, method, corps, q) {
     return vue(col, rec, gerant());
   }
   exigerGerant();
+  // Comme sur le serveur : une commande ne change que par les routes de paiement et d'étapes.
+  if (col === 'orders') throw new ErreurApi(403, 'Les commandes se modifient par leurs étapes.');
   const now = Date.now();
   if (method === 'DELETE') {
     const avant = table[id]; if (!avant) throw new ErreurApi(404, 'Introuvable.');
@@ -217,7 +227,6 @@ function routeRecords(b, col, id, method, corps, q) {
   const rec = nouveau ? { id: rid, created: now } : table[rid];
   if (col === 'products') { if (!doc.createdAt) doc.createdAt = (rec.doc && rec.doc.createdAt) || now; doc.updatedAt = now; rec.active = doc.status !== 'draft'; }
   if (col === 'discounts') rec.code = R.valider.codePromo(doc.code);
-  if (col === 'orders') { rec.status = doc.status || rec.status; rec.phone = doc.phone || ''; }
   rec.doc = doc; rec.updated = now; table[rid] = rec;
   enregistrer(b); diffuser(col, rid, nouveau ? 'create' : 'update');
   return vue(col, rec, true);
@@ -235,26 +244,26 @@ async function serveur(chemin, method, corps) {
   if ((m = p.match(/^collections\/admins\/records\/(.+)$/))) { exigerGerant(); return Auth.compte; }
   if ((m = p.match(/^collections\/([a-z]+)\/records(?:\/([^/]+))?$/))) return routeRecords(b, m[1], m[2] && decodeURIComponent(m[2]), method, corps, q);
 
-  if (p === 'sokoyetu/etat') { exigerGerant(); return { version: __VERSION__ + ' · démo', ia: false }; }
+  if (p === 'sokoyetu/etat') { exigerGerant(); return { version: __VERSION__ + ' · démo', ia: false, paiement: { fournisseur: 'simulation', pret: true, test: true } }; }
   if (p === 'sokoyetu/discount') {
     const code = R.valider.codePromo(q.get('code'));
     const r = R.verifierRemise(code ? remiseParCode(b, code) : null, code, R.num(q.get('subtotal')), Date.now());
     return r.ok ? { ok: true, code: r.code, type: r.type, value: r.value, amount: r.amount, minSubtotal: r.minSubtotal } : { ok: false, reason: r.reason };
   }
-  const cfg = () => R.config(b.cols.config.store ? b.cols.config.store.doc : {});
+  const cfg = () => configPaiement(b.cols.config.store ? b.cols.config.store.doc : {});
   const produit = (id) => (b.cols.products[id] ? b.cols.products[id].doc : null);
   if (p === 'sokoyetu/devis') {
     const code = R.valider.codePromo(corps.discountCode);
     const d = R.devis({ cfg: cfg(), produit, lignes: corps.items, zoneId: corps.zoneId, code: corps.discountCode, remise: code ? remiseParCode(b, code) : null, maintenant: Date.now() });
     d.lignes.forEach((l) => { delete l.cost; });
-    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, total: d.total, zoneId: d.zone ? d.zone.id : '' };
+    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, zoneId: d.zone ? d.zone.id : '' };
   }
   if (p === 'sokoyetu/commander') {
     if (corps.website) throw new ErreurApi(400, 'Vérification impossible. Rechargez la page et réessayez.');
     const t = R.valider.jeton(corps.token);
     if (!t) throw new ErreurApi(400, 'Jeton de commande invalide. Rechargez la page et réessayez.');
     const deja = Object.values(b.cols.orders).find((x) => x.token === t);
-    if (deja) return { id: deja.id, order: commandePublique(deja.doc) };
+    if (deja) { suivrePaiement(b, deja); return reponseClient(deja); }
     let prep;
     try {
       const code = R.valider.codePromo(corps.discountCode);
@@ -266,7 +275,30 @@ async function serveur(chemin, method, corps) {
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
     diffuser('orders', id, 'create');
-    return { id, order: commandePublique(prep.commande) };
+    demanderPaiement(b, b.cols.orders[id], {});
+    return reponseClient(b.cols.orders[id]);
+  }
+  if ((m = p.match(/^sokoyetu\/paiement\/([^/]+)(\/relancer)?$/))) {
+    const rec = b.cols.orders[decodeURIComponent(m[1])];
+    if (!rec || (!gerant() && rec.token !== q.get('t'))) throw new ErreurApi(404, 'Commande introuvable.');
+    suivrePaiement(b, rec);
+    if (!m[2]) return reponseClient(rec);
+    const raison = R.relancePossible(rec.doc); if (raison) throw new ErreurApi(400, raison);
+    if (rec.doc.payment.status === 'pending' && Date.now() - Number(rec.doc.payment.startedAt || 0) < 30000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
+    const moyen = R.moyensDePaiement(cfg()).find((x) => x.k === ((corps && corps.method) || rec.doc.payment.method));
+    if (!moyen) throw new ErreurApi(400, 'Ce mode de paiement n’est pas disponible.', { champ: 'method' });
+    const tel = R.valider.mobileMoney((corps && corps.phone) || rec.doc.payment.phone);
+    if (!tel) throw new ErreurApi(400, `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, { champ: 'payphone' });
+    demanderPaiement(b, rec, { methode: moyen.k, label: moyen.label, telephone: tel });
+    return reponseClient(rec);
+  }
+  if (p === 'sokoyetu/retrouver') {
+    const n = R.numeroNettoye(corps.numero); const tel = R.chiffres(R.valider.telephone(corps.telephone));
+    if (!R.numeroValide(n) || !tel) throw new ErreurApi(400, 'Indiquez le numéro de commande (6 caractères) et votre numéro de téléphone.');
+    const rec = Object.values(b.cols.orders).find((x) => x.doc.number === n);
+    const tels = rec ? [rec.doc.phone, rec.doc.customer && rec.doc.customer.phone, rec.doc.payment && rec.doc.payment.phone].map((x) => R.chiffres(R.valider.telephone(x))) : [];
+    if (!rec || !tels.includes(tel)) throw new ErreurApi(404, 'Aucune commande ne correspond à ce numéro et à ce téléphone.');
+    return { id: rec.id, token: rec.token };
   }
   if ((m = p.match(/^sokoyetu\/commandes\/(.+)$/))) {
     exigerGerant();
@@ -289,7 +321,7 @@ async function serveur(chemin, method, corps) {
       const d = rec.doc;
       d.phone = ''; d.customer = { name: 'Client effacé', phone: '' };
       d.shipping = Object.assign({}, d.shipping || {}, { address: '', landmark: '' });
-      d.note = ''; d.adminNote = ''; d.payment = Object.assign({}, d.payment || {}, { sender: '', ref: d.payment && d.payment.ref ? '••••' : '' });
+      d.note = ''; d.adminNote = ''; d.payment = Object.assign({}, d.payment || {}, { sender: '', phone: '', ref: d.payment && d.payment.ref ? '••••' : '' });
       d.erasedAt = Date.now(); (d.timeline = d.timeline || []).push({ at: Date.now(), text: 'Données personnelles effacées à la demande du client' });
       rec.phone = ''; rec.updated = Date.now();
     });
@@ -299,6 +331,47 @@ async function serveur(chemin, method, corps) {
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
   throw new ErreurApi(404, 'Adresse inconnue dans la démonstration.');
 }
+
+/* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
+
+function verifierSimulation(d) {
+  if (Date.now() - Number(d.payment.startedAt || 0) < DELAI_PAIEMENT) return { etat: 'en_attente' };
+  if (/0000$/.test(String(d.payment.phone || ''))) return { etat: 'echec', message: 'Solde insuffisant (simulation).' };
+  return { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) };
+}
+function appliquerPaiement(b, rec, r) {
+  let d = rec.doc; const now = Date.now(); let modifies = [];
+  d.payment.checkedAt = now;
+  if (r && r.etat === 'paye') { const x = R.paiementConfirme(d, { maintenant: now, reference: r.reference }); if (x.stock === 'reserver') modifies = stock(b, x.entrees, -1); d = x.commande; }
+  else if (r && r.etat === 'echec' && d.payment.status === 'pending') d = R.paiementEchoue(d, { maintenant: now, raison: r.message });
+  if (R.enAttentePaiement(d) && Number(d.expiresAt) && now > Number(d.expiresAt)) { const x = R.paiementExpire(d, { maintenant: now }); if (x.stock === 'restituer') modifies = modifies.concat(stock(b, x.entrees, 1)); d = x.commande; }
+  rec.doc = d; rec.status = d.status; rec.updated = now;
+  enregistrer(b);
+  modifies.forEach((pid) => diffuser('products', pid, 'update'));
+  diffuser('orders', rec.id, 'update');
+}
+function suivrePaiement(b, rec) {
+  const d = rec.doc;
+  if (!R.enAttentePaiement(d)) return;
+  if (Number(d.expiresAt) && Date.now() > Number(d.expiresAt)) { appliquerPaiement(b, rec, null); return; }
+  if (d.payment.status !== 'pending') return;
+  const r = verifierSimulation(d);
+  if (r.etat !== 'en_attente') appliquerPaiement(b, rec, r);
+}
+function demanderPaiement(b, rec, opts) {
+  const now = Date.now();
+  rec.doc = R.paiementEnvoye(rec.doc, { maintenant: now, providerId: `SIM-${rec.doc.number}-${R.int(rec.doc.payment.attempts) + 1}`, ...opts });
+  rec.updated = now; enregistrer(b); diffuser('orders', rec.id, 'update');
+}
+function reponseClient(rec) {
+  const d = rec.doc; const p = d.payment || {};
+  return { id: rec.id, order: commandePublique(d), paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: R.int(p.attempts), relance: R.relancePossible(d) === '', test: true } };
+}
+// Comme la tâche minute du serveur : les paiements en cours avancent même si le client a fermé la page.
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  try { const b = base(); Object.values(b.cols.orders).filter((r) => R.enAttentePaiement(r.doc)).forEach((r) => suivrePaiement(b, r)); } catch (e) { }
+}, 4000);
 
 /* ---------- Même interface que src/commun/js/api.js ---------- */
 

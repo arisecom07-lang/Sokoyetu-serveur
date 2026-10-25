@@ -14,13 +14,14 @@ import { Rayons, Rayon, Nouveautes, Recherche, Favoris } from './pages/catalogue
 import { Produit } from './pages/produit.jsx';
 import { Panier } from './pages/panier.jsx';
 import { Commander } from './pages/commander.jsx';
-import { Merci, Compte, Commandes, Suivi } from './pages/compte.jsx';
+import { Paiement } from './pages/paiement.jsx';
+import { Merci, Compte, Commandes, Suivi, Retrouver } from './pages/compte.jsx';
 import { Infos } from './pages/infos.jsx';
 import { Introuvable } from './pages/introuvable.jsx';
 
-const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, commander: Commander, merci: Merci, compte: Compte, commandes: Commandes, suivi: Suivi, infos: Infos };
+const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, suivi: Suivi, infos: Infos };
 /* Ce qui occupe le bas de l'écran du téléphone : navigation, barre d'action, ou les deux. */
-const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', merci: '', recherche: '' };
+const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', paiement: '', merci: '', recherche: '' };
 
 function Consentement() {
   const c = cfg.value;

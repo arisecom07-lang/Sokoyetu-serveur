@@ -88,7 +88,7 @@ code { font: 650 13.5px ui-monospace, 'SF Mono', Menlo, Consolas, monospace; bac
     <div>
       <span class="etiquette">Démonstration</span>
       <h1 class="marque">Sokoyetu<i>.</i></h1>
-      <p>La boutique et son administration, reliées comme sur le vrai serveur. Tout se passe dans ce navigateur : commandez un article, puis validez le paiement Mobile Money côté gestion.</p>
+      <p>La boutique et son administration, reliées comme sur le vrai serveur. Tout se passe dans ce navigateur : commandez et payez un article par Mobile Money (en mode test), puis suivez la commande côté gestion.</p>
     </div>
     <div class="actions-tete">
       <a class="btn btn-plein" href="boutique/index.html">Ouvrir la boutique</a>
@@ -110,23 +110,23 @@ code { font: 650 13.5px ui-monospace, 'SF Mono', Menlo, Consolas, monospace; bac
   <section class="cartes" aria-label="Les deux applications">
     <a class="carte" href="boutique/index.html">
       <img src="boutique/captures/accueil.webp" alt="Accueil de la boutique : le port à conteneurs, Sokoyetu écrit au centre" width="780" height="1688" loading="lazy">
-      <div><h2>La boutique <span aria-hidden="true">→</span></h2><p>Ce que voient vos clients à Bukavu et Goma : rayons, fiches articles, panier et paiement Mobile Money.</p></div>
+      <div><h2>La boutique <span aria-hidden="true">→</span></h2><p>Ce que voient vos clients à Bukavu et Goma : rayons, fiches articles, panier, paiement Mobile Money et reçu.</p></div>
     </a>
     <a class="carte" href="admin/index.html">
       <img src="apercu-admin.webp" alt="Tableau de bord de l’administration : ventes, commandes à traiter" width="780" height="1688" loading="lazy">
-      <div><h2>L’administration <span aria-hidden="true">→</span></h2><p>Votre côté : commandes en direct, vérification des paiements, produits, stock et réglages.</p></div>
+      <div><h2>L’administration <span aria-hidden="true">→</span></h2><p>Votre côté : commandes payées en direct, préparation, produits, stock et réglages.</p></div>
     </a>
   </section>
 
   <section class="parcours">
     <h2>Le parcours à essayer</h2>
-    <div class="etape"><span>1</span><div><b>Commandez dans la boutique</b><p>Ajoutez un article au panier, choisissez M-Pesa et saisissez un code de transaction au choix, par exemple <code>MP2610.AB12</code>. Le code promo <code>BIENVENUE10</code> marche dès $20.</p></div></div>
-    <div class="etape"><span>2</span><div><b>Vérifiez le paiement</b><p>Dans l’administration (compte déjà rempli), la commande arrive avec une alerte. Touchez « Paiement reçu », puis préparez et expédiez.</p></div></div>
-    <div class="etape"><span>3</span><div><b>Suivez comme le client</b><p>Dans la boutique, « Suivre ma commande » se met à jour à chaque étape. Le stock baisse à la commande et revient si vous l’annulez.</p></div></div>
+    <div class="etape"><span>1</span><div><b>Commandez et payez dans la boutique</b><p>Ajoutez un article au panier, choisissez M-Pesa et touchez « Payer » : le paiement de test est confirmé après 5 secondes et le reçu s’affiche avec le numéro de commande. Un numéro finissant par <code>0000</code> simule un refus. Le code promo <code>BIENVENUE10</code> marche dès $20.</p></div></div>
+    <div class="etape"><span>2</span><div><b>Recevez l’alerte</b><p>Dans l’administration (compte déjà rempli), l’alerte « Commande payée » arrive toute seule. Préparez, puis expédiez.</p></div></div>
+    <div class="etape"><span>3</span><div><b>Suivez comme le client</b><p>Dans la boutique, « Suivre ma commande » se met à jour à chaque étape ; « Mon compte → Retrouver une commande » la retrouve avec son numéro. Le stock baisse à la commande et revient si elle n’est pas payée.</p></div></div>
   </section>
 
   <footer class="pied">
-    <p>Données d’exemple gardées seulement dans ce navigateur. Aucun paiement réel. L’assistant IA des fiches produits ne fonctionne que sur le vrai serveur.</p>
+    <p>Données d’exemple gardées seulement dans ce navigateur. Aucun paiement réel : le paiement est simulé, comme le mode test du serveur. L’assistant IA des fiches produits ne fonctionne que sur le vrai serveur.</p>
     <div class="reinit" id="reinit">
       <button class="btn btn-ligne" id="btn-reinit" type="button">Réinitialiser la démo</button>
       <span class="message" id="message-reinit" role="status"></span>

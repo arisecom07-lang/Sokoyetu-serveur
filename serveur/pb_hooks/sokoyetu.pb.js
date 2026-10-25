@@ -64,33 +64,34 @@ routerAdd('POST', '/api/sokoyetu/devis', (e) => {
   const code = R.valider.codePromo(b.discountCode);
   const d = R.devis({ cfg: S.configuration(e.app), produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null, maintenant: Date.now() });
   d.lignes.forEach((l) => { delete l.cost; });
-  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, total: d.total, zoneId: d.zone ? d.zone.id : '' });
+  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, zoneId: d.zone ? d.zone.id : '' });
 });
 
 /*
- * Enregistre une commande payée par Mobile Money. Tout est recalculé ici, puis enregistré d'un bloc
- * (commande + réservation du stock). Renvoyer deux fois la même commande (connexion coupée) ne crée qu'une commande.
+ * Commande et paiement automatique par Mobile Money. Tout est recalculé ici et enregistré d'un bloc
+ * (commande « en attente de paiement » + réservation du stock), puis la demande de paiement part chez le fournisseur :
+ * le client la valide sur son téléphone. Renvoyer deux fois la même commande (connexion coupée) ne crée qu'une commande.
  */
 routerAdd('POST', '/api/sokoyetu/commander', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
+  const C = require(`${__hooks}/lib/commandes.js`);
   const b = S.corps(e);
   if (b.website) return e.json(400, { message: 'Vérification impossible. Rechargez la page et réessayez.' });
   const jeton = R.valider.jeton(b.token);
   if (!jeton) return e.json(400, { message: 'Jeton de commande invalide. Rechargez la page et réessayez.' });
-  try {
-    const deja = e.app.findFirstRecordByData('orders', 'token', jeton);
-    return e.json(200, { id: deja.id, order: S.commandePublique(S.lire(deja)) });
-  } catch (err) { /* nouvelle commande */ }
+  let deja = null;
+  try { deja = e.app.findFirstRecordByData('orders', 'token', jeton); } catch (err) { /* nouvelle commande */ }
+  if (deja) return e.json(200, C.reponseClient(deja.id, C.suivre(e.app, deja)));
 
-  let resultat = null, erreur = null;
+  let id = null, erreur = null;
   e.app.runInTransaction((tx) => {
     const P = S.lecteurProduits(tx);
     const code = R.valider.codePromo(b.discountCode);
     let prep;
     try {
       prep = R.preparerCommande({
-        cfg: S.configuration(tx), produit: (id) => P.doc(id), remise: code ? S.remiseParCode(tx, code) : null,
-        saisie: b, maintenant: Date.now(), numero: $security.randomStringWithAlphabet(5, 'ABCDEFGHJKMNPQRSTUVWXYZ23456789')
+        cfg: S.configuration(tx), produit: (x) => P.doc(x), remise: code ? S.remiseParCode(tx, code) : null,
+        saisie: b, maintenant: Date.now(), numero: S.numeroUnique(tx)
       });
     } catch (err) {
       if (err instanceof R.ErreurCommande) { erreur = { message: err.message, champ: err.champ }; return; }
@@ -98,15 +99,66 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     }
     S.appliquerStock(tx, prep.reserve, -1);
     const rec = new Record(tx.findCollectionByNameOrId('orders'));
-    rec.set('doc', prep.commande);
     rec.set('token', jeton);
-    rec.set('phone', prep.commande.phone);
-    rec.set('status', 'open');
-    tx.save(rec);
-    resultat = { id: rec.id, order: S.commandePublique(prep.commande) };
+    S.enregistrerCommande(tx, rec, prep.commande);
+    id = rec.id;
   });
   if (erreur) return e.json(400, erreur);
-  return e.json(200, resultat);
+  const doc = C.demander(e.app, e.app.findRecordById('orders', id), { callbackUrl: C.adresseNotification(e) });
+  return e.json(200, C.reponseClient(id, doc));
+});
+
+// État du paiement d'une commande (le client attend la confirmation sur son téléphone). Revérifié auprès du fournisseur.
+routerAdd('GET', '/api/sokoyetu/paiement/{id}', (e) => {
+  const C = require(`${__hooks}/lib/commandes.js`);
+  const rec = C.commandeDuClient(e);
+  return e.json(200, C.reponseClient(rec.id, C.suivre(e.app, rec)));
+});
+
+// Nouvelle demande de paiement (refusée, rien reçu sur le téléphone, autre opérateur ou autre numéro), même commande.
+routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
+  const C = require(`${__hooks}/lib/commandes.js`);
+  const rec = C.commandeDuClient(e);
+  const d = C.suivre(e.app, rec);
+  const raison = R.relancePossible(d);
+  if (raison) return e.json(400, { message: raison });
+  if (d.payment.status === 'pending' && Date.now() - Number(d.payment.startedAt || 0) < 30000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
+  const b = S.corps(e);
+  const moyen = R.moyensDePaiement(S.configuration(e.app)).find((m) => m.k === (b.method || d.payment.method));
+  if (!moyen) return e.json(400, { message: 'Ce mode de paiement n’est pas disponible.', champ: 'method' });
+  const tel = R.valider.mobileMoney(b.phone || d.payment.phone);
+  if (!tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
+  const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel });
+  return e.json(200, C.reponseClient(rec.id, doc));
+});
+
+// Le fournisseur annonce le résultat d'un paiement. Toujours revérifié auprès de lui ; toujours répondu 200.
+routerAdd('POST', '/api/sokoyetu/notification/{fournisseur}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  const C = require(`${__hooks}/lib/commandes.js`);
+  try { C.notification(e.app, String(e.request.pathValue('fournisseur') || ''), S.corps(e)); } catch (err) { console.log('sokoyetu notification', err); }
+  return e.json(200, { ok: true });
+});
+
+// Retrouver sa commande avec son numéro et son téléphone (autre appareil, historique effacé…).
+routerAdd('POST', '/api/sokoyetu/retrouver', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
+  const b = S.corps(e);
+  const n = R.numeroNettoye(b.numero); const tel = R.chiffres(R.valider.telephone(b.telephone));
+  if (!R.numeroValide(n) || !tel) return e.json(400, { message: 'Indiquez le numéro de commande (6 caractères) et votre numéro de téléphone.' });
+  const introuvable = () => e.json(404, { message: 'Aucune commande ne correspond à ce numéro et à ce téléphone.' });
+  let rec;
+  try { rec = e.app.findFirstRecordByData('orders', 'number', n); } catch (err) { return introuvable(); }
+  const d = S.lire(rec);
+  const telephones = [d.phone, d.customer && d.customer.phone, d.payment && d.payment.phone].map((x) => R.chiffres(R.valider.telephone(x))).filter(Boolean);
+  if (telephones.indexOf(tel) < 0) return introuvable();
+  return e.json(200, { id: rec.id, token: rec.getString('token') });
+});
+
+// Chaque minute : paiements en cours revérifiés, commandes non payées à temps annulées (stock rendu).
+cronAdd('sokoyetu-paiements', '* * * * *', () => {
+  require(`${__hooks}/lib/commandes.js`).surveiller($app);
 });
 
 /* ---------- Administration ---------- */
@@ -126,9 +178,7 @@ routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
     catch (err) { if (err instanceof R.ErreurCommande) { erreur = { status: 400, message: err.message }; return; } throw err; }
     if (r.stock === 'reserver') S.appliquerStock(tx, r.entrees, -1);
     if (r.stock === 'restituer') S.appliquerStock(tx, r.entrees, 1);
-    rec.set('doc', r.commande);
-    rec.set('status', r.commande.status);
-    tx.save(rec);
+    S.enregistrerCommande(tx, rec, r.commande);
     sortie = { id: rec.id, doc: r.commande };
   });
   if (erreur) return e.json(erreur.status, { message: erreur.message });
@@ -148,11 +198,10 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
       d.phone = ''; d.customer = { name: 'Client effacé', phone: '' };
       d.shipping = Object.assign({}, d.shipping || {}, { address: '', landmark: '' });
       d.note = ''; d.adminNote = '';
-      d.payment = Object.assign({}, d.payment || {}, { sender: '', ref: d.payment && d.payment.ref ? '••••' : '' });
+      d.payment = Object.assign({}, d.payment || {}, { sender: '', phone: '', ref: d.payment && d.payment.ref ? '••••' : '' });
       d.erasedAt = Date.now();
       (d.timeline = d.timeline || []).push({ at: Date.now(), text: 'Données personnelles effacées à la demande du client' });
-      rec.set('doc', d); rec.set('phone', '');
-      tx.save(rec); n++;
+      S.enregistrerCommande(tx, rec, d); n++;
     });
   });
   return e.json(200, { effacees: n });
@@ -174,7 +223,7 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
 routerAdd('GET', '/api/sokoyetu/etat', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
   S.exigerGerant(e);
-  return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: require(`${__hooks}/lib/ia.js`).active() });
+  return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: require(`${__hooks}/lib/ia.js`).active(), paiement: require(`${__hooks}/lib/paiement.js`).etat() });
 });
 
 /* ---------- Champs techniques tenus à jour automatiquement ---------- */
@@ -200,11 +249,18 @@ function majRemise(e) {
 onRecordCreateRequest(majRemise, 'discounts');
 onRecordUpdateRequest(majRemise, 'discounts');
 
+// Commande retouchée depuis le tableau de bord technique : champs de recherche réalignés sur le document.
+onRecordUpdateRequest((e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.champsCommande(e.record, S.lire(e.record));
+  return e.next();
+}, 'orders');
+
 /* ---------- Ce que les clients ne voient jamais : coûts d'achat, notes internes, contrôles ---------- */
 
 onRecordEnrich((e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  if (!S.estGerant(e.requestInfo)) { e.record.set('doc', S.commandePublique(S.lire(e.record))); e.record.hide('token'); }
+  if (!S.estGerant(e.requestInfo)) { e.record.set('doc', S.commandePublique(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
   return e.next();
 }, 'orders');
 

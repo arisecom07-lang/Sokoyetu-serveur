@@ -22,5 +22,7 @@ ARGS=(--dir="$DATA" --hooksDir="$D/pb_hooks" --migrationsDir="$D/pb_migrations")
 "$PB" migrate up "${ARGS[@]}" >/dev/null
 "$PB" sokoyetu-admin admin@sokoyetu.test 'Sokoyetu-2026' "${ARGS[@]}" >/dev/null
 "$PB" superuser upsert technique@sokoyetu.test 'Technique-2026' "${ARGS[@]}" >/dev/null
-echo "Boutique : http://localhost:$PORT   ·   Administration : http://admin.localhost:$PORT"
+# Paiement en mode test (aucun argent) : confirmé au bout de quelques secondes, refusé si le numéro finit par 0000.
+export SOKOYETU_PAIEMENT="${SOKOYETU_PAIEMENT:-simulation}" SOKOYETU_SIMULATION_DELAI="${SOKOYETU_SIMULATION_DELAI:-3}"
+echo "Boutique : http://localhost:$PORT   ·   Administration : http://admin.localhost:$PORT   ·   Paiement : $SOKOYETU_PAIEMENT"
 exec "$PB" serve --http=127.0.0.1:$PORT "${ARGS[@]}" --publicDir="$D/pb_public"

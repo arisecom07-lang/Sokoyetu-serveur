@@ -16,7 +16,7 @@ for (const k of ['collections', 'products', 'banners', 'discounts']) {
   for (const x of d[k] || []) { const { id, ageDays, ...doc } = x; if (k === 'products') doc.createdAt = maintenant - (ageDays || 0) * 864e5; await ecrire(k, id, doc); }
 }
 const cfg = { name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir',
-  payments: { mpesa: { enabled: true, number: '0991234567', accountName: 'Sokoyetu SARL', ussd: '*1222#' }, airtel: { enabled: true, number: '0971234567', accountName: 'Sokoyetu SARL', ussd: '*501#' }, orange: { enabled: true, number: '0891234567', accountName: 'Sokoyetu SARL', ussd: '#144#' } },
+  payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true } }, serviceFeePct: 2,
   legal: { company: 'Sokoyetu SARL', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu', email: 'contact@sokoyakwetu.com' } };
 if (process.env.CONFIG !== 'non') await ecrire('config', 'store', cfg);
 console.log('Catalogue d’exemple chargé.');

@@ -5,6 +5,7 @@ Disallow: /api/
 Disallow: /_/
 Disallow: /panier
 Disallow: /commander
+Disallow: /paiement/
 Disallow: /merci/
 Disallow: /suivi/
 Disallow: /compte

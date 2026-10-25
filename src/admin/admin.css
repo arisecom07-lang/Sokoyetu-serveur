@@ -353,6 +353,12 @@ a.kpi:active { transform: scale(.985); }
 
 /* ---------- Réglages ---------- */
 .operateur-tete { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e3); align-items: center; }
+.commande-serveur { display: block; padding: 12px 14px; border-radius: var(--r-m); background: var(--ebene); color: var(--sur-ebene); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.a-copier-admin { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 14px; border-radius: var(--r-m); border: 1.5px dashed var(--ligne-saisie); }
+.a-copier-admin > div { min-width: 0; }
+.a-copier-admin .btn { flex: none; }
+.a-copier-admin small { display: block; font-size: 12.5px; color: var(--encre-3); font-weight: 600; }
+.a-copier-admin .code { font-size: 13px; letter-spacing: 0; font-weight: 700; overflow-wrap: anywhere; }
 .op-carre { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .02em; }
 .zone-carte { padding: var(--e4); border-radius: var(--r-m); border: 1px solid var(--ligne); background: var(--fond); }
 .saisie-groupe.suffixe .saisie { padding-left: 14px; padding-right: 52px; }
