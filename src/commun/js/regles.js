@@ -13,12 +13,13 @@
 
 /* ---------- Constantes ---------- */
 
+/* exemple : format de numéro montré dans le champ du paiement (préfixes courants de l'opérateur). */
 const OPERATEURS = {
-  mpesa: { label: 'M-Pesa', sub: 'Vodacom', color: '#E11D2A', init: 'M' },
-  airtel: { label: 'Airtel Money', sub: 'Airtel', color: '#D9001B', init: 'A' },
-  orange: { label: 'Orange Money', sub: 'Orange', color: '#F07800', init: 'O' },
-  afrimoney: { label: 'Afrimoney', sub: 'Africell', color: '#6B2C91', init: 'A' },
-  illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I' }
+  mpesa: { label: 'M-Pesa', sub: 'Vodacom', color: '#E11D2A', init: 'M', exemple: '081 234 5678' },
+  airtel: { label: 'Airtel Money', sub: 'Airtel', color: '#D9001B', init: 'A', exemple: '099 123 4567' },
+  orange: { label: 'Orange Money', sub: 'Orange', color: '#F07800', init: 'O', exemple: '084 123 4567' },
+  afrimoney: { label: 'Afrimoney', sub: 'Africell', color: '#6B2C91', init: 'A', exemple: '090 123 4567' },
+  illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I', exemple: '099 123 4567' }
 };
 
 /*

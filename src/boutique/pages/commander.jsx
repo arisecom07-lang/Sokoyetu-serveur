@@ -59,8 +59,9 @@ export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, tel
       </div>
       {erreurs.method ? <p class="champ-erreur"><Icone n="alerte" />{erreurs.method}</p> : null}
       <div class="formulaire espace-haut">
-        <Champ libelle={`Numéro ${moyen ? moyen.label : 'Mobile Money'} à débiter`} erreur={erreurs.payphone} aide="La demande de paiement arrive sur ce téléphone : vous la validez avec votre code PIN.">
-          {(a) => <input class="saisie saisie-numero" {...a} value={tel} onInput={(e) => onTel(e.currentTarget.value)} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder={telephone(telContact) || '099 123 4567'} />}
+        <Champ libelle={`Entrez le numéro de votre compte ${moyen ? moyen.label : 'Mobile Money'}`} erreur={erreurs.payphone}
+          aide={`La demande de paiement arrive sur ce téléphone : vous la validez avec votre code PIN.${telContact ? ` Laissé vide, nous utilisons votre numéro ${telephone(telContact)}.` : ''}`}>
+          {(a) => <input class="saisie saisie-numero" {...a} value={tel} onInput={(e) => onTel(e.currentTarget.value)} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder={`Ex. ${(moyen && moyen.exemple) || '099 123 4567'}`} />}
         </Champ>
       </div>
     </>
