@@ -167,10 +167,12 @@ export function ouvrirLivraisonPaiement() {
             <p class="attenue">Commandés pour vous chez nos fournisseurs, transportés puis dédouanés par nos soins : livrés en {R.int(c.importDays)} jours environ, sans frais cachés.</p>
           </section>
           <section class="pile">
-            <h3 class="sous-titre">Paiement Mobile Money, à la commande</h3>
-            <p class="attenue">Vous envoyez le montant exact au numéro affiché, puis vous saisissez le code reçu par SMS. Nous vérifions le paiement et confirmons votre commande. Pas de paiement à la livraison.</p>
+            <h3 class="sous-titre">Paiement Mobile Money, dans l’application</h3>
+            <p class="attenue">Vous choisissez votre opérateur : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. La commande est confirmée dès que l’opérateur valide le paiement, et vous recevez aussitôt votre reçu avec votre numéro de commande. Pas de paiement à la livraison.</p>
+            {R.num(c.serviceFeePct) > 0 ? <p class="attenue">Des frais de service de {R.num(c.serviceFeePct)} % du panier s’ajoutent au paiement ; ils sont affichés avant de payer.</p> : null}
+            {!ms.length ? <p class="attenue">Le paiement en ligne ouvre très bientôt.</p> : null}
             {ms.length ? <div class="operateurs">{ms.map((m) => <PuceOperateur key={m.k} m={m} />)}</div> : null}
-            <p class="note ton-info"><Icone n="bouclier" /><span>Nous ne vous demanderons jamais votre code PIN.</span></p>
+            <p class="note ton-info"><Icone n="bouclier" /><span>Vous seul saisissez votre code PIN, sur votre téléphone. Personne ne vous le demandera.</span></p>
           </section>
           {c.returns ? <section class="pile"><h3 class="sous-titre">Échanges</h3><p class="attenue">{c.returns}</p></section> : null}
         </div>
@@ -181,7 +183,7 @@ export function ouvrirLivraisonPaiement() {
 
 export const ETAPES_IMPORT = [
   ['etiquette', 'Vous choisissez', 'Articles en stock à Bukavu ou importés de Chine sur commande.'],
-  ['portefeuille', 'Vous payez par Mobile Money', 'M-Pesa, Airtel Money, Orange Money : le montant exact, sans intermédiaire.'],
+  ['portefeuille', 'Vous payez par Mobile Money', 'M-Pesa, Airtel Money, Orange Money : vous validez le paiement sur votre téléphone et recevez votre reçu.'],
   ['douane', 'Nous importons et dédouanons', 'Transport par conteneur et formalités de douane pris en charge.'],
   ['camion', 'Vous êtes livré', 'À Bukavu et à Goma, avec un suivi de commande à chaque étape.']
 ];

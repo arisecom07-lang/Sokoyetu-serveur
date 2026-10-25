@@ -11,20 +11,26 @@ import { TetePage, adresseBoutique } from '../composants/cadre.jsx';
 import { LigneCommandeCourte, Chargement } from './accueil.jsx';
 
 export function statutPaiement(o) {
+  if (R.nonAboutie(o)) return { label: 'Non aboutie', ton: 'neutre' };
   if (o.status === 'cancelled') return o.payment && o.payment.status === 'refunded' ? { label: 'Remboursée', ton: 'neutre' } : { label: 'Annulée', ton: 'danger' };
   if (R.estPayee(o)) return { label: 'Payée', ton: 'ok' };
-  return { label: 'Paiement à vérifier', ton: 'alerte' };
+  if (o.payment && o.payment.status === 'failed') return { label: 'Paiement refusé', ton: 'danger' };
+  return { label: 'Paiement en cours', ton: 'alerte' };
 }
+const FOURNISSEURS = { flexpay: 'FlexPay', simulation: 'Mode test (aucun argent)' };
+const heure = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 export function statutPreparation(o) {
   if (o.status === 'cancelled') return null;
   const r = R.estRetraitCmd(o);
   return ({ unfulfilled: { label: 'À préparer', ton: 'neutre' }, preparing: { label: 'En préparation', ton: 'info' }, shipped: { label: r ? 'Prête au retrait' : 'En route', ton: 'info' }, delivered: { label: r ? 'Retirée' : 'Livrée', ton: 'ok' } })[o.fulfillment || 'unfulfilled'] || null;
 }
-const avecPoints = (o) => o.status === 'open' && Array.isArray(o.issues) && o.issues.length > 0 && !R.estPayee(o);
+// Commande payée avec une remarque du serveur (paiement arrivé après l'annulation automatique…), pas encore préparée.
+export const avecPoints = (o) => o.status === 'open' && R.estPayee(o) && Array.isArray(o.issues) && o.issues.length > 0 && (!o.fulfillment || o.fulfillment === 'unfulfilled');
 
 const FILTRES = [
-  ['toutes', 'Toutes', () => true], ['verifier', 'À vérifier', R.aVerifier], ['points', 'Points à vérifier', avecPoints], ['preparer', 'À préparer', R.aPreparer],
-  ['expediees', 'En route', R.aExpedier], ['livrees', 'Livrées', (o) => o.status !== 'cancelled' && o.fulfillment === 'delivered'], ['annulees', 'Annulées', (o) => o.status === 'cancelled']
+  ['toutes', 'Toutes', () => true], ['points', 'Points à vérifier', avecPoints], ['preparer', 'À préparer', R.aPreparer],
+  ['expediees', 'En route', R.aExpedier], ['livrees', 'Livrées', (o) => o.status !== 'cancelled' && o.fulfillment === 'delivered'],
+  ['paiement', 'Paiement en cours', R.enAttentePaiement], ['nonabouties', 'Non abouties', R.nonAboutie], ['annulees', 'Annulées', (o) => o.status === 'cancelled' && !R.nonAboutie(o)]
 ];
 
 export function Commandes() {
@@ -35,19 +41,19 @@ export function Commandes() {
   const os = commandes.value;
   const fn = (FILTRES.find((x) => x[0] === filtre) || FILTRES[0])[2];
   const mots = normaliser(q).split(/\s+/).filter(Boolean);
-  const liste = os.filter(fn).filter((o) => !mots.length || mots.every((m) => normaliser([o.number, o.customer && o.customer.name, o.phone, o.customer && o.customer.phone, o.payment && o.payment.ref].join(' ')).includes(m)));
+  const liste = os.filter(fn).filter((o) => !mots.length || mots.every((m) => normaliser([o.number, o.customer && o.customer.name, o.phone, o.customer && o.customer.phone, o.payment && o.payment.phone, o.payment && o.payment.reference, o.payment && o.payment.ref].join(' ')).includes(m)));
   const aTraiter = os.filter(R.aTraiter).length;
   return (
     <>
       <TetePage titre="Commandes" sous={`${pluriel(os.length, 'commande')}${aTraiter ? ` · ${aTraiter} à traiter` : ''}`} />
       <div class="outils-liste">
-        <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, téléphone, n° ou code" aria-label="Rechercher une commande" /></label>
+        <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, téléphone, n° ou transaction" aria-label="Rechercher une commande" /></label>
         <div class="puces" role="group" aria-label="Filtrer les commandes">
           {FILTRES.map(([k, t, f]) => { const n = os.filter(f).length; if (k === 'points' && !n) return null; return <button key={k} class="puce" aria-pressed={filtre === k ? 'true' : 'false'} onClick={() => setFiltre(k)}>{t}{k !== 'toutes' && n ? <span class="n">{n}</span> : null}</button>; })}
         </div>
       </div>
       {!pret.value ? <Chargement /> : liste.length ? <div class="liste">{liste.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div>
-        : <div class="carte"><Vide icone="recu" titre={os.length ? 'Aucune commande ici' : 'Pas encore de commande'} texte={os.length ? 'Changez de filtre ou de recherche.' : 'Les commandes passées dans la boutique arrivent ici en direct, avec une alerte.'}>{os.length ? null : <a class="btn btn-primaire" href={adresseBoutique('/')} target="_blank" rel="noopener">Passer une commande test</a>}</Vide></div>}
+        : <div class="carte"><Vide icone="recu" titre={os.length ? 'Aucune commande ici' : 'Pas encore de commande'} texte={os.length ? 'Changez de filtre ou de recherche.' : 'Les commandes de la boutique arrivent ici en direct, avec une alerte dès que le client a payé.'}>{os.length ? null : <a class="btn btn-primaire" href={adresseBoutique('/')} target="_blank" rel="noopener">Passer une commande test</a>}</Vide></div>}
     </>
   );
 }
@@ -58,8 +64,7 @@ function messageClient(o) {
   if (o.fulfillment === 'delivered') return `Bonjour ${n}, merci pour votre achat chez ${c.name} ! Votre commande #${o.number} est bien remise. À très vite.`;
   if (o.fulfillment === 'shipped') return R.estRetraitCmd(o) ? `Bonjour ${n}, votre commande #${o.number} est prête : vous pouvez venir la retirer à la boutique.` : `Bonjour ${n}, votre commande #${o.number} est en route (${o.shipping && o.shipping.zoneName}). Le livreur vous appellera.`;
   if (o.fulfillment === 'preparing') return `Bonjour ${n}, nous préparons votre commande #${o.number}. Nous vous prévenons dès son départ.`;
-  if (R.estPayee(o)) return `Bonjour ${n}, votre paiement de ${dollars(o.total)} pour la commande #${o.number} est bien reçu. Merci !`;
-  return `Bonjour ${n}, merci pour votre commande #${o.number} chez ${c.name} (${dollars(o.total)}). Nous vérifions votre paiement ${o.payment && o.payment.label}.`;
+  return `Bonjour ${n}, merci pour votre commande #${o.number} chez ${c.name} : votre paiement de ${dollars(o.total)} est bien reçu. Nous vous prévenons dès son départ.`;
 }
 function messageLivreur(o) {
   const s = o.shipping || {};
@@ -75,9 +80,11 @@ export function Commande() {
   const sp = statutPaiement(o), sf = statutPreparation(o); const retrait = R.estRetraitCmd(o);
   const m = R.margeCommande(o); const points = R.incoherences(o);
   const nb = commandes.value.filter((x) => x.phone && x.phone === o.phone).length;
-  const wa = lienWhatsApp(o.customer && o.customer.phone, messageClient(o));
+  // Pas de message au client tant que la commande n'est pas payée : le paiement se fait seul, dans la boutique.
+  const wa = R.estPayee(o) || o.payment.status === 'refunded' ? lienWhatsApp(o.customer && o.customer.phone, messageClient(o)) : '';
   const agir = async (action, extra) => {
-    if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: o.stockApplied ? 'Les articles retournent en stock. Pensez à rembourser le client si le paiement a été reçu.' : 'La commande sera marquée comme annulée.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
+    if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: R.estPayee(o) ? 'Les articles retournent en stock. Le client a payé : remboursez-le sur son numéro Mobile Money, puis notez-le ici.' : 'Les articles retournent en stock. Si le client valide le paiement malgré tout, la commande se rouvrira avec un point à vérifier.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
+    if (action === 'paid' && !(await confirmer({ titre: 'Marquer comme payée à la main ?', texte: `Seulement si vous avez reçu ${dollars(o.total)} en dehors de l’application : vérifiez d’abord dans votre compte ${o.payment.label}. D’habitude, la commande se confirme toute seule dès que l’opérateur valide le paiement.`, ok: 'Oui, j’ai reçu l’argent', annuler: 'Retour' }))) return;
     setOccupe(action);
     try {
       await etapeCommande(o.id, action, extra);
@@ -89,13 +96,16 @@ export function Commande() {
   const bouton = (action, icone, children, secondaire) => <button class={classes('btn', secondaire ? 'btn-secondaire' : 'btn-primaire', occupe === action && 'charge')} disabled={!!occupe} onClick={() => agir(action)}><Icone n={icone} />{children}</button>;
 
   let suite;
-  if (o.status === 'cancelled') suite = (
+  if (R.nonAboutie(o)) suite = <Note ton="info" icone="horloge">Le client n’a pas payé dans le délai : commande annulée automatiquement{o.cancelledAt ? ` le ${dateHeure(o.cancelledAt)}` : ''}, articles remis en stock. Rien à faire.</Note>;
+  else if (o.status === 'cancelled') suite = (
     <><Note ton="danger" icone="alerte">Commande annulée{o.cancelledAt ? ` le ${dateHeure(o.cancelledAt)}` : ''}{o.stockApplied === false && (o.reserved || []).length ? ', articles remis en stock' : ''}.{R.estPayee(o) ? ' Le paiement avait été reçu : remboursez le client puis notez-le.' : ''}</Note>
       <div class="rangee-l espace-haut">{R.estPayee(o) ? bouton('refund', 'echange', 'Remboursement effectué', false) : null}{bouton('reopen', "actualiser", 'Rouvrir la commande', true)}</div></>
   );
-  else if (R.aVerifier(o)) suite = (
-    <><Note ton="alerte" icone="portefeuille">Vérifiez dans votre compte <b>{o.payment.label}</b> la réception de <b>{dollars(o.total)}</b>{o.payment.sender ? <> envoyés par le <b>{telephone(o.payment.sender)}</b></> : null}, code <b>{o.payment.ref}</b>.</Note>
-      <div class="rangee-l espace-haut">{bouton('paid', "coche", 'Paiement reçu', false)}</div></>
+  else if (R.enAttentePaiement(o)) suite = (
+    <>{o.payment.status === 'failed'
+      ? <Note ton="danger" icone="alerte">Dernière tentative refusée : {String(o.payment.error || 'paiement annulé').replace(/\.+$/, '')}. Le client peut réessayer depuis la boutique{o.expiresAt ? ` jusqu’à ${heure(o.expiresAt)}` : ''}.</Note>
+      : <Note ton="alerte" icone="mobile">Le client valide le paiement <b>{o.payment.label}</b> de <b>{dollars(o.total)}</b> sur son téléphone. La commande se confirme toute seule dès que l’opérateur valide{o.expiresAt ? <>, sinon elle s’annule à <b>{heure(o.expiresAt)}</b></> : null}.</Note>}
+      <div class="rangee-l espace-haut">{bouton('paid', 'coche', 'Marquer comme payée à la main', true)}</div></>
   );
   else if (!o.fulfillment || o.fulfillment === 'unfulfilled') suite = <><p class="attenue">Payée. Préparez les articles ci-dessous.</p><div class="rangee-l espace-haut">{bouton('preparing', "colis", 'Commencer la préparation', false)}{bouton('shipped', retrait ? 'boutique' : 'camion', retrait ? 'Prête au retrait' : 'Expédier directement', true)}</div></>;
   else if (o.fulfillment === 'preparing') suite = <><p class="attenue">{retrait ? 'Quand le colis est prêt, prévenez le client.' : 'Quand le colis part, marquez-le comme expédié.'}</p><div class="rangee-l espace-haut">{bouton('shipped', retrait ? 'boutique' : 'camion', retrait ? 'Prête au retrait' : 'Marquer comme expédiée', false)}</div></>;
@@ -106,10 +116,10 @@ export function Commande() {
   return (
     <>
       <TetePage titre={`Commande #${o.number}`} sous={`${dateHeure(o.createdAt)} · ${o.customer && o.customer.name}`} parent="/commandes"
-        actions={<div class="rangee"><Pastille ton={sp.ton} point>{sp.label}</Pastille>{sf ? <Pastille ton={sf.ton}>{sf.label}</Pastille> : null}</div>} />
+        actions={<div class="rangee"><Pastille ton={sp.ton} point>{sp.label}</Pastille>{sf && R.estPayee(o) ? <Pastille ton={sf.ton}>{sf.label}</Pastille> : null}</div>} />
       <div class="detail-grille">
         <div class="pile-l">
-          {points.length && o.status !== 'cancelled' ? <Note ton="danger" icone="alerte"><b>Points à vérifier avant d’encaisser</b><ul class="points">{points.map((p, i) => <li key={i}>{p}</li>)}</ul></Note> : null}
+          {points.length && o.status !== 'cancelled' ? <Note ton="danger" icone="alerte"><b>Points à vérifier</b><ul class="points">{points.map((p, i) => <li key={i}>{p}</li>)}</ul></Note> : null}
           <section class="carte">
             <h2 class="carte-titre"><Icone n="drapeau" />Prochaine étape</h2>
             {suite}
@@ -137,8 +147,9 @@ export function Commande() {
               <div><dt>Sous-total</dt><dd class="num">{dollars(o.subtotal)}</dd></div>
               {o.discount ? <div><dt>Code {o.discount.code}</dt><dd class="moins num">−{dollars(o.discount.amount)}</dd></div> : null}
               <div><dt>Livraison · {o.shipping && o.shipping.zoneName}</dt><dd class="num">{o.shippingFee ? dollars(o.shippingFee) : 'Gratuite'}</dd></div>
-              <div class="total"><dt class="lib">Total</dt><dd class="num">{dollars(o.total)}</dd></div>
-              {m.couts ? <div><dt>Marge estimée (hors livraison){m.connue ? '' : ' · coûts incomplets'}</dt><dd class="num" style={{ color: m.marge >= 0 ? 'var(--ok)' : 'var(--danger)', fontWeight: 750 }}>{dollars(m.marge)}</dd></div> : null}
+              {o.serviceFee ? <div><dt>Frais de service ({R.num(o.serviceFeePct)} %)</dt><dd class="num">{dollars(o.serviceFee)}</dd></div> : null}
+              <div class="total"><dt class="lib">{R.estPayee(o) ? 'Total payé' : 'Total'}</dt><dd class="num">{dollars(o.total)}</dd></div>
+              {m.couts ? <div><dt>Marge estimée (frais de service compris, hors livraison){m.connue ? '' : ' · coûts incomplets'}</dt><dd class="num" style={{ color: m.marge >= 0 ? 'var(--ok)' : 'var(--danger)', fontWeight: 750 }}>{dollars(m.marge)}</dd></div> : null}
             </dl>
           </section>
           <section class="carte">
@@ -150,11 +161,13 @@ export function Commande() {
           <section class="carte">
             <h2 class="carte-titre"><Icone n="portefeuille" />Paiement</h2>
             <dl class="infos">
-              <dt>Mode</dt><dd>{o.payment.label}</dd>
-              {o.payment.ref ? <><dt>Code</dt><dd><span class="code">{o.payment.ref}</span> <button class="btn-icone mini" aria-label="Copier le code" onClick={async () => { if (await copier(o.payment.ref)) toast('Code copié'); }}><Icone n="copier" /></button></dd></> : null}
-              {o.payment.sender ? <><dt>Envoyé par</dt><dd>{telephone(o.payment.sender)}</dd></> : null}
-              <dt>Montant</dt><dd>{dollars(o.total)}</dd>
-              <dt>Statut</dt><dd>{o.payment.status === 'paid' ? `Reçu${o.payment.paidAt ? ' le ' + date(o.payment.paidAt) : ''}` : o.payment.status === 'refunded' ? 'Remboursé' : 'À vérifier'}</dd>
+              <dt>Mode</dt><dd>{o.payment.label}{o.payment.phone ? ` · ${telephone(o.payment.phone)}` : ''}</dd>
+              {o.payment.provider ? <><dt>Service</dt><dd>{FOURNISSEURS[o.payment.provider] || o.payment.provider}</dd></> : null}
+              {o.payment.reference ? <><dt>Transaction</dt><dd><span class="code">{o.payment.reference}</span> <button class="btn-icone mini" aria-label="Copier la référence" onClick={async () => { if (await copier(o.payment.reference)) toast('Référence copiée'); }}><Icone n="copier" /></button></dd></> : null}
+              {o.payment.ref ? <><dt>Code client</dt><dd><span class="code">{o.payment.ref}</span></dd></> : null}
+              <dt>Montant</dt><dd>{dollars(o.total)}{o.serviceFee ? <small class="discret"> dont {dollars(o.serviceFee)} de frais</small> : null}</dd>
+              {R.int(o.payment.attempts) > 1 ? <><dt>Tentatives</dt><dd>{o.payment.attempts}</dd></> : null}
+              <dt>Statut</dt><dd>{o.payment.status === 'paid' ? `Payé${o.payment.paidAt ? ' le ' + dateHeure(o.payment.paidAt) : ''}${o.payment.manual ? ' (confirmé à la main)' : ''}` : o.payment.status === 'refunded' ? 'Remboursé' : o.payment.status === 'expired' ? 'Jamais reçu' : o.payment.status === 'failed' ? 'Refusé' : 'En attente du client'}</dd>
             </dl>
           </section>
           <section class="carte">
@@ -172,7 +185,7 @@ export function Commande() {
             <h2 class="carte-titre"><Icone n="repere" />{retrait ? 'Retrait en boutique' : 'Livraison'}</h2>
             <dl class="infos"><dt>Zone</dt><dd>{o.shipping.zoneName}</dd>{o.shipping.address ? <><dt>Adresse</dt><dd>{o.shipping.address}</dd></> : null}{o.shipping.landmark ? <><dt>Repère</dt><dd>{o.shipping.landmark}</dd></> : null}</dl>
             {o.note ? <Note icone="bulle" classe="espace-haut"><b>Note du client :</b> {o.note}</Note> : null}
-            {!retrait && o.status !== 'cancelled' ? <a class="btn btn-doux btn-s espace-haut" href={`https://wa.me/?text=${encodeURIComponent(messageLivreur(o))}`} target="_blank" rel="noopener"><Icone n="camion" />Envoyer au livreur</a> : null}
+            {!retrait && o.status !== 'cancelled' && R.estPayee(o) ? <a class="btn btn-doux btn-s espace-haut" href={`https://wa.me/?text=${encodeURIComponent(messageLivreur(o))}`} target="_blank" rel="noopener"><Icone n="camion" />Envoyer au livreur</a> : null}
           </section>
           <section class="carte">
             <h2 class="carte-titre"><Icone n="crayon" />Note interne</h2>

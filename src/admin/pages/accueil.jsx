@@ -8,10 +8,10 @@ import { Local } from '../../commun/js/stockage.js';
 import { DEMO } from '../../commun/js/api.js';
 import { dollars, date, debutJour, JOUR, pluriel, ilya, classes } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret } from '../etat.js';
+import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, paiementServeur } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
-import { statutPaiement, statutPreparation } from './commandes.jsx';
+import { statutPaiement, statutPreparation, avecPoints } from './commandes.jsx';
 
 export function Connexion() {
   const [email, setEmail] = useState(DEMO ? 'demo@sokoyetu.com' : Local.lire('dernierEmail', ''));
@@ -58,13 +58,16 @@ export function Connexion() {
   );
 }
 
+/* Une vente = une commande payée (confirmée par l'opérateur), comptée le jour du paiement. */
+const venteDu = (o) => (o.payment && o.payment.paidAt) || o.createdAt || 0;
+const estVente = (o) => o.status !== 'cancelled' && R.estPayee(o);
 function statistiques(liste, debut, fin) {
-  const l = liste.filter((o) => o.status !== 'cancelled' && (o.createdAt || 0) >= debut && (o.createdAt || 0) < fin);
+  const l = liste.filter((o) => estVente(o) && venteDu(o) >= debut && venteDu(o) < fin);
   const ventes = l.reduce((a, o) => a + R.num(o.total), 0);
-  const encaisse = l.filter(R.estPayee).reduce((a, o) => a + R.num(o.total), 0);
+  const frais = l.reduce((a, o) => a + R.num(o.serviceFee), 0);
   const marge = l.reduce((a, o) => a + R.margeCommande(o).marge, 0);
   const margeConnue = l.every((o) => R.margeCommande(o).connue);
-  return { l, ventes, encaisse, marge, margeConnue, n: l.length, panier: l.length ? ventes / l.length : 0 };
+  return { l, ventes, frais, marge, margeConnue, n: l.length, panier: l.length ? ventes / l.length : 0 };
 }
 function evolution(a, b) {
   if (!b) return a ? { texte: 'Nouveau', ton: 'ok' } : null;
@@ -77,11 +80,11 @@ function etapesDemarrage(c) {
   const ps = produits.value;
   return [
     { texte: 'Ajouter vos propres produits', fait: ps.some((p) => !p.demo), href: '/produits/nouveau' },
-    { texte: 'Configurer vos numéros Mobile Money', fait: R.moyensDePaiement(c).length > 0, href: '/reglages/paiements' },
+    { texte: 'Brancher le paiement Mobile Money (FlexPay)', fait: paiementServeur.value.pret && paiementServeur.value.fournisseur === 'flexpay', href: '/reglages/paiements' },
     { texte: 'Vérifier les zones et frais de livraison', fait: !!(c.setup && c.setup.livraison), href: '/reglages/livraison' },
     { texte: 'Ajouter le numéro WhatsApp de la boutique', fait: !!R.chiffres(c.whatsapp), href: '/reglages/general' },
     { texte: 'Compléter les informations légales (RCCM, adresse)', fait: !!(c.legal && c.legal.company && c.legal.address && (c.legal.rccm || c.legal.idnat)), href: '/reglages/legal' },
-    { texte: 'Passer une commande test', fait: commandes.value.length > 0, href: null }
+    { texte: 'Passer une commande test', fait: commandes.value.some(R.estPayee), href: null }
   ];
 }
 
@@ -94,10 +97,11 @@ export function Tableau() {
   const st = statistiques(os, debut, fin); const avant = statistiques(os, debut - periode * JOUR, debut);
   const nJours = Math.max(7, periode); const d0 = auj - (nJours - 1) * JOUR;
   const jours = Array.from({ length: nJours }, (_, i) => ({ t: d0 + i * JOUR, v: 0, n: 0 }));
-  os.forEach((o) => { if (o.status === 'cancelled') return; const i = Math.floor((debutJour(o.createdAt || 0) - d0) / JOUR); if (i >= 0 && i < nJours) { jours[i].v += R.num(o.total); jours[i].n++; } });
+  os.forEach((o) => { if (!estVente(o)) return; const i = Math.floor((debutJour(venteDu(o)) - d0) / JOUR); if (i >= 0 && i < nJours) { jours[i].v += R.num(o.total); jours[i].n++; } });
 
-  const nVerif = os.filter(R.aVerifier).length, nPrep = os.filter(R.aPreparer).length, nLiv = os.filter(R.aExpedier).length;
-  const nPoints = os.filter((o) => o.status === 'open' && Array.isArray(o.issues) && o.issues.length && !R.estPayee(o)).length;
+  const nPaiement = os.filter(R.enAttentePaiement).length, nPrep = os.filter(R.aPreparer).length, nLiv = os.filter(R.aExpedier).length;
+  const nPoints = os.filter(avecPoints).length;
+  const p = paiementServeur.value;
   const faibles = produits.value.filter((p) => R.estEnVente(p) && !R.estImport(p) && R.stockTotal(p) <= R.int(c.lowStock));
   const top = {};
   st.l.forEach((o) => (o.items || []).forEach((i) => { const t = top[i.productId] = top[i.productId] || { id: i.productId, titre: i.title, image: i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {}), qte: 0, ca: 0 }; t.qte += R.int(i.qty); t.ca += R.int(i.qty) * R.num(i.price); }));
@@ -112,12 +116,14 @@ export function Tableau() {
       <TetePage grand titre={`${h < 18 ? 'Bonjour' : 'Bonsoir'}${c.ownerName ? ', ' + c.ownerName : ''}`} sous={`${date(maintenant, { weekday: 'long', day: 'numeric', month: 'long' })} · ${os.length ? pluriel(os.length, 'commande') + ' au total' : 'prêt pour vos premières ventes'}`}
         actions={<Segment libelle="Période" options={[[1, 'Aujourd’hui'], [7, '7 jours'], [30, '30 jours']]} valeur={periode} onChange={(v) => changer(Number(v))} />} />
       <div class="pile-l">
+        {!p.pret ? <Note ton="danger" icone="portefeuille">La boutique n’encaisse pas encore : le paiement Mobile Money n’est pas branché sur le serveur. <a class="lien" href={lien('/reglages/paiements')}>Voir comment l’activer</a></Note>
+          : p.test ? <Note ton="alerte" icone="portefeuille">Paiement en <b>mode test</b> : les commandes sont confirmées sans argent. <a class="lien" href={lien('/reglages/paiements')}>Brancher FlexPay</a></Note> : null}
         {nbExemples.value ? <Note ton="info" icone="info">Le catalogue d’exemple est affiché dans la boutique ({pluriel(nbExemples.value, 'élément')}). Remplacez-le par vos articles, ou retirez-le dans <a class="lien" href={lien('/reglages/general')}>Réglages → Général</a>.</Note> : null}
         <div class="kpis">
-          <Kpi grand libelle={`Ventes ${lib}`} icone="graphique" valeur={dollars(st.ventes)} sous={evV ? evV.texte : `${dollars(st.encaisse)} encaissés`} ton={evV && evV.ton} />
-          <Kpi libelle="Commandes" icone="recu" valeur={String(st.n)} sous={nVerif + nPrep ? `${nVerif + nPrep} à traiter` : 'Tout est à jour'} href={lien('/commandes')} ton={nVerif + nPrep ? 'alerte' : 'ok'} />
+          <Kpi grand libelle={`Ventes ${lib}`} icone="graphique" valeur={dollars(st.ventes)} sous={evV ? evV.texte : 'Commandes payées'} ton={evV && evV.ton} />
+          <Kpi libelle="Commandes payées" icone="recu" valeur={String(st.n)} sous={nPrep ? `${nPrep} à préparer` : 'Tout est à jour'} href={lien('/commandes')} ton={nPrep ? 'alerte' : 'ok'} />
           <Kpi libelle="Marge estimée" icone="portefeuille" valeur={dollars(st.marge)} sous={st.ventes ? `${Math.round((st.marge / Math.max(1, st.ventes)) * 100)} % des ventes${st.margeConnue ? '' : ' · coûts incomplets'}` : 'après coûts d’achat'} />
-          <Kpi libelle="Panier moyen" icone="sac" valeur={dollars(st.panier)} sous={`${dollars(st.encaisse)} encaissés`} />
+          <Kpi libelle="Panier moyen" icone="sac" valeur={dollars(st.panier)} sous={st.frais ? `dont ${dollars(st.frais)} de frais de service` : 'par commande payée'} />
         </div>
         <div class="tableau-grille">
           <div class="pile-l">
@@ -127,22 +133,22 @@ export function Tableau() {
             </section>
             <section class="carte">
               <h2 class="carte-titre"><Icone n="recu" />Dernières commandes{os.length ? <a class="fin lien" href={lien('/commandes')}>Tout voir</a> : null}</h2>
-              {os.length ? <div class="liste sans-bord">{os.slice(0, 5).map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div>
+              {os.length ? <div class="liste sans-bord">{os.filter((o) => !R.nonAboutie(o)).slice(0, 5).map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div>
                 : <div class="vide-petit"><p class="attenue">Les commandes de la boutique arrivent ici en direct.</p><a class="btn btn-doux btn-s" href={adresseBoutique('/')} target="_blank" rel="noopener"><Icone n="oeil" />Passer une commande test</a></div>}
             </section>
           </div>
           <div class="pile-l">
             <section class="carte">
               <h2 class="carte-titre"><Icone n="coche" />À faire</h2>
-              {nVerif || nPrep || nLiv || faibles.length || nPoints ? (
+              {nPrep || nLiv || faibles.length || nPoints ? (
                 <div class="a-faire">
-                  {nVerif ? <a href={lien('/commandes?f=verifier')}><span class="af-n ton-alerte">{nVerif}</span><b>Paiement{nVerif > 1 ? 's' : ''} Mobile Money à vérifier</b><Icone n="droite" /></a> : null}
-                  {nPoints ? <a href={lien('/commandes?f=points')}><span class="af-n ton-danger">{nPoints}</span><b>Commande{nPoints > 1 ? 's' : ''} avec un point à vérifier</b><Icone n="droite" /></a> : null}
+                  {nPoints ? <a href={lien('/commandes?f=points')}><span class="af-n ton-danger">{nPoints}</span><b>Commande{nPoints > 1 ? 's' : ''} payée{nPoints > 1 ? 's' : ''} avec un point à vérifier</b><Icone n="droite" /></a> : null}
                   {nPrep ? <a href={lien('/commandes?f=preparer')}><span class="af-n ton-info">{nPrep}</span><b>Commande{nPrep > 1 ? 's' : ''} à préparer</b><Icone n="droite" /></a> : null}
                   {nLiv ? <a href={lien('/commandes?f=expediees')}><span class="af-n ton-marque">{nLiv}</span><b>Commande{nLiv > 1 ? 's' : ''} en route à livrer</b><Icone n="droite" /></a> : null}
                   {faibles.length ? <a href={lien('/produits?f=faible')}><span class="af-n ton-danger">{faibles.length}</span><b>Produit{faibles.length > 1 ? 's' : ''} en stock faible</b><Icone n="droite" /></a> : null}
                 </div>
               ) : <Note ton="ok" icone="coche">Rien en attente : tout est à jour.</Note>}
+              {nPaiement ? <p class="discret petit espace-haut"><a class="lien" href={lien('/commandes?f=paiement')}>{pluriel(nPaiement, 'paiement en cours', 'paiements en cours')}</a> : le client valide sur son téléphone, rien à faire.</p> : null}
             </section>
             <section class="carte">
               <h2 class="carte-titre"><Icone n="etoile" />Meilleures ventes<span class="fin">{lib}</span></h2>

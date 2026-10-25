@@ -16,6 +16,7 @@ Wants=network-online.target
 User=sokoyetu
 Group=sokoyetu
 WorkingDirectory=$DIR
+Environment=SOKOYETU_DOMAINE=$DOMAINE
 EnvironmentFile=-$DIR/sokoyetu.env
 ExecStart=$DIR/pocketbase serve $DOMAINE www.$DOMAINE admin.$DOMAINE --dir=$DIR/pb_data --hooksDir=$DIR/pb_hooks --migrationsDir=$DIR/pb_migrations --publicDir=$DIR/pb_public --hooksWatch=false
 Restart=always

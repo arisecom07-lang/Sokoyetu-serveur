@@ -43,10 +43,10 @@ function carillon() {
   });
 }
 quandNouvelleCommande((o) => {
-  toast(`Nouvelle commande #${o.number} · ${dollars(o.total)}`, { icone: 'cloche', duree: 6000 });
+  toast(`Commande payée #${o.number} · ${dollars(o.total)}`, { icone: 'cloche', duree: 6000 });
   carillon();
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
-    navigator.serviceWorker.ready.then((r) => r.showNotification(`Nouvelle commande #${o.number}`, { body: `${o.customer && o.customer.name} · ${dollars(o.total)} · ${o.payment && o.payment.label}`, icon: 'icone-192.png', tag: 'commande-' + o.id, data: { url: '/#/commandes/' + o.id } })).catch(() => { });
+    navigator.serviceWorker.ready.then((r) => r.showNotification(`Commande payée #${o.number}`, { body: `${o.customer && o.customer.name} · ${dollars(o.total)} · ${o.payment && o.payment.label}`, icon: 'icone-192.png', tag: 'commande-' + o.id, data: { url: '/#/commandes/' + o.id } })).catch(() => { });
   }
 });
 

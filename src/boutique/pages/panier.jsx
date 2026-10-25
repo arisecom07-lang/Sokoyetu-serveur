@@ -26,6 +26,8 @@ export function Panier() {
   const problemes = new Map(dv.problemes.filter((x) => x.ligne != null).map((x) => [x.ligne, x]));
   const bloque = dv.problemes.some((x) => x.code === 'stock' || x.code === 'option' || x.code === 'article');
   const seuil = R.num(c.freeShippingOver);
+  // Hors livraison (choisie à l'étape suivante) : frais de service sur le panier après réduction.
+  const frais = R.fraisService(c, dv.sousTotal); const estime = R.arrondi(dv.sousTotal + frais);
   const suggestions = trier(produits.value.filter((p) => !panier.value.some((l) => l.productId === p.id)), 'pour-vous').slice(0, 8);
 
   if (!lignes.length) {
@@ -80,9 +82,10 @@ export function Panier() {
               <dl class="montants">
                 <div><dt>Sous-total ({pluriel(nbArticles.value, 'article')})</dt><dd class="num">{dollars(dv.sousTotal)}</dd></div>
                 <div><dt>Livraison</dt><dd class="attenue">Choisie à l’étape suivante</dd></div>
-                <div class="total"><dt class="lib">Total estimé</dt><dd class="num">{dollars(dv.sousTotal)}</dd></div>
+                {frais ? <div><dt>Frais de service ({R.num(c.serviceFeePct)} %)</dt><dd class="num">{dollars(frais)}</dd></div> : null}
+                <div class="total"><dt class="lib">Total estimé</dt><dd class="num">{dollars(estime)}</dd></div>
               </dl>
-              {francs(dv.sousTotal, c) ? <p class="discret petit droite">{francs(dv.sousTotal, c)}</p> : null}
+              {francs(estime, c) ? <p class="discret petit droite">{francs(estime, c)}</p> : null}
               {seuil > 0 ? (
                 <div class="livraison-offerte">
                   <div class="jauge" aria-hidden="true"><i style={{ width: Math.min(100, dv.sousTotal / seuil * 100) + '%' }} /></div>
@@ -90,7 +93,7 @@ export function Panier() {
                 </div>
               ) : null}
               <button class="btn btn-primaire btn-l btn-bloc seulement-ordi espace-haut" disabled={bloque} onClick={() => { mesurerEvenement('begin_checkout', { value: dv.sousTotal, currency: 'USD' }); naviguer('/commander'); }}>Commander<Icone n="droite" /></button>
-              <p class="note ton-info espace-haut"><Icone n="bouclier" /><span>Paiement Mobile Money à la commande. Le montant exact vous est confirmé avant de payer.</span></p>
+              <p class="note ton-info espace-haut"><Icone n="bouclier" /><span>Paiement Mobile Money dans l’application : vous validez le montant sur votre téléphone, avec votre code PIN.</span></p>
             </div>
           </aside>
         </div>
@@ -98,7 +101,7 @@ export function Panier() {
       </main>
       <Pied />
       <BarreAction avecNav>
-        <div class="barre-total"><small>Total estimé</small><span class="prix">{dollars(dv.sousTotal)}</span></div>
+        <div class="barre-total"><small>Total estimé</small><span class="prix">{dollars(estime)}</span></div>
         <button class="btn btn-primaire btn-l" style={{ flex: 1 }} disabled={bloque} onClick={() => { mesurerEvenement('begin_checkout', { value: dv.sousTotal, currency: 'USD' }); naviguer('/commander'); }}>Commander</button>
       </BarreAction>
     </>

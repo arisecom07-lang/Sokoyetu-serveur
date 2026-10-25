@@ -39,9 +39,9 @@ export function Client() {
   const tel = route.value.segs[1]; const c = clients.value.find((x) => x.tel === tel);
   if (!pret.value) return <Chargement />;
   if (!c) return <><TetePage titre="Client" parent="/clients" /><div class="carte"><Vide icone="personnes" titre="Client introuvable" /></div></>;
-  const valides = c.commandes.filter((o) => o.status !== 'cancelled');
+  const valides = c.commandes.filter((o) => o.status !== 'cancelled' && R.estPayee(o));
   const effacer = async () => {
-    if (!(await confirmer({ titre: `Effacer les données de ${c.nom || 'ce client'} ?`, texte: 'Nom, téléphone, adresses et codes de paiement sont retirés de toutes ses commandes. Les montants restent pour la comptabilité. C’est définitif.', ok: 'Effacer définitivement', danger: true }))) return;
+    if (!(await confirmer({ titre: `Effacer les données de ${c.nom || 'ce client'} ?`, texte: 'Nom, téléphones et adresses sont retirés de toutes ses commandes. Les montants restent pour la comptabilité. C’est définitif.', ok: 'Effacer définitivement', danger: true }))) return;
     try { const r = await effacerClient(c.tel); toast(`Données effacées (${pluriel(r.effacees, 'commande')})`, { icone: 'poubelle' }); history.back(); } catch (e) { gererErreur(e, 'Effacement impossible'); }
   };
   return (
@@ -49,7 +49,7 @@ export function Client() {
       <TetePage titre={c.nom || 'Client'} sous={`${telephone(c.affiche) || c.affiche}${c.zone ? ' · ' + c.zone : ''}`} parent="/clients" />
       <div class="pile-l">
         <div class="kpis">
-          <Kpi libelle="Commandes" icone="recu" valeur={String(c.commandes.length)} sous={c.commandes.length - valides.length ? `${c.commandes.length - valides.length} annulée(s)` : ''} />
+          <Kpi libelle="Commandes payées" icone="recu" valeur={String(valides.length)} sous={c.commandes.length - valides.length ? `${c.commandes.length - valides.length} non payée(s) ou annulée(s)` : ''} />
           <Kpi libelle="Total dépensé" icone="portefeuille" valeur={dollars(c.depense)} />
           <Kpi libelle="Panier moyen" icone="sac" valeur={dollars(c.depense / Math.max(1, valides.length))} />
           <Kpi libelle="Dernière commande" icone="calendrier" valeur={date(c.derniere, { day: 'numeric', month: 'short' })} sous={ilya(c.derniere)} />
@@ -138,9 +138,9 @@ function AlertesCommandes() {
   };
   return (
     <>
-      <p class="intertitre">Alertes de nouvelle commande</p>
+      <p class="intertitre">Alertes de commande payée</p>
       <div class="menu">
-        <Bascule actif={son} onClick={() => { Local.ecrire('sonCommandes', !son); setSon(!son); }} libelle="Son" sous="Un carillon quand une commande arrive" />
+        <Bascule actif={son} onClick={() => { Local.ecrire('sonCommandes', !son); setSon(!son); }} libelle="Son" sous="Un carillon dès qu’un client a payé" />
         {permission !== 'absent' ? <Bascule actif={permission === 'granted'} onClick={notifier} libelle="Notifications" sous={permission === 'granted' ? 'Activées sur cet appareil, même quand l’onglet est en arrière-plan' : permission === 'denied' ? 'Refusées : à autoriser dans les réglages du navigateur' : 'Être prévenu même quand l’onglet est en arrière-plan'} /> : null}
       </div>
     </>

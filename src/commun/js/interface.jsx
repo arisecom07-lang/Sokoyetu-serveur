@@ -147,11 +147,14 @@ export function Bascule({ actif, onClick, libelle, sous, desactive }) {
   );
 }
 
+/* Case à cocher dont le texte peut contenir des liens : la case est le contrôle, le texte la nomme et la coche aussi. */
 export function CaseACocher({ coche, onClick, children }) {
+  const id = useId();
   return (
-    <button type="button" class="case" role="checkbox" aria-checked={coche ? 'true' : 'false'} onClick={onClick}>
-      <span class="case-boite" aria-hidden="true"><Icone n="coche" /></span><span>{children}</span>
-    </button>
+    <div class="case" data-coche={coche ? 'oui' : 'non'}>
+      <button type="button" class="case-boite" role="checkbox" aria-checked={coche ? 'true' : 'false'} aria-labelledby={id} onClick={onClick}><Icone n="coche" /></button>
+      <span id={id} onClick={(e) => { if (!e.target.closest('a')) onClick(); }}>{children}</span>
+    </div>
   );
 }
 

@@ -101,6 +101,9 @@ function catalogue(e) {
   const liste = (col, filtre) => e.app.findRecordsByFilter(col, filtre, '', 10000, 0).map(S.versRecord);
   let config = null;
   try { config = S.versRecord(e.app.findRecordById('config', 'store')); } catch (err) { }
+  // Le fournisseur de paiement (sans aucune clé) : la boutique n'affiche que les moyens réellement encaissables.
+  const cfg = S.configuration(e.app);
+  config = Object.assign({ id: 'store' }, config || {}, { payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.provider === 'simulation' } });
   const donnees = {
     config,
     collections: liste('collections', 'id != ""'),

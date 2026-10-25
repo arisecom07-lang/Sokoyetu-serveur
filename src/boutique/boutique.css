@@ -303,6 +303,48 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .liste-points .ic { --ic: 18px; color: var(--alerte); }
 .carte.en-erreur { border-color: var(--danger); }
 
+/* ---------- Paiement en cours ---------- */
+.intro-paiement { margin: -6px 0 12px; }
+.saisie-numero { font-size: 18px; font-weight: 700; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.paiement-corps { max-width: 640px; margin: 0 auto; }
+.paiement-attente { --op: var(--ebene); display: grid; justify-items: center; text-align: center; gap: 10px; padding: var(--e6) var(--e5); border-color: color-mix(in srgb, var(--op) 30%, var(--ligne));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--op) 7%, var(--surface)), var(--surface) 220px); }
+.paiement-attente h1 { font-size: 25px; line-height: 1.2; max-width: 22ch; }
+.paiement-attente > .attenue { max-width: 46ch; line-height: 1.5; }
+.paiement-attente .gauche { text-align: left; justify-self: stretch; }
+.paiement-attente .pile { justify-self: stretch; }
+.paiement-attente .etapes-paiement { justify-self: stretch; max-width: 420px; margin: 6px auto; }
+.op-grande { width: 44px; height: 44px; border-radius: 13px; font-size: 20px; }
+.attente-onde { position: relative; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--op) 14%, var(--surface)); color: var(--op); margin: 4px 0; }
+.attente-onde .ic { --ic: 34px; }
+.attente-onde::before, .attente-onde::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--op) 45%, transparent); animation: onde 2.4s var(--sortie) infinite; }
+.attente-onde::after { animation-delay: 1.2s; }
+@keyframes onde { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+.point-vivant { display: inline-block; vertical-align: 1px; margin-right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 50%, transparent); animation: vivant 1.6s ease-out infinite; }
+@keyframes vivant { to { box-shadow: 0 0 0 8px transparent; } }
+.paiement-attente.en-echec { border-color: color-mix(in srgb, var(--danger) 40%, var(--ligne)); background: linear-gradient(180deg, var(--danger-doux), var(--surface) 200px); }
+.paiement-icone { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); }
+.paiement-icone .ic { --ic: 36px; }
+.paiement-icone.danger { background: var(--danger-doux); color: var(--danger); }
+.attente-paiement { border-color: color-mix(in srgb, var(--alerte) 40%, var(--ligne)); background: var(--alerte-doux); margin-top: 0; }
+.attente-paiement .menu-icone { color: var(--alerte); }
+
+/* ---------- Reçu ---------- */
+.recu { position: relative; background: var(--surface); border: 1px solid var(--ligne); border-radius: var(--r-l); padding: var(--e5); box-shadow: var(--ombre-1); display: grid; gap: var(--e4); }
+.recu-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); flex-wrap: wrap; }
+.recu-tete h2 { font-family: var(--police-titre); font-size: 19px; font-weight: 700; text-align: right; }
+.recu-tete small { display: block; text-align: right; color: var(--encre-3); font-size: 13px; }
+.recu-numero { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 14px 14px 18px; border-radius: var(--r-m); background: var(--fond-2); border: 1.5px dashed var(--ligne-saisie); }
+.recu-numero small { display: block; font-size: 12.5px; color: var(--encre-3); font-weight: 600; }
+.recu-numero b { display: block; font-size: 28px; line-height: 1.15; letter-spacing: .14em; }
+.recu-infos dd b { font-weight: 700; }
+.recu-trait { height: 0; border-top: 1.5px dashed var(--ligne); margin: 0 calc(-1 * var(--e5)); }
+.recu-pied { display: grid; gap: 6px; font-size: 13px; color: var(--encre-3); line-height: 1.5; border-top: 1px solid var(--ligne); padding-top: var(--e3); }
+.recu-pied b { color: var(--encre-2); }
+.rangee-boutons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e2); }
+.page-retrouver form { max-width: 520px; margin: var(--e4) auto 0; }
+.page-retrouver h1 { font-size: 26px; }
+
 /* ---------- Merci, compte, suivi ---------- */
 .merci-tete { display: grid; justify-items: center; text-align: center; gap: 8px; padding: var(--e8) 0 var(--e5); }
 .merci-coche { width: 86px; height: 86px; border-radius: 50%; display: grid; place-items: center; background: var(--ok); color: #fff; box-shadow: 0 0 0 10px var(--ok-doux); animation: pulse 700ms var(--ressort) 150ms both; margin-bottom: 8px; }
@@ -455,3 +497,13 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 /* Écran de démarrage (avant le premier affichage de l'application) */
 .ecran-demarrage { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 22px; }
 .ecran-demarrage .marque { font-size: 46px; }
+
+/* ---------- Impression du reçu (« Enregistrer en PDF ») ---------- */
+@media print {
+  @page { margin: 14mm; }
+  body { background: #fff !important; }
+  .entete, .nav-bas, .barre-action, .pied, .non-imprime, .toasts, .consentement, .barre-mise-a-jour, .lien-evitement, .bandeau-hors-ligne { display: none !important; }
+  .page-merci { padding: 0 !important; }
+  .recu { box-shadow: none; border-color: #bbb; break-inside: avoid; }
+  .recu-numero { background: #fff; }
+}

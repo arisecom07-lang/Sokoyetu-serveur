@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const R = require('../src/commun/js/regles.js');
 
-const cfg = R.config({ payments: { mpesa: { enabled: true, number: '0991234567' }, airtel: { enabled: true, number: '' } }, freeShippingOver: 50 });
+const cfg = R.config({ payments: { mpesa: { enabled: true }, airtel: { enabled: false } }, freeShippingOver: 50, payment: { provider: 'simulation' } });
 const produits = {
   robe: { title: 'Robe', price: 20, cost: 8, status: 'active', source: 'local', options: { colors: [{ name: 'Noir', hex: '#000' }], sizes: ['M', 'L'] }, variants: { 'Noir|M': 2, 'Noir|L': 0 }, sold: 1 },
   montre: { title: 'Montre', price: 15.5, cost: 6, status: 'active', source: 'import' },
@@ -30,6 +30,8 @@ test('validation des noms et codes', () => {
   assert.equal(R.valider.nom('a'), '');
   assert.equal(R.valider.reference(' pp231024.1234 '), 'PP231024.1234');
   assert.equal(R.valider.reference('ab'), '');
+  assert.equal(R.valider.mobileMoney('+243 81 234 5678'), '0812345678');
+  assert.equal(R.valider.mobileMoney('+250788123456'), '');
   assert.equal(R.valider.codePromo('bienvenue10'), 'BIENVENUE10');
 });
 
@@ -37,9 +39,13 @@ test('configuration : zones et retrait', () => {
   assert.equal(cfg.zones.length, 3);
   assert.equal(R.estRetrait(R.zoneDe(cfg, 'retrait')), true);
   assert.equal(R.estRetrait(R.zoneDe(cfg, 'bukavu')), false);
-  assert.deepEqual(R.moyensDePaiement(cfg).map((m) => m.k), ['mpesa']);
+  assert.deepEqual(R.moyensDePaiement(cfg).map((m) => m.k), ['mpesa', 'orange'], 'Airtel désactivé, Afrimoney et Illico désactivés par défaut');
   const vide = R.config({ zones: [] });
   assert.equal(vide.zones.length, 3);
+  assert.equal(vide.payment.provider, '');
+  assert.deepEqual(R.moyensDePaiement(vide), [], 'sans fournisseur de paiement, la boutique n’encaisse pas');
+  assert.equal(vide.serviceFeePct, 2);
+  assert.deepEqual(R.moyensDePaiement(R.config({ payment: { provider: 'flexpay' }, payments: { illico: { enabled: true } } })).map((m) => m.k), ['mpesa', 'airtel', 'orange']);
 });
 
 test('stock par variante', () => {
@@ -55,14 +61,16 @@ test('devis sans problème, avec remise et livraison', () => {
   assert.equal(d.sousTotal, 51);
   assert.equal(d.remise.amount, 5.1);
   assert.equal(d.livraison, 2);
-  assert.equal(d.total, 47.9);
+  assert.equal(d.frais, 0.92, 'frais de service : 2 % de 45,90 $');
+  assert.equal(d.total, 48.82);
 });
 
 test('livraison offerte au-delà du seuil', () => {
   const d = R.devis({ cfg, produit, lignes: [{ productId: 'montre', qty: 4 }], zoneId: 'goma' });
   assert.equal(d.sousTotal, 62);
   assert.equal(d.livraison, 0);
-  assert.equal(d.total, 62);
+  assert.equal(d.frais, 1.24);
+  assert.equal(d.total, 63.24);
 });
 
 test('devis : stock insuffisant, option invalide, article retiré, doublons fusionnés', () => {
@@ -87,48 +95,102 @@ const saisie = (extra) => Object.assign({
   termsAccepted: true, customer: { name: 'Grâce Mapendo', phone: '0991234567' },
   shipping: { zoneId: 'bukavu', address: 'Nyawera, av. Lumumba 12' },
   items: [{ productId: 'robe', color: 'Noir', size: 'M', qty: 1 }, { productId: 'montre', qty: 1 }],
-  payment: { method: 'mpesa', ref: 'ABC123XYZ' }, total: 37.5
+  payment: { method: 'mpesa', phone: '' }, total: 38.21
 }, extra || {});
 
-test('commande : construction correcte et réservation', () => {
-  const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'K7P2Q' });
-  assert.equal(commande.total, 37.5);
-  assert.deepEqual(commande.issues, []);
+test('commande : construction, frais de service, livraison estimée et réservation', () => {
+  const t0 = Date.UTC(2026, 9, 25, 9);
+  const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'K7P2QA', maintenant: t0 });
+  assert.equal(commande.total, 38.21);
+  assert.equal(commande.serviceFee, 0.71);
+  assert.equal(commande.serviceFeePct, 2);
   assert.equal(commande.payment.label, 'M-Pesa');
+  assert.equal(commande.payment.phone, '0991234567', 'numéro de contact par défaut');
   assert.equal(commande.payment.status, 'pending');
+  assert.equal(commande.payment.test, true);
+  assert.equal(commande.expiresAt, t0 + 30 * 60000);
+  assert.equal(commande.delivery.days, 21, 'import Chine (20 jours) + Bukavu (1 jour)');
   assert.equal(commande.items[0].cost, 8);
   assert.deepEqual(reserve, [{ productId: 'robe', key: 'Noir|M', qty: 1, import: false }, { productId: 'montre', key: '', qty: 1, import: true }]);
   const apres = R.ajusterStock(produits.robe, reserve.filter((r) => r.productId === 'robe'), -1);
   assert.equal(apres.variants['Noir|M'], 1);
   assert.equal(apres.sold, 2);
+  assert.equal(R.livraisonEstimee(cfg, [{ source: 'local' }], R.zoneDe(cfg, 'goma'), t0).days, 2);
+  assert.equal(R.livraisonEstimee(cfg, [{ source: 'local' }], R.zoneDe(cfg, 'retrait'), t0).days, 0);
 });
 
-test('commande : erreurs de saisie bloquantes', () => {
+test('commande : erreurs bloquantes, avant tout paiement', () => {
   assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ termsAccepted: false }) }), /conditions/);
   assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ customer: { name: 'X', phone: '0991234567' } }) }), /nom/);
   assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ payment: { method: 'cod' } }) }), /mode de paiement/);
-  assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ payment: { method: 'airtel', ref: 'ABC123' } }) }), /mode de paiement/);
-  assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ payment: { method: 'mpesa', ref: '!' } }) }), /transaction/);
+  assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ payment: { method: 'airtel' } }) }), /mode de paiement/);
+  assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ payment: { method: 'mpesa', phone: '+250788123456' } }) }), /M-Pesa invalide/);
   assert.throws(() => R.preparerCommande({ cfg, produit, saisie: saisie({ shipping: { zoneId: 'bukavu', address: '' } }) }), /adresse/);
-  const ok = R.preparerCommande({ cfg, produit, saisie: saisie({ shipping: { zoneId: 'retrait' }, total: 35.5 }) });
+  assert.throws(() => R.preparerCommande({ cfg: R.config({}), produit, saisie: saisie() }), /pas encore ouvert/);
+  const ok = R.preparerCommande({ cfg, produit, saisie: saisie({ shipping: { zoneId: 'retrait' }, total: 36.21 }) });
   assert.equal(ok.commande.shipping.pickup, true);
-  assert.deepEqual(ok.commande.issues, []);
+  assert.equal(ok.commande.total, 36.21);
 });
 
-test('commande payée mais catalogue modifié : enregistrée avec points à vérifier', () => {
-  const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: saisie({ items: [{ productId: 'robe', color: 'Noir', size: 'L', qty: 1 }], total: 22 }) });
-  assert.equal(commande.issues.length, 1);
-  assert.match(commande.issues[0], /épuisé/);
-  assert.deepEqual(reserve, []);
-  const t = R.preparerCommande({ cfg, produit, saisie: saisie({ total: 30 }) });
-  assert.match(t.commande.issues[0], /total recalculé/);
+test('commande : stock épuisé ou total changé, le client ne paie pas', () => {
+  const e1 = (() => { try { R.preparerCommande({ cfg, produit, saisie: saisie({ items: [{ productId: 'robe', color: 'Noir', size: 'L', qty: 1 }], total: 22.4 }) }); } catch (e) { return e; } })();
+  assert.ok(e1 instanceof R.ErreurCommande);
+  assert.equal(e1.champ, 'panier');
+  assert.match(e1.message, /épuisé/);
+  const e2 = (() => { try { R.preparerCommande({ cfg, produit, saisie: saisie({ total: 30 }) }); } catch (e) { return e; } })();
+  assert.equal(e2.champ, 'total');
+  assert.match(e2.message, /38\.21/);
 });
 
-test('étapes de commande : paiement, expédition, annulation et stock', () => {
-  const { commande } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'AAAAA' });
+test('paiement automatique : demande, refus, nouvelle tentative, confirmation', () => {
+  const t0 = Date.now();
+  let o = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'AAAAAA', maintenant: t0 }).commande;
+  o = R.paiementEnvoye(o, { maintenant: t0, providerId: 'SIM-1' });
+  assert.equal(o.payment.attempts, 1);
+  assert.equal(R.enAttentePaiement(o), true);
+  assert.equal(R.aTraiter(o), false, 'une commande non payée n’est pas à préparer');
+  assert.deepEqual(R.statutClient(o), { label: 'Paiement en cours', ton: 'warn', etape: 0 });
+  o = R.paiementEchoue(o, { maintenant: t0 + 1000, raison: 'Solde insuffisant' });
+  assert.equal(o.payment.status, 'failed');
+  assert.equal(R.statutClient(o).label, 'Paiement non abouti');
+  assert.equal(R.relancePossible(o, t0 + 2000), '');
+  o = R.paiementEnvoye(o, { maintenant: t0 + 2000, providerId: 'SIM-2', methode: 'mpesa', telephone: '0812345678' });
+  assert.equal(o.payment.attempts, 2);
+  assert.equal(o.payment.phone, '0812345678');
+  const r = R.paiementConfirme(o, { maintenant: t0 + 3000, reference: 'MP261025.1200.A12345' });
+  assert.equal(r.stock, '');
+  assert.equal(r.commande.payment.status, 'paid');
+  assert.equal(r.commande.payment.reference, 'MP261025.1200.A12345');
+  assert.equal(R.aTraiter(r.commande), true);
+  assert.equal(R.statutClient(r.commande).label, 'Payée');
+  assert.equal(R.paiementConfirme(r.commande, { maintenant: t0 + 4000 }).commande.timeline.length, r.commande.timeline.length, 'confirmation répétée sans effet');
+  assert.match(R.relancePossible(r.commande), /déjà payée/);
+});
+
+test('paiement non reçu à temps : annulation automatique, stock rendu ; paiement tardif : commande rouverte', () => {
+  const t0 = Date.now();
+  let o = R.paiementEnvoye(R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'BBBBBB', maintenant: t0 }).commande, { maintenant: t0, providerId: 'SIM-3' });
+  assert.match(R.relancePossible(o, t0 + 31 * 60000), /délai/);
+  const ex = R.paiementExpire(o, { maintenant: t0 + 31 * 60000 });
+  assert.equal(ex.stock, 'restituer');
+  assert.equal(ex.entrees.length, 2);
+  assert.equal(R.nonAboutie(ex.commande), true);
+  assert.equal(R.statutClient(ex.commande).label, 'Annulée : paiement non reçu');
+  assert.throws(() => R.etapeCommande(ex.commande, 'reopen'), /jamais arrivé/);
+  const tard = R.paiementConfirme(ex.commande, { maintenant: t0 + 32 * 60000, reference: 'TARD' });
+  assert.equal(tard.stock, 'reserver');
+  assert.equal(tard.commande.status, 'open');
+  assert.equal(tard.commande.payment.status, 'paid');
+  assert.match(tard.commande.issues[0], /après l’annulation/);
+  let n = R.paiementEnvoye(R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'CCCCCC', maintenant: t0 }).commande, { maintenant: t0, providerId: 'x' });
+  for (let i = 0; i < 4; i++) n = R.paiementEnvoye(R.paiementEchoue(n, { maintenant: t0, raison: 'refus' }), { maintenant: t0, providerId: 'x' + i });
+  assert.match(R.relancePossible(n, t0), /Trop de tentatives/);
+});
+
+test('étapes de commande : expédition, annulation et stock', () => {
+  const { commande } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'DDDDDD' });
   assert.throws(() => R.etapeCommande(commande, 'shipped'), /paiement/);
-  const p1 = R.etapeCommande(commande, 'paid');
-  assert.equal(p1.commande.payment.status, 'paid');
+  const p1 = R.paiementConfirme(commande, { reference: 'X' });
   assert.equal(p1.stock, '');
   const p2 = R.etapeCommande(p1.commande, 'shipped');
   assert.equal(p2.commande.fulfillment, 'shipped');
@@ -142,6 +204,9 @@ test('étapes de commande : paiement, expédition, annulation et stock', () => {
   assert.equal(fin.commande.adminNote, 'Client ravi');
   assert.throws(() => R.etapeCommande(fin.commande, 'cancel'), /livrée/);
   assert.deepEqual(R.statutClient(fin.commande), { label: 'Livrée', ton: 'ok', etape: 4 });
+  assert.equal(R.margeCommande(fin.commande).marge, 22.21, 'articles 35,50 + frais 0,71 − coûts 14');
+  const manuel = R.etapeCommande(commande, 'paid');
+  assert.equal(manuel.commande.payment.manual, true);
 });
 
 test('ancienne commande sans réservation : stock réservé au paiement', () => {
@@ -152,8 +217,12 @@ test('ancienne commande sans réservation : stock réservé au paiement', () => 
 });
 
 test('numéro de commande et montants', () => {
-  assert.match(R.numeroCommande(), /^[A-Z2-9]{5}$/);
+  assert.match(R.numeroCommande(), /^[A-Z2-9]{6}$/);
+  assert.equal(R.numeroNettoye(' #k7p2qa '), 'K7P2QA');
+  assert.equal(R.numeroValide('#K7P2QA'), true);
+  assert.equal(R.numeroValide('K7'), false);
   assert.equal(R.dollars(1234.5), '$1 234.50');
   assert.equal(R.arrondi(1.005), 1.01);
   assert.deepEqual(R.incoherences({ items: [{ price: 10, qty: 2 }], subtotal: 20, shippingFee: 2, total: 22 }), []);
+  assert.deepEqual(R.incoherences({ items: [{ price: 10, qty: 2 }], subtotal: 20, shippingFee: 2, serviceFee: 0.4, total: 22.4 }), []);
 });

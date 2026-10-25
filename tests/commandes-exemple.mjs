@@ -1,12 +1,15 @@
 // Sokoyetu — crée quelques commandes de test (statuts variés, réparties sur 10 jours) dans un serveur local.
-//   node tests/commandes-exemple.mjs      (après outils/charger-exemple.mjs)
+//   node tests/commandes-exemple.mjs      (après outils/charger-exemple.mjs ; serveur en paiement de test)
 import { randomBytes } from 'node:crypto';
 const BASE = process.env.BASE || 'http://127.0.0.1:8090';
 const JOUR = 864e5;
-
-const auth = await (await fetch(BASE + '/api/collections/admins/auth-with-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity: 'admin@sokoyetu.test', password: 'Sokoyetu-2026' }) })).json();
-const h = { 'Content-Type': 'application/json', Authorization: auth.token };
+const json = { 'Content-Type': 'application/json' };
+const connexion = async (col, identity, password) => (await (await fetch(`${BASE}/api/collections/${col}/auth-with-password`, { method: 'POST', headers: json, body: JSON.stringify({ identity, password }) })).json()).token;
+const admin = { ...json, Authorization: await connexion('admins', 'admin@sokoyetu.test', 'Sokoyetu-2026') };
+// Les commandes ne se retouchent que par le compte technique (dates vieillies pour les graphiques).
+const technique = { ...json, Authorization: await connexion('_superusers', 'technique@sokoyetu.test', 'Technique-2026') };
 const jeton = () => randomBytes(20).toString('hex');
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const CLIENTS = [
   ['Grâce Mapendo', '0991234501', 'bukavu', 'Nyawera, av. Lumumba 12'], ['Patient Bisimwa', '0971234502', 'goma', 'Himbi, av. du Lac 4'],
@@ -22,24 +25,43 @@ const PANIERS = [
   [{ productId: 'ex-p18', qty: 2 }]
 ];
 const METHODES = ['mpesa', 'airtel', 'orange', 'mpesa', 'airtel', 'mpesa'];
-const SUITES = [['paid', 'preparing', 'shipped', 'delivered'], ['paid'], [], ['paid', 'preparing', 'shipped'], ['paid', 'preparing'], []];
-const AGE = [9, 6, 4, 2, 1, 0];
+// Paiement : 'paye' (confirmé par le mode test), 'refuse' (numéro en 0000), 'echu' (refusé puis délai dépassé).
+const PAIEMENT = ['paye', 'paye', 'refuse', 'paye', 'paye', 'echu'];
+const SUITES = [['preparing', 'shipped', 'delivered'], [], [], ['preparing', 'shipped'], ['preparing'], []];
+const AGE = [9, 6, 0, 2, 1, 4];
+
+async function etat(id, t) { return (await (await fetch(`${BASE}/api/sokoyetu/paiement/${id}?t=${t}`)).json()); }
+async function attendre(id, t, voulu) {
+  for (let i = 0; i < 60; i++) { const r = await etat(id, t); if (r.paiement && voulu.includes(r.paiement.etat)) return r; await pause(500); }
+  throw new Error('paiement bloqué');
+}
 
 for (let i = 0; i < CLIENTS.length; i++) {
   const [name, phone, zoneId, address] = CLIENTS[i];
-  const devis = await (await fetch(BASE + '/api/sokoyetu/devis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: PANIERS[i], zoneId }) })).json();
-  const r = await fetch(BASE + '/api/sokoyetu/commander', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-    token: jeton(), termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address, landmark: i === 0 ? 'En face de la paroisse' : '' },
-    items: PANIERS[i], discountCode: '', payment: { method: METHODES[i], ref: `TX${2410 + i}.${(1000 + i * 37).toString(36).toUpperCase()}`, sender: i % 2 ? '' : phone }, total: devis.total, note: i === 1 ? 'Appelez avant de passer, merci.' : ''
+  const devis = await (await fetch(BASE + '/api/sokoyetu/devis', { method: 'POST', headers: json, body: JSON.stringify({ items: PANIERS[i], zoneId }) })).json();
+  const t = jeton();
+  const payeur = PAIEMENT[i] === 'paye' ? phone : phone.slice(0, 6) + '0000';
+  const r = await fetch(BASE + '/api/sokoyetu/commander', { method: 'POST', headers: json, body: JSON.stringify({
+    token: t, termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address, landmark: i === 0 ? 'En face de la paroisse' : '' },
+    items: PANIERS[i], discountCode: '', payment: { method: METHODES[i], phone: payeur }, total: devis.total, note: i === 1 ? 'Appelez avant de passer, merci.' : ''
   }) });
   const o = await r.json();
   if (!r.ok) { console.error(name, r.status, o); continue; }
-  for (const action of SUITES[i]) await fetch(`${BASE}/api/sokoyetu/commandes/${o.id}`, { method: 'POST', headers: h, body: JSON.stringify({ action }) });
-  if (AGE[i]) {
-    const rec = await (await fetch(`${BASE}/api/collections/orders/records/${o.id}`, { headers: h })).json();
-    const decale = AGE[i] * JOUR + i * 3600e3;
-    const doc = { ...rec.doc, createdAt: rec.doc.createdAt - decale, timeline: (rec.doc.timeline || []).map((e) => ({ ...e, at: e.at - decale })) };
-    await fetch(`${BASE}/api/collections/orders/records/${o.id}`, { method: 'PATCH', headers: h, body: JSON.stringify({ doc }) });
+  await attendre(o.id, t, PAIEMENT[i] === 'paye' ? ['paid'] : ['failed']);
+  for (const action of SUITES[i]) await fetch(`${BASE}/api/sokoyetu/commandes/${o.id}`, { method: 'POST', headers: admin, body: JSON.stringify({ action }) });
+  if (AGE[i] || PAIEMENT[i] === 'echu') {
+    const rec = await (await fetch(`${BASE}/api/collections/orders/records/${o.id}`, { headers: admin })).json();
+    const d = AGE[i] * JOUR + i * 3600e3; const p = rec.doc.payment || {};
+    const avant = (x) => (x ? x - d : x);
+    const doc = { ...rec.doc, createdAt: avant(rec.doc.createdAt), expiresAt: PAIEMENT[i] === 'echu' ? Date.now() - 1000 : avant(rec.doc.expiresAt),
+      preparingAt: avant(rec.doc.preparingAt), shippedAt: avant(rec.doc.shippedAt), deliveredAt: avant(rec.doc.deliveredAt),
+      payment: { ...p, startedAt: avant(p.startedAt), paidAt: avant(p.paidAt), failedAt: avant(p.failedAt) },
+      delivery: rec.doc.delivery ? { ...rec.doc.delivery, at: avant(rec.doc.delivery.at) } : rec.doc.delivery,
+      timeline: (rec.doc.timeline || []).map((e) => ({ ...e, at: e.at - d })) };
+    const x = await fetch(`${BASE}/api/collections/orders/records/${o.id}`, { method: 'PATCH', headers: technique, body: JSON.stringify({ doc }) });
+    if (!x.ok) console.error(name, 'dates', x.status, await x.text());
+    if (PAIEMENT[i] === 'echu') await etat(o.id, t); // annulée à l'échéance
   }
-  console.log(`#${o.order.number} ${name} · ${o.order.total} $ · ${SUITES[i].join(' → ') || 'à vérifier'}`);
+  const fin = await etat(o.id, t);
+  console.log(`#${o.order.number} ${name} · ${o.order.total} $ · ${fin.paiement.etat}${SUITES[i].length ? ' → ' + SUITES[i].join(' → ') : ''}`);
 }

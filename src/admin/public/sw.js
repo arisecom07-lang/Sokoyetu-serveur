@@ -61,7 +61,7 @@ self.addEventListener('fetch', (e) => {
   })));
 });
 
-// Toucher une notification « Nouvelle commande » ouvre (ou ramène) l'application sur cette commande.
+// Toucher une notification « Commande payée » ouvre (ou ramène) l'application sur cette commande.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || '/';

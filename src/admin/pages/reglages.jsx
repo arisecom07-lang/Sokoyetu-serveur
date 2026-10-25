@@ -3,15 +3,16 @@ import { useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Champ, Note, Bascule, toast, confirmer } from '../../commun/js/interface.jsx';
-import { uid, copie, classes, telephone } from '../../commun/js/outils.js';
+import { uid, copie, classes, copier } from '../../commun/js/outils.js';
 import { PAGES_LEGALES, ANCIENNES_CLES, modeleLegal } from '../../commun/js/legal.js';
 import { aller, route, lien } from '../routeur.js';
-import { cfg, pret, sauver, gererErreur, chargerExemple, retirerExemples, nbExemples } from '../etat.js';
+import { cfg, pret, sauver, gererErreur, chargerExemple, retirerExemples, nbExemples, paiementServeur } from '../etat.js';
 import { TetePage, BarreEnregistrer, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement } from './accueil.jsx';
 import { useFormulaire } from './catalogue.jsx';
 
 const OUTILS = { ga4: ['Google Analytics 4', /^G-[A-Z0-9]{4,12}$/, 'Identifiant de mesure, ex. G-ABC123XYZ'], plausible: ['Plausible (sans cookie)', /^[a-z0-9.-]+\.[a-z]{2,}$/, 'Votre domaine, ex. sokoyakwetu.com'], goatcounter: ['GoatCounter (sans cookie)', /^[a-z0-9-]{2,40}$/, 'Votre code, ex. sokoyetu'] };
+const NOM_FOURNISSEUR = { flexpay: 'FlexPay', simulation: 'le mode test' };
 const TITRES = { boutique: ['Identité de la boutique', 'boutique'], paiements: ['Paiements Mobile Money', 'portefeuille'], livraison: ['Livraison', 'camion'], general: ['Général', 'reglages'], legal: ['Informations légales', 'recu'] };
 
 /* Remet les textes légaux d'origine sous leurs nouvelles clés. */
@@ -40,12 +41,13 @@ function Formulaire({ section }) {
     d.importDays = R.int(d.importDays); if ((d.importDays < 1 || d.importDays > 180) && stop('Délai d’import : entre 1 et 180 jours')) return;
     d.freeShippingOver = R.num(d.freeShippingOver); d.lowStock = R.int(d.lowStock);
     if (String(d.whatsapp || '').trim()) { const w = R.valider.telephone(d.whatsapp); if (!w && stop('Numéro WhatsApp invalide, ex. 0991234567')) return; d.whatsapp = w; } else d.whatsapp = '';
-    for (const k of Object.keys(R.OPERATEURS)) {
-      const p = d.payments[k] || {}; d.payments[k] = p;
-      if (String(p.number || '').trim()) { const n = R.valider.telephone(p.number); if (!n && stop(`Numéro ${R.OPERATEURS[k].label} invalide`)) return; p.number = n; } else p.number = '';
-      p.accountName = R.nettoyer(p.accountName, 60); p.ussd = R.nettoyer(p.ussd, 20);
-      if (p.enabled && !p.number && section === 'paiements' && stop(`Indiquez le numéro ${R.OPERATEURS[k].label}, ou désactivez-le`)) return;
-    }
+    // Paiement automatique : seulement les opérateurs proposés, les frais de service et le délai pour payer.
+    // Le fournisseur et ses clés restent sur le serveur (paiement.sh), jamais dans ces réglages.
+    for (const k of Object.keys(R.OPERATEURS)) d.payments[k] = { enabled: !!(d.payments[k] && d.payments[k].enabled) };
+    if (section === 'paiements' && !Object.keys(R.OPERATEURS).some((k) => d.payments[k].enabled) && stop('Gardez au moins un opérateur actif')) return;
+    d.serviceFeePct = R.num(d.serviceFeePct); if ((d.serviceFeePct < 0 || d.serviceFeePct > 20) && stop('Frais de service : entre 0 et 20 %')) return;
+    const delai = R.int(d.payment && d.payment.holdMinutes); if ((delai < 5 || delai > 120) && stop('Délai pour payer : entre 5 et 120 minutes')) return;
+    d.payment = { holdMinutes: delai };
     d.zones = (d.zones || []).filter((z) => String(z.name || '').trim()).map((z) => ({ id: z.id || uid(), name: R.nettoyer(z.name, 40), fee: Math.max(0, R.num(z.fee)), days: R.int(z.days), pickup: !!z.pickup }));
     if (!d.zones.length && stop('Gardez au moins une zone de livraison')) return;
     for (const k of ['company', 'address', 'rccm', 'idnat', 'nif']) d.legal[k] = R.nettoyer(d.legal[k], k === 'address' ? 140 : 80);
@@ -79,26 +81,50 @@ function Formulaire({ section }) {
           </section>
         ) : null}
 
-        {section === 'paiements' ? (
-          <>
-            <Note ton="info" icone="info">Le client envoie le montant exact à votre numéro, puis saisit le code de transaction. Vous vérifiez la réception dans Commandes avant de préparer le colis. Seuls les moyens actifs avec un numéro apparaissent dans la boutique. Il n’y a pas de paiement à la livraison.</Note>
-            {Object.entries(R.OPERATEURS).map(([k, o]) => {
-              const p = f.payments[k] || {};
-              return (
-                <section key={k} class="carte">
-                  <div class="operateur-tete"><span class="op-carre" style={{ background: o.color }} aria-hidden="true">{o.init}</span><Bascule actif={!!p.enabled} onClick={() => pay(k, 'enabled', !p.enabled)} libelle={o.label} sous={p.enabled ? (p.number ? `Actif · ${telephone(p.number)}` : 'Indiquez le numéro') : 'Désactivé'} /></div>
-                  {p.enabled ? (
-                    <div class="formulaire espace-haut">
-                      <Champ libelle="Numéro de réception">{(a) => <input class="saisie" {...a} type="tel" inputmode="tel" value={p.number || ''} onInput={(e) => pay(k, 'number', e.currentTarget.value)} placeholder="Ex. : 099 123 4567" />}</Champ>
-                      <Champ libelle="Nom du compte" aide="Le client vérifie ce nom avant d’envoyer l’argent.">{(a) => <input class="saisie" {...a} value={p.accountName || ''} onInput={(e) => pay(k, 'accountName', e.currentTarget.value)} maxlength="60" />}</Champ>
-                      <Champ libelle="Code USSD" facultatif aide="Affiché au client pour ouvrir le menu Mobile Money.">{(a) => <input class="saisie" {...a} value={p.ussd || ''} onInput={(e) => pay(k, 'ussd', e.currentTarget.value)} maxlength="20" placeholder="Ex. : *1222#" />}</Champ>
-                    </div>
-                  ) : null}
-                </section>
-              );
-            })}
-          </>
-        ) : null}
+        {section === 'paiements' ? (() => {
+          const ps = paiementServeur.value;
+          const fournisseur = R.FOURNISSEURS[ps.fournisseur] ? ps.fournisseur : 'flexpay';
+          const proposes = R.FOURNISSEURS[fournisseur].operateurs;
+          const reel = ps.pret && ps.fournisseur === 'flexpay';
+          const notification = adresseBoutique('/api/sokoyetu/notification/flexpay');
+          return (
+            <>
+              <section class="carte">
+                <h2 class="carte-titre"><Icone n="portefeuille" />Encaissement</h2>
+                {reel ? <Note ton="ok" icone="coche"><b>Paiement automatique actif (FlexPay).</b> Le client valide sur son téléphone ; la commande se confirme toute seule et l’argent arrive sur votre compte marchand FlexPay.</Note>
+                  : ps.pret && ps.test ? <Note ton="alerte" icone="info"><b>Mode test.</b> Les commandes sont confirmées sans argent (refusées si le numéro finit par 0000). N’annoncez pas la boutique dans ce mode.</Note>
+                    : <Note ton="danger" icone="alerte"><b>Paiement fermé.</b> La boutique affiche « Le paiement en ligne ouvre très bientôt » et ne prend aucune commande.</Note>}
+                {!reel ? (
+                  <div class="pile espace-haut">
+                    <p class="attenue petit">Pour encaisser : ouvrez un compte marchand FlexPay (vous recevez un code marchand et un jeton d’accès), puis tapez sur le serveur (DigitalOcean → votre Droplet → Console) :</p>
+                    <code class="commande-serveur">sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'</code>
+                    <p class="attenue petit">Essai sans argent : <code>sudo /opt/sokoyetu/paiement.sh test</code>. Le jeton reste sur le serveur : il n’est jamais enregistré ici ni envoyé aux navigateurs.</p>
+                  </div>
+                ) : null}
+                <div class="a-copier-admin espace-haut">
+                  <div><small>Adresse de notification à donner à FlexPay</small><span class="code">{notification}</span></div>
+                  <button class="btn btn-secondaire btn-s" onClick={async () => { if (await copier(notification)) toast('Adresse copiée'); }}><Icone n="copier" />Copier</button>
+                </div>
+              </section>
+              <section class="carte formulaire">
+                <h2 class="carte-titre"><Icone n="pourcent" />Frais et délai</h2>
+                <div class="deux-colonnes">
+                  <Champ libelle="Frais de service (%)" aide="Ajoutés au panier (après réduction, hors livraison) au moment de payer. Ils vous reviennent.">{(a) => <input class="saisie" {...a} type="number" inputmode="decimal" min="0" max="20" step="0.5" value={f.serviceFeePct} onInput={champ('serviceFeePct')} />}</Champ>
+                  <Champ libelle="Délai pour payer (minutes)" aide="Articles réservés pendant ce délai ; sans paiement, la commande s’annule toute seule.">{(a) => <input class="saisie" {...a} type="number" inputmode="numeric" min="5" max="120" value={f.payment.holdMinutes} onInput={(e) => maj({ payment: { ...f.payment, holdMinutes: e.currentTarget.value } })} />}</Champ>
+                </div>
+              </section>
+              <p class="intertitre">Opérateurs proposés aux clients</p>
+              {Object.entries(R.OPERATEURS).map(([k, o]) => {
+                const p = f.payments[k] || {}; const possible = proposes.includes(k);
+                return (
+                  <section key={k} class="carte">
+                    <div class="operateur-tete"><span class="op-carre" style={{ background: o.color }} aria-hidden="true">{o.init}</span><Bascule actif={possible && !!p.enabled} desactive={!possible} onClick={() => pay(k, 'enabled', !p.enabled)} libelle={o.label} sous={!possible ? `Non proposé par ${NOM_FOURNISSEUR[fournisseur]}` : p.enabled ? 'Proposé aux clients' : 'Désactivé'} /></div>
+                  </section>
+                );
+              })}
+            </>
+          );
+        })() : null}
 
         {section === 'livraison' ? (
           <>

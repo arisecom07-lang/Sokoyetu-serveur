@@ -4,8 +4,8 @@ Sokoyetu, ce sont **deux applications séparées** qui partagent la même base d
 
 | Adresse | Pour qui | Contenu |
 |---|---|---|
-| **https://sokoyakwetu.com** | vos clients | la boutique : rayons, articles, panier, paiement Mobile Money, suivi de commande |
-| **https://admin.sokoyakwetu.com** | vous | l'administration : commandes en direct, paiements à vérifier, produits, stock, réglages |
+| **https://sokoyakwetu.com** | vos clients | la boutique : rayons, articles, panier, paiement Mobile Money dans l'application, reçu, suivi de commande |
+| **https://admin.sokoyakwetu.com** | vous | l'administration : commandes payées en direct, préparation, produits, stock, réglages |
 
 La boutique ne contient aucun lien ni aucun code de l'administration. Depuis l'administration, le bouton **Voir la boutique** ouvre le site comme vos clients le voient.
 
@@ -67,7 +67,7 @@ bash /root/sokoyetu/installer.sh
 | A | `admin` | adresse IP du Droplet |
 
 5. Attendez 5 à 30 minutes (le temps que le nom de domaine se propage), puis ouvrez **https://admin.sokoyakwetu.com** et connectez-vous avec l'e-mail et le mot de passe choisis.
-6. Dans l'administration, suivez la carte **Bien démarrer** du tableau de bord : numéros Mobile Money, zones de livraison, WhatsApp, informations légales, puis vos propres produits. Changez le mot de passe dans **Plus → Mon compte**.
+6. Branchez le paiement Mobile Money (section 5), puis dans l'administration suivez la carte **Bien démarrer** du tableau de bord : zones de livraison, WhatsApp, informations légales, puis vos propres produits. Changez le mot de passe dans **Plus → Mon compte**.
 
 Le catalogue d'exemple (18 articles) peut être chargé ou retiré dans **Réglages → Général**.
 
@@ -109,6 +109,11 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 | Mettre à jour | `sudo /opt/sokoyetu/mise-a-jour.sh` |
 | Mettre à jour depuis un fichier déjà sur le serveur | `sudo /opt/sokoyetu/mise-a-jour.sh /root/sokoyetu-serveur.zip` |
 | Mot de passe oublié | `sudo /opt/sokoyetu/mot-de-passe.sh vous@exemple.com 'NouveauMotDePasse'` |
+| Brancher le paiement FlexPay | `sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'` |
+| Essayer FlexPay sur son environnement de test | `sudo /opt/sokoyetu/paiement.sh flexpay-essai CODE_MARCHAND 'JETON'` |
+| Paiement en mode test (aucun argent) | `sudo /opt/sokoyetu/paiement.sh test` |
+| Fermer le paiement | `sudo /opt/sokoyetu/paiement.sh arreter` |
+| Voir l'état du paiement | `sudo /opt/sokoyetu/paiement.sh` |
 | Activer l'assistant IA | `sudo /opt/sokoyetu/ia.sh 'sk-ant-...'` |
 | Retirer l'assistant IA | `sudo /opt/sokoyetu/ia.sh --retirer` |
 | Voir si le site tourne | `systemctl status sokoyetu` |
@@ -118,13 +123,32 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 
 ---
 
-## 5. Paiements Mobile Money
+## 5. Paiement Mobile Money automatique
 
-- Le client paie **au moment de la commande** : il envoie le montant exact à votre numéro (M-Pesa, Airtel Money, Orange Money ou Illico Cash), puis saisit le **code de transaction** reçu par SMS. Il n'y a **pas de paiement à la livraison**.
-- Le stock est réservé dès la commande. La commande arrive aussitôt dans l'administration, avec une alerte à l'écran, un son et une notification (à activer dans **Plus → Mon compte**).
-- Vous vérifiez dans votre compte Mobile Money la réception du montant et du code, puis vous touchez **Paiement reçu**. Ensuite : **Commencer la préparation → Expédier → Livrée**. Le client voit chaque étape dans son suivi de commande.
-- Une commande annulée rend ses articles au stock.
-- Les numéros de réception se règlent dans **Réglages → Paiements Mobile Money**. Seuls les moyens actifs avec un numéro apparaissent dans la boutique.
+### Comment ça se passe
+
+1. Le client choisit son opérateur (M-Pesa, Airtel Money, Orange Money, Afrimoney) et le numéro à débiter, puis touche **Payer**.
+2. Une demande de paiement s'affiche sur son téléphone ; il la valide avec son **code PIN**. Il ne quitte pas la boutique et n'écrit à personne : pas de code à recopier, pas de WhatsApp.
+3. Dès que l'opérateur confirme, la commande est **validée** et le client reçoit son **reçu** : numéro de commande unique (6 caractères, ex. `K7M2QX`), articles, frais, total payé, référence de la transaction et date de livraison prévue. Il peut le partager ou l'enregistrer en PDF.
+4. Avec ce numéro et son téléphone, il **retrouve sa commande** depuis n'importe quel appareil (**Mon compte → Retrouver une commande**).
+
+- **Frais de service** : 2 % du panier (après réduction, hors livraison) sont ajoutés au total avant le paiement. Ils vous reviennent (ce ne sont pas les frais de FlexPay). Le pourcentage se règle dans **Réglages → Paiements Mobile Money** (0 à 20 %).
+- **Stock réservé** pendant le paiement (30 minutes par défaut, réglable de 5 à 120). Sans paiement dans ce délai, la commande s'annule toute seule et les articles reviennent en vente. Paiement refusé (solde insuffisant, PIN annulé…) : le client réessaie sur la même commande, avec le même ou un autre numéro.
+- **Administration** : la commande apparaît « Paiement en cours » pendant que le client valide, puis l'alerte **Commande payée** sonne (écran, son, notification) dès la confirmation. Vous n'avez rien à vérifier : **Commencer la préparation → Expédier → Livrée**. Les tableaux de bord ne comptent que les commandes payées.
+- Le serveur ne croit jamais une notification sur parole : il revérifie chaque paiement auprès de FlexPay, et revérifie aussi chaque minute les paiements en cours.
+
+### Brancher FlexPay (une fois)
+
+1. Ouvrez un **compte marchand FlexPay** (flexpay.cd). Vous recevez un **code marchand** et un **jeton d'accès** (token).
+2. Donnez à FlexPay l'adresse de notification : `https://sokoyakwetu.com/api/sokoyetu/notification/flexpay` (aussi affichée, avec un bouton Copier, dans **Réglages → Paiements Mobile Money**).
+3. Si FlexPay vous donne un accès de test, essayez d'abord : `sudo /opt/sokoyetu/paiement.sh flexpay-essai CODE_MARCHAND 'JETON'`, puis passez une commande de quelques centimes.
+4. Pour encaisser pour de vrai : `sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'`.
+
+Le jeton reste sur le serveur (`/opt/sokoyetu/sokoyetu.env`, lisible par l'administrateur du serveur seulement) : il n'est jamais enregistré dans l'administration ni envoyé aux navigateurs. Tant qu'aucun paiement n'est branché, la boutique affiche « Le paiement en ligne ouvre très bientôt » et ne prend pas de commande.
+
+**Mode test** (`sudo /opt/sokoyetu/paiement.sh test`) : aucun argent ; le paiement est confirmé tout seul après quelques secondes, refusé si le numéro se termine par 0000. Un bandeau « Mode test » s'affiche dans la boutique et l'administration. Ne l'ouvrez pas au public dans ce mode.
+
+À confirmer avec FlexPay à l'ouverture du compte : les opérateurs proposés, la devise (USD) et le format exact de leurs réponses. L'adaptateur suit leur documentation publique ; un essai sur leur environnement de test le valide avant d'encaisser.
 
 ---
 
@@ -143,7 +167,7 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 ## 7. Application sur téléphone
 
 - **Boutique** : dans Chrome sur Android, la boutique propose **Installer l'application**. Elle s'ouvre ensuite comme une application, reste rapide avec une connexion faible et affiche une page hors connexion.
-- **Administration** : ouvrez https://admin.sokoyakwetu.com dans Chrome → menu ⋮ → **Ajouter à l'écran d'accueil**. Dans **Plus → Mon compte → Alertes de nouvelle commande**, activez le son et les notifications : une commande qui arrive s'annonce même quand l'onglet est en arrière-plan, avec le nombre de commandes à traiter dans le titre (et sur l'icône quand le téléphone le permet).
+- **Administration** : ouvrez https://admin.sokoyakwetu.com dans Chrome → menu ⋮ → **Ajouter à l'écran d'accueil**. Dans **Plus → Mon compte → Alertes de commande payée**, activez le son et les notifications : une commande payée s'annonce même quand l'onglet est en arrière-plan, avec le nombre de commandes à préparer dans le titre (et sur l'icône quand le téléphone le permet).
 - **Google Play** (plus tard) : créez l'application avec PWABuilder à partir de https://sokoyakwetu.com, puis reliez-la au site avec `sudo /opt/sokoyetu/android.sh 'EMPREINTE:SHA256'` (empreinte fournie par PWABuilder et la Play Console).
 
 ---
@@ -163,7 +187,7 @@ npm install
 npm run build        # → dist/sokoyetu-serveur.zip (le paquet à déposer sur GitHub)
 npm run demo         # → dist/demo/ (démonstration sans serveur, données dans le navigateur)
 npm test             # règles métier et icônes
-bash outils/serveur-local.sh   # vrai serveur local : http://localhost:8090 et http://admin.localhost:8090
+bash outils/serveur-local.sh   # vrai serveur local (paiement en mode test) : http://localhost:8090 et http://admin.localhost:8090
 ```
 
 Le détail technique (architecture, tests, conventions) est dans `A-LIRE-CLAUDE-CODE.md`.
