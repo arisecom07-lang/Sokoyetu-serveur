@@ -1,4 +1,4 @@
-// Sokoyetu (boutique) — parcourir : rayons, un rayon, nouveautés, recherche, favoris.
+// Sokoyetu (boutique) — parcourir : rayons, un rayon, nouveautés, en stock / import Chine, recherche, favoris.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
@@ -102,6 +102,44 @@ export function Nouveautes() {
         ) : null}
         <div class="espace-haut">
           {!catalogueDisponible.value ? <SqueletteGrille /> : <GrilleProduits key={rayon} liste={liste} vide={<Vide icone="etincelle" titre="Pas encore de nouveautés" texte="Revenez bientôt : de nouveaux articles arrivent chaque semaine." />} />}
+        </div>
+      </main>
+      <Pied />
+    </>
+  );
+}
+
+/* Articles en stock (livrés en 24 à 48 h) ou à commander depuis la Chine : les titres de l'accueil mènent ici. */
+export function Provenance() {
+  const c = cfg.value; const imp = route.value.nom === 'import-chine';
+  const rs = rayons.value; const [tri, setTri] = useState('pour-vous'); const [rayon, setRayon] = useState('tout');
+  const base = produits.value.filter((p) => (imp ? R.estImport(p) : !R.estImport(p) && R.stockTotal(p) > 0));
+  let liste = trier(base, tri);
+  if (rayon !== 'tout') liste = liste.filter((p) => (p.collectionIds || []).includes(rayon));
+  const titre = imp ? 'Importés de Chine pour vous' : `En stock à ${c.city}`;
+  const sous = imp ? `Livrés en ≈ ${c.importDays} jours, douane comprise` : 'Livré en 24 à 48 h';
+  const rsUtiles = rs.filter((r) => base.some((p) => (p.collectionIds || []).includes(r.id)));
+  useSeo(() => ({ titre, description: imp
+    ? `Articles importés de Chine sur commande chez ${c.name} : livrés à Bukavu et Goma en ≈ ${c.importDays} jours, dédouanement compris, paiement Mobile Money.`
+    : `Articles en stock à ${c.city} chez ${c.name} : livrés en 24 à 48 h, paiement Mobile Money.` }), [imp, titre]);
+  return (
+    <>
+      <EntetePage titre={titre} sous={pluriel(base.length, 'article')} repli="/" />
+      <main id="contenu" class="page conteneur page-provenance" data-source={imp ? 'import' : 'local'}>
+        <p class="provenance-sous"><Icone n={imp ? 'avion' : 'camion'} />{sous}</p>
+        <div class="puces" role="group" aria-label="Trier">
+          {TRIS.map(([k, t]) => <button key={k} class="puce" aria-pressed={tri === k ? 'true' : 'false'} onClick={() => setTri(k)}>{t}</button>)}
+        </div>
+        {rsUtiles.length > 1 ? (
+          <div class="puces espace-haut" role="group" aria-label="Filtrer par rayon">
+            <button class="puce" aria-pressed={rayon === 'tout' ? 'true' : 'false'} onClick={() => setRayon('tout')}>Tous les rayons</button>
+            {rsUtiles.map((r) => <button key={r.id} class="puce" aria-pressed={rayon === r.id ? 'true' : 'false'} onClick={() => setRayon(r.id)}>{r.name}</button>)}
+          </div>
+        ) : null}
+        <div class="espace-haut">
+          {!catalogueDisponible.value ? <SqueletteGrille /> : (
+            <GrilleProduits key={tri + rayon} liste={liste} vide={<Vide icone={imp ? 'avion' : 'boutique'} titre="Aucun article ici pour l’instant" texte={base.length ? 'Essayez un autre rayon.' : 'De nouveaux articles arrivent bientôt.'}><a class="btn btn-secondaire" href={lien(imp ? '/en-stock' : '/import-chine')}>{imp ? 'Voir les articles en stock' : 'Voir les articles à commander'}</a></Vide>} />
+          )}
         </div>
       </main>
       <Pied />

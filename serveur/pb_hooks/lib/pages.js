@@ -80,7 +80,8 @@ function pageRayon(e) {
 function planDuSite(e) {
   const racine = base(e);
   const jour = (t) => { try { return new Date(t).toISOString().slice(0, 10); } catch (err) { return ''; } };
-  const urls = [{ loc: racine + '/', freq: 'daily', prio: '1.0' }, { loc: racine + '/nouveautes', freq: 'daily', prio: '0.8' }, { loc: racine + '/categories', freq: 'weekly', prio: '0.6' }];
+  const urls = [{ loc: racine + '/', freq: 'daily', prio: '1.0' }, { loc: racine + '/nouveautes', freq: 'daily', prio: '0.8' }, { loc: racine + '/categories', freq: 'weekly', prio: '0.6' },
+    { loc: racine + '/en-stock', freq: 'daily', prio: '0.8' }, { loc: racine + '/import-chine', freq: 'daily', prio: '0.8' }];
   e.app.findRecordsByFilter('collections', 'id != ""', '', 500, 0).forEach((rec) => {
     const d = S.lire(rec); if (d.visible === false) return;
     urls.push({ loc: `${racine}/c/${rec.id}/${R.slug(d.name)}`, freq: 'weekly', prio: '0.7', mod: jour(rec.getString('updated').replace(' ', 'T')) });

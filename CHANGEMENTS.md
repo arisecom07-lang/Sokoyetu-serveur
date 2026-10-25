@@ -1,3 +1,16 @@
+# Sokoyetu — « En stock à Bukavu » et « Importés de Chine » séparés sur l'accueil (octobre 2026)
+
+## Ce qui change pour vous
+
+- Sur l'accueil, les deux rangées ont chacune **leur bande de couleur** : vert forêt pour « En stock à Bukavu », bleu ardoise pour « Importés de Chine pour vous » (teintes sobres ; en thème sombre, les mêmes repères en version éteinte).
+- **Les titres sont des boutons** : « En stock à Bukavu › » ouvre la liste de tous les articles en stock (`/en-stock`), « Importés de Chine pour vous › » celle de tous les articles à commander depuis la Chine (`/import-chine`). Chaque liste se trie (pour vous, nouveautés, prix, promotions) et se filtre par rayon.
+
+## Détails techniques
+
+- Page `Provenance` dans `pages/catalogue.jsx` (routes `en-stock` et `import-chine`), ajoutées au plan du site. Couleurs dans `couleurs.css` (`.rangee-source`, `.page-provenance`, `data-source="local|import"`).
+
+---
+
 # Sokoyetu — comptes clients facultatifs (octobre 2026)
 
 ## Ce qui change pour vous
