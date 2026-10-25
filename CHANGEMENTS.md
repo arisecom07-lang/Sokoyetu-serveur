@@ -1,0 +1,52 @@
+# Sokoyetu — version 2.0 (octobre 2026)
+
+Refonte complète, même concept : la boutique d'import Chine → Bukavu / Goma, payée par Mobile Money à la commande, et son administration. Une seule base de code remplace les deux versions qui existaient (l'interface d'essai dans Claude et le paquet serveur, plus ancien).
+
+## Ce qui change pour vous
+
+- **Deux applications vraiment séparées.** La boutique sur `sokoyakwetu.com`, l'administration sur `admin.sokoyakwetu.com`. Plus aucune page d'administration dans le site des clients (l'ancienne `admin.html` renvoie vers le sous-domaine).
+- **Ça marche hors de Claude.** L'interface d'essai enregistrait tout dans la mémoire de Claude (`window.claude`) et ne pouvait pas fonctionner sur le vrai site. Tout passe maintenant par le serveur PocketBase.
+- **Commandes en direct.** Une commande passée dans la boutique apparaît aussitôt dans l'administration, avec une alerte, un son, le compteur dans le titre et une notification si vous l'activez (Plus → Mon compte).
+- **Le client suit sa commande** en direct : paiement confirmé, préparation, en route, livrée. Le lien de suivi est secret et ne montre jamais vos coûts ni vos notes.
+- **Nouveau design**, clair par défaut (cacao et ébène sur ivoire), sombre en option ; deux polices hébergées sur le serveur (rapides, sans Google) ; bannière d'accueil centrée avec « Sokoyetu » en grand sur le port à conteneurs, puis la douane et le transit.
+- **Tableau de bord** : ventes, commandes, marge estimée, panier moyen, histogramme des ventes par jour (7 ou 30 jours, chiffres aussi en tableau), choses à faire, meilleures ventes, guide « Bien démarrer ».
+- **Assistant IA** (facultatif) : une photo de l'article suffit pour rédiger la fiche produit.
+- **Démonstration** jouable sans serveur, pour essayer la boutique et l'administration ensemble.
+- **Vraies photos Unsplash** dans tout le catalogue d'exemple, choisies une à une sans marque visible : un vrai port à conteneurs avec ses grues en première image de l'accueil, puis le terminal et la route ; les articles présentés seuls ; des personnes africaines pour les rayons mode. Les anciennes photos de mannequins et les images 3D générées sont retirées.
+- **Nouveau catalogue d'exemple** sur vos rayons : montres, sacs, bijoux, électronique, mode femme et mode homme (18 articles, dont la batterie externe pour les coupures de courant).
+
+## Défauts corrigés et améliorations
+
+**Paiement et commandes**
+- Le paiement à la livraison existait encore dans le code de la boutique (option « cod ») alors qu'il est exclu : retiré partout, y compris des conditions de vente, et refusé par le serveur.
+- Le stock n'était déduit que depuis l'administration, au moment où la gérante confirmait, depuis son téléphone : deux commandes simultanées pouvaient vendre le même dernier article. Il est maintenant **réservé par le serveur dès la commande**, en une seule opération, et rendu si la commande est annulée.
+- Les étapes de commande (paiement reçu, préparation, expédition, livraison, annulation, remboursement) sont exécutées **par le serveur**, plus par le navigateur de la gérante.
+- Si la connexion coupe au moment de valider, le client peut réessayer sans risque : un envoi répété ne crée qu'une seule commande.
+- Les commandes passent par une seule entrée du serveur, qui recalcule prix, remise, livraison et total ; elles ne peuvent plus être écrites directement dans la base.
+- Si un prix ou le stock change pendant qu'un client paie, la commande est gardée et marquée « point à vérifier » au lieu d'être refusée après paiement.
+- Le montant à payer est confirmé par le serveur **avant** que le client n'envoie l'argent.
+
+**Administration**
+- Modifier une fiche produit pendant qu'une commande arrive n'écrase plus le stock vendu entre-temps.
+- Quitter une fiche avec des modifications non enregistrées demande confirmation.
+- Les notifications de commande, qui ne fonctionnaient pas, marchent maintenant (son, notification, compteur).
+- Droit à l'effacement : un bouton efface les données personnelles d'un client de toutes ses commandes.
+
+**Boutique**
+- Vraies adresses de pages (`/p/123/montre-…`, `/c/montres`) : partage WhatsApp avec image et titre, référencement Google, bouton retour fiable, plan du site automatique.
+- Catalogue gardé sur le téléphone et rechargé seulement s'il a changé : ouverture rapide même avec une connexion faible.
+- Page hors connexion et bandeau « nouvelle version disponible » de l'application installée.
+- Accessibilité : contrastes vérifiés (niveau AA) en clair et en sombre, navigation au clavier, lecteurs d'écran ; aucun défaut relevé par le contrôle automatique (axe-core) sur les pages principales des deux applications.
+- Aucun débordement horizontal sur petit écran (vérifié à 360 px).
+
+**Serveur**
+- Limites anti-abus par adresse (connexion, commandes, codes promo, devis, assistant IA).
+- En-têtes de sécurité (CSP, HSTS), compression, mise en cache des fichiers et des photos.
+- Miniatures des photos en plusieurs tailles, photos compressées avant envoi depuis le téléphone.
+- Mise à jour possible depuis un fichier déjà sur le serveur ; sauvegardes avant mise à jour réservées à l'administrateur du serveur ; clé de l'assistant IA jamais lisible par le site.
+
+## Vérifications faites
+
+- 15 tests des règles métier et des icônes, 15 tests du serveur sur une base neuve.
+- Parcours complet dans de vrais navigateurs sur le vrai serveur : un client commande sur téléphone avec un code promo, la gérante reçoit l'alerte, confirme le paiement, prépare, expédie, livre ; le suivi du client se met à jour à chaque étape ; le stock baisse puis revient à l'annulation.
+- Installation, mise à jour, activation de l'IA et changement de mot de passe essayés sur une machine Ubuntu de test (sans DigitalOcean ni nom de domaine réel : le certificat HTTPS n'a pas pu être testé ici).

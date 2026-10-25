@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hors connexion · Sokoyetu</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#FBF8F4">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root { color-scheme: light; --fond: #FBF8F4; --encre: #1E1611; --encre-2: #5A4B41; --doux: #F3E8DE; --ebene: #2A1D16; --sur: #FFF8F1; --or: #C8902E; }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --fond: #15110E; --encre: #F6EFE8; --encre-2: #CFC1B5; --doux: #2E241D; --ebene: #F1E4D6; --sur: #1E1611; } }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--fond); color: var(--encre); font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; padding: 24px 16px; box-sizing: border-box; text-align: center; }
+main { max-width: 380px; display: grid; gap: 14px; justify-items: center; }
+.marque { font: 650 32px Georgia, 'Times New Roman', serif; letter-spacing: -.02em; } .marque i { font-style: normal; color: var(--or); }
+.rond { width: 96px; height: 96px; border-radius: 50%; background: var(--doux); display: grid; place-items: center; }
+h1 { font-size: 22px; margin: 0; } p { margin: 0; color: var(--encre-2); }
+.bouton { display: inline-flex; align-items: center; height: 50px; padding: 0 26px; border-radius: 999px; background: var(--ebene); color: var(--sur); font: 700 15px system-ui, sans-serif; text-decoration: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="marque">Sokoyetu<i>.</i></div>
+  <div class="rond" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1"/><path d="M3 3l18 18"/></svg></div>
+  <h1>Pas de connexion</h1>
+  <p>Votre panier et vos favoris restent sur ce téléphone. Reconnectez-vous pour continuer vos achats.</p>
+  <a class="bouton" href="/">Réessayer</a>
+</main>
+</body>
+</html>

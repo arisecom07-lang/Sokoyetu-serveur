@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "Sokoyetu",
+  "short_name": "Sokoyetu",
+  "description": "Vos achats en Chine, dédouanés et livrés à Bukavu et Goma. Mode, montres, sacs, bijoux et électronique, paiement Mobile Money.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#FBF8F4",
+  "theme_color": "#FBF8F4",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nouveautés", "url": "/nouveautes", "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Mon panier", "url": "/panier", "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Mes commandes", "url": "/compte/commandes", "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] }
+  ],
+  "screenshots": [
+    { "src": "/captures/accueil.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Accueil de la boutique" },
+    { "src": "/captures/produit.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Fiche article" },
+    { "src": "/captures/commande.webp", "sizes": "780x1688", "type": "image/webp", "form_factor": "narrow", "label": "Paiement Mobile Money" },
+    { "src": "/captures/ordinateur.webp", "sizes": "1440x900", "type": "image/webp", "form_factor": "wide", "label": "La boutique sur grand écran" }
+  ]
+}

@@ -1,0 +1,874 @@
+{
+ "collections": [
+  {
+   "id": "col-montres",
+   "name": "Montres",
+   "image": {
+    "type": "url",
+    "src": "photos/cat-montres.webp",
+    "w": 600,
+    "h": 600,
+    "alt": "Montre à gousset suspendue à sa chaîne"
+   },
+   "order": 1,
+   "visible": true,
+   "demo": true
+  },
+  {
+   "id": "col-sacs",
+   "name": "Sacs",
+   "image": {
+    "type": "url",
+    "src": "photos/cat-sacs.webp",
+    "w": 600,
+    "h": 600,
+    "alt": "Cabas en cuir tressé"
+   },
+   "order": 2,
+   "visible": true,
+   "demo": true
+  },
+  {
+   "id": "col-bijoux",
+   "name": "Bijoux",
+   "image": {
+    "type": "url",
+    "src": "photos/cat-bijoux.webp",
+    "w": 600,
+    "h": 600,
+    "alt": "Collier de perles dans son écrin"
+   },
+   "order": 3,
+   "visible": true,
+   "demo": true
+  },
+  {
+   "id": "col-electronique",
+   "name": "Électronique",
+   "image": {
+    "type": "url",
+    "src": "photos/cat-electronique.webp",
+    "w": 600,
+    "h": 600,
+    "alt": "Casque audio sur fond jaune"
+   },
+   "order": 4,
+   "visible": true,
+   "demo": true
+  },
+  {
+   "id": "col-femmes",
+   "name": "Mode femme",
+   "image": {
+    "type": "url",
+    "src": "photos/cat-femmes.webp",
+    "w": 600,
+    "h": 600,
+    "alt": "Portrait d’une femme élégante"
+   },
+   "order": 5,
+   "visible": true,
+   "demo": true
+  },
+  {
+   "id": "col-hommes",
+   "name": "Mode homme",
+   "image": {
+    "type": "url",
+    "src": "photos/cat-hommes.webp",
+    "w": 600,
+    "h": 600,
+    "alt": "Homme souriant en pull et béret"
+   },
+   "order": 6,
+   "visible": true,
+   "demo": true
+  }
+ ],
+ "products": [
+  {
+   "id": "ex-p01",
+   "demo": true,
+   "title": "Robe midi bordeaux",
+   "description": "En velours côtelé doux, boutonnée devant, manches trois-quarts : élégante pour une cérémonie, confortable toute la journée.",
+   "details": "Matière : Velours côtelé de coton\nLongueur : Mi-mollet\nEntretien : Lavage à 30 °C",
+   "price": 26,
+   "compareAt": 0,
+   "cost": 9.5,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-femmes"
+   ],
+   "tags": "robe, bordeaux, velours, femme, cérémonie",
+   "featured": true,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p01-1.webp",
+     "srcset": "photos/p01-1-s.webp 400w, photos/p01-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Robe midi bordeaux en velours côtelé"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": [
+     "S",
+     "M",
+     "L",
+     "XL"
+    ]
+   },
+   "variants": {
+    "|S": 2,
+    "|M": 3,
+    "|L": 2,
+    "|XL": 1
+   },
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 2
+  },
+  {
+   "id": "ex-p02",
+   "demo": true,
+   "title": "Escarpins à fleurs",
+   "description": "Des escarpins qui se remarquent : imprimé fleuri sur fond bleu, talon fin de 9 cm, bout pointu.",
+   "details": "Talon : 9 cm\nDessus : Satin imprimé\nSemelle : Antidérapante",
+   "price": 21,
+   "compareAt": 0,
+   "cost": 7.5,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-femmes"
+   ],
+   "tags": "escarpins, talon, fleurs, femme, chaussures",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p02-1.webp",
+     "srcset": "photos/p02-1-s.webp 400w, photos/p02-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Escarpins à motif fleuri"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": [
+     "36",
+     "37",
+     "38",
+     "39",
+     "40",
+     "41"
+    ]
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 9
+  },
+  {
+   "id": "ex-p03",
+   "demo": true,
+   "title": "Sac bandoulière en cuir camel",
+   "description": "Un sac de tous les jours en cuir lisse : rabat aimanté, poche intérieure zippée, bandoulière réglable.",
+   "details": "Matière : Cuir de vachette\nDimensions : 24 × 17 × 8 cm\nBandoulière : Réglable",
+   "price": 32,
+   "compareAt": 39,
+   "cost": 14,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-sacs",
+    "col-femmes"
+   ],
+   "tags": "sac, bandoulière, cuir, camel, femme",
+   "featured": true,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p03-1.webp",
+     "srcset": "photos/p03-1-s.webp 400w, photos/p03-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Sac bandoulière en cuir camel"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 3,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 4
+  },
+  {
+   "id": "ex-p04",
+   "demo": true,
+   "title": "Boucles d’oreilles pendantes, strass bleus",
+   "description": "Des pendantes qui accrochent la lumière : strass clairs et pierre bleue. Pour les mariages et les grandes occasions.",
+   "details": "Matière : Laiton plaqué argent, strass\nLongueur : 4,5 cm\nFermoir : Clou poussette",
+   "price": 9,
+   "compareAt": 0,
+   "cost": 2.5,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-bijoux"
+   ],
+   "tags": "boucles d’oreilles, strass, bleu, mariage, cadeau",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p04-1.webp",
+     "srcset": "photos/p04-1-s.webp 400w, photos/p04-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Boucles d’oreilles pendantes, strass bleus"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 6,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 6
+  },
+  {
+   "id": "ex-p05",
+   "demo": true,
+   "title": "Colliers dorés à pendentifs",
+   "description": "Deux chaînes fines à superposer, l’une avec une pierre bleue, l’autre avec un croissant de lune.",
+   "details": "Matière : Acier inoxydable doré\nLongueurs : 42 et 50 cm\nNe noircit pas",
+   "price": 12,
+   "compareAt": 0,
+   "cost": 3.5,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-bijoux"
+   ],
+   "tags": "collier, doré, pendentif, cadeau, femme",
+   "featured": true,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p05-1.webp",
+     "srcset": "photos/p05-1-s.webp 400w, photos/p05-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Colliers dorés à pendentifs"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 8,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 1
+  },
+  {
+   "id": "ex-p06",
+   "demo": true,
+   "title": "Bracelet or rose serti",
+   "description": "Un bracelet souple serti de petites pierres claires, couleur or rose : se porte seul ou avec une montre.",
+   "details": "Matière : Laiton plaqué or rose, zircons\nTour de poignet : 17 à 19 cm",
+   "price": 8,
+   "compareAt": 0,
+   "cost": 2,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-bijoux"
+   ],
+   "tags": "bracelet, or rose, strass, bijou, femme",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p06-1.webp",
+     "srcset": "photos/p06-1-s.webp 400w, photos/p06-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Bracelet or rose serti"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 12
+  },
+  {
+   "id": "ex-p07",
+   "demo": true,
+   "title": "Montre blanche minimaliste",
+   "description": "Cadran épuré et bracelet blanc souple : une montre légère qui va avec tout, pour elle comme pour lui.",
+   "details": "Mouvement : Quartz\nÉtanchéité : 3 ATM\nBracelet : Silicone",
+   "price": 24,
+   "compareAt": 0,
+   "cost": 9,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-montres",
+    "col-femmes"
+   ],
+   "tags": "montre, blanche, minimaliste, femme, homme",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p07-1.webp",
+     "srcset": "photos/p07-1-s.webp 400w, photos/p07-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Montres blanches minimalistes"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 7
+  },
+  {
+   "id": "ex-p08",
+   "demo": true,
+   "title": "Chemise en chambray",
+   "description": "Toile de coton légère qui respire, petit motif discret : la chemise idéale pour le climat de Bukavu et de Goma.",
+   "details": "Matière : Chambray de coton\nCoupe : Droite\nManches : Longues",
+   "price": 18,
+   "compareAt": 0,
+   "cost": 6.5,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-hommes"
+   ],
+   "tags": "chemise, chambray, coton, homme",
+   "featured": true,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p08-1.webp",
+     "srcset": "photos/p08-1-s.webp 400w, photos/p08-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Chemise en chambray sur cintre"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": [
+     "M",
+     "L",
+     "XL",
+     "XXL"
+    ]
+   },
+   "variants": {
+    "|M": 3,
+    "|L": 5,
+    "|XL": 3,
+    "|XXL": 1
+   },
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 3
+  },
+  {
+   "id": "ex-p09",
+   "demo": true,
+   "title": "Chemise habillée en coton",
+   "description": "Col net et coton repassable facilement : pour le bureau, les mariages et les rendez-vous importants.",
+   "details": "Matière : 100 % coton\nCoupe : Ajustée\nCol : Classique",
+   "price": 34,
+   "compareAt": 40,
+   "cost": 13,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-hommes"
+   ],
+   "tags": "chemise, habillée, coton, homme, bureau",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p09-1.webp",
+     "srcset": "photos/p09-1-s.webp 400w, photos/p09-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Chemises habillées en coton pliées"
+    }
+   ],
+   "options": {
+    "colors": [
+     {
+      "name": "Bleu",
+      "hex": "#3E5C86"
+     },
+     {
+      "name": "Blanc",
+      "hex": "#F5F3F0"
+     },
+     {
+      "name": "Bordeaux",
+      "hex": "#6E1F2E"
+     }
+    ],
+    "sizes": [
+     "M",
+     "L",
+     "XL",
+     "XXL"
+    ]
+   },
+   "variants": {
+    "Bleu|M": 2,
+    "Bleu|L": 3,
+    "Bleu|XL": 2,
+    "Bleu|XXL": 1,
+    "Blanc|M": 3,
+    "Blanc|L": 4,
+    "Blanc|XL": 2,
+    "Blanc|XXL": 1,
+    "Bordeaux|M": 1,
+    "Bordeaux|L": 2,
+    "Bordeaux|XL": 1,
+    "Bordeaux|XXL": 0
+   },
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 5
+  },
+  {
+   "id": "ex-p10",
+   "demo": true,
+   "title": "Sac à dos en cuir marron",
+   "description": "Un sac à dos en cuir qui se patine avec le temps : grande poche, poche avant zippée, place pour un ordinateur de 14 pouces.",
+   "details": "Matière : Cuir\nContenance : 15 L\nOrdinateur : Jusqu’à 14 pouces",
+   "price": 38,
+   "compareAt": 0,
+   "cost": 16,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-sacs",
+    "col-hommes"
+   ],
+   "tags": "sac à dos, cuir, marron, homme, ordinateur",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p10-1.webp",
+     "srcset": "photos/p10-1-s.webp 400w, photos/p10-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Sac à dos en cuir marron"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 3,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 8
+  },
+  {
+   "id": "ex-p11",
+   "demo": true,
+   "title": "Lunettes de soleil rondes",
+   "description": "Monture fine dorée et verres teintés verts qui protègent des UV. Étui fourni.",
+   "details": "Protection : UV400\nMonture : Métal doré\nÉtui : Inclus",
+   "price": 11,
+   "compareAt": 0,
+   "cost": 3,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-hommes",
+    "col-femmes"
+   ],
+   "tags": "lunettes, soleil, rondes, homme, femme",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p11-1.webp",
+     "srcset": "photos/p11-1-s.webp 400w, photos/p11-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Lunettes de soleil rondes, monture dorée"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 14
+  },
+  {
+   "id": "ex-p12",
+   "demo": true,
+   "title": "Cartable en cuir gris",
+   "description": "Un cartable aux lignes classiques : deux boucles, anse et bandoulière. Pour les papiers, une tablette et l’essentiel.",
+   "details": "Matière : Cuir synthétique grainé\nDimensions : 28 × 21 × 9 cm\nBandoulière : Amovible",
+   "price": 22,
+   "compareAt": 0,
+   "cost": 8,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-sacs"
+   ],
+   "tags": "cartable, sac, cuir, gris, bureau",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p12-1.webp",
+     "srcset": "photos/p12-1-s.webp 400w, photos/p12-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Cartable en cuir gris"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 10
+  },
+  {
+   "id": "ex-p13",
+   "demo": true,
+   "title": "Batterie externe 20 000 mAh",
+   "description": "Quatre à cinq recharges de téléphone : indispensable pendant les coupures de courant.",
+   "details": "Capacité : 20 000 mAh\nSorties : 2 × USB, 1 × USB-C\nRecharge rapide : 20 W",
+   "price": 15,
+   "compareAt": 0,
+   "cost": 6,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-electronique"
+   ],
+   "tags": "batterie, power bank, chargeur, coupure",
+   "featured": true,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p13-1.webp",
+     "srcset": "photos/p13-1-s.webp 400w, photos/p13-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Batterie externe et ses câbles"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 12,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 2
+  },
+  {
+   "id": "ex-p14",
+   "demo": true,
+   "title": "Écouteurs sans fil",
+   "description": "Son clair, boîtier de recharge de poche et jusqu’à 20 heures d’écoute avec le boîtier.",
+   "details": "Bluetooth : 5.3\nAutonomie : 5 h (20 h avec le boîtier)\nRecharge : USB-C",
+   "price": 19,
+   "compareAt": 25,
+   "cost": 7.5,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-electronique"
+   ],
+   "tags": "écouteurs, bluetooth, sans fil, musique",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p14-1.webp",
+     "srcset": "photos/p14-1-s.webp 400w, photos/p14-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Écouteurs sans fil noirs et leur boîtier"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 7,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 4
+  },
+  {
+   "id": "ex-p15",
+   "demo": true,
+   "title": "Enceinte de bureau Bluetooth",
+   "description": "Un son ample pour la maison ou la boutique : Bluetooth pour le téléphone, entrée audio pour l’ordinateur.",
+   "details": "Puissance : 20 W\nConnexion : Bluetooth 5.0, entrée audio 3,5 mm\nAlimentation : Secteur",
+   "price": 24,
+   "compareAt": 0,
+   "cost": 10,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-electronique"
+   ],
+   "tags": "enceinte, bluetooth, musique, maison",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p15-1.webp",
+     "srcset": "photos/p15-1-s.webp 400w, photos/p15-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Enceinte de bureau noire"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 5,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 6
+  },
+  {
+   "id": "ex-p16",
+   "demo": true,
+   "title": "Casque audio Bluetooth",
+   "description": "Coussinets doux et réduction du bruit pour la route, le bureau ou les longs appels.",
+   "details": "Bluetooth : 5.2\nAutonomie : 30 h\nRéduction du bruit : Oui",
+   "price": 29,
+   "compareAt": 0,
+   "cost": 12,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-electronique"
+   ],
+   "tags": "casque, audio, bluetooth, musique",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p16-1.webp",
+     "srcset": "photos/p16-1-s.webp 400w, photos/p16-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Casque audio noir"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 11
+  },
+  {
+   "id": "ex-p17",
+   "demo": true,
+   "title": "Montre classique, bracelet cuir",
+   "description": "Cadran blanc sobre, aiguilles fines et bracelet en cuir : la montre qui va avec tout.",
+   "details": "Mouvement : Quartz\nÉtanchéité : 3 ATM\nBracelet : Cuir véritable",
+   "price": 28,
+   "compareAt": 35,
+   "cost": 12,
+   "source": "local",
+   "status": "active",
+   "collectionIds": [
+    "col-montres",
+    "col-hommes"
+   ],
+   "tags": "montre, cuir, classique, homme, femme, cadeau",
+   "featured": true,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p17-1.webp",
+     "srcset": "photos/p17-1-s.webp 400w, photos/p17-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Montre classique à cadran blanc, bracelet en cuir"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 4,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 3
+  },
+  {
+   "id": "ex-p18",
+   "demo": true,
+   "title": "Montre connectée",
+   "description": "Pas, sommeil, rythme cardiaque et notifications du téléphone au poignet. Une semaine d’autonomie.",
+   "details": "Écran : Couleur tactile\nAutonomie : 7 jours\nCompatible : Android et iPhone",
+   "price": 35,
+   "compareAt": 0,
+   "cost": 15,
+   "source": "import",
+   "status": "active",
+   "collectionIds": [
+    "col-montres",
+    "col-electronique"
+   ],
+   "tags": "montre connectée, sport, smartwatch",
+   "featured": false,
+   "images": [
+    {
+     "type": "url",
+     "src": "photos/p18-1.webp",
+     "srcset": "photos/p18-1-s.webp 400w, photos/p18-1.webp 800w",
+     "w": 800,
+     "h": 1000,
+     "alt": "Montre connectée noire"
+    }
+   ],
+   "options": {
+    "colors": [],
+    "sizes": []
+   },
+   "variants": {},
+   "stock": 0,
+   "sku": "",
+   "sold": 0,
+   "ageDays": 1
+  }
+ ],
+ "banners": [
+  {
+   "id": "ex-b1",
+   "eyebrow": "Import Chine → Afrique",
+   "title": "Vos articles voyagent par conteneur jusqu’à vous",
+   "subtitle": "",
+   "cta": "Voir les nouveautés",
+   "collectionId": "new",
+   "image": {
+    "type": "url",
+    "src": "photos/ban-port.webp",
+    "srcset": "photos/ban-port-s.webp 900w, photos/ban-port.webp 1600w",
+    "w": 1600,
+    "h": 900,
+    "alt": "Port à conteneurs : grues de chargement et porte-conteneurs à quai"
+   },
+   "order": 1,
+   "active": true,
+   "demo": true
+  },
+  {
+   "id": "ex-b2",
+   "eyebrow": "Dédouanement compris",
+   "title": "Transport et douane : on s’occupe de tout",
+   "subtitle": "",
+   "cta": "Comment ça marche",
+   "collectionId": "aide",
+   "image": {
+    "type": "url",
+    "src": "photos/ban-douane.webp",
+    "srcset": "photos/ban-douane-s.webp 900w, photos/ban-douane.webp 1600w",
+    "w": 1600,
+    "h": 900,
+    "alt": "Terminal à conteneurs vu du ciel, avec ses grues"
+   },
+   "order": 2,
+   "active": true,
+   "demo": true
+  },
+  {
+   "id": "ex-b3",
+   "eyebrow": "Bukavu · Goma",
+   "title": "Payez par Mobile Money, recevez chez vous",
+   "subtitle": "",
+   "cta": "Découvrir les rayons",
+   "collectionId": "",
+   "image": {
+    "type": "url",
+    "src": "photos/ban-transit.webp",
+    "srcset": "photos/ban-transit-s.webp 900w, photos/ban-transit.webp 1600w",
+    "w": 1600,
+    "h": 900,
+    "alt": "Camion de marchandises sur une route de montagne"
+   },
+   "order": 3,
+   "active": true,
+   "demo": true
+  }
+ ],
+ "discounts": [
+  {
+   "id": "ex-d1",
+   "code": "BIENVENUE10",
+   "type": "percent",
+   "value": 10,
+   "minSubtotal": 20,
+   "active": true,
+   "endsAt": null,
+   "demo": true
+  }
+ ],
+ "config": {}
+}

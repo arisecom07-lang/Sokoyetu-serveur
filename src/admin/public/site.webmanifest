@@ -1,0 +1,24 @@
+{
+  "name": "Sokoyetu Gestion",
+  "short_name": "Gestion",
+  "description": "Commandes, paiements Mobile Money, produits et réglages de la boutique Sokoyetu.",
+  "lang": "fr",
+  "dir": "ltr",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FBF8F4",
+  "theme_color": "#FBF8F4",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icone-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Commandes", "url": "/#/commandes", "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Ajouter un produit", "url": "/#/produits/nouveau", "icons": [{ "src": "/icone-192.png", "sizes": "192x192" }] }
+  ]
+}

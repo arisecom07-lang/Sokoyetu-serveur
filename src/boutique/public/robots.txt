@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /api/files/
+Disallow: /api/
+Disallow: /_/
+Disallow: /panier
+Disallow: /commander
+Disallow: /merci/
+Disallow: /suivi/
+Disallow: /compte
+
+Sitemap: https://sokoyakwetu.com/sitemap.xml
