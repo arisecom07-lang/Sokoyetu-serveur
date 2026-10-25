@@ -38,7 +38,7 @@ const ZONES_DEFAUT = [
 
 const CONFIG_DEFAUT = {
   name: 'Sokoyetu',
-  tagline: 'Vos achats en Chine, livrés chez vous',
+  tagline: 'Commandez et recevez chez vous',
   ownerName: '',
   city: 'Bukavu',
   announcement: 'Livraison à Bukavu et Goma · Paiement Mobile Money',

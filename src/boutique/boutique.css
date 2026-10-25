@@ -42,8 +42,11 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .entete.defile { border-bottom-color: var(--ligne); box-shadow: 0 6px 20px rgba(42, 29, 22, .05); }
 .entete-in { display: flex; align-items: center; gap: var(--e2); height: var(--h-entete); }
 .entete-marque { display: flex; align-items: center; min-height: var(--cible); margin-right: auto; }
-.marque { font-family: var(--police-titre); font-weight: 650; font-optical-sizing: auto; font-size: 26px; letter-spacing: -.02em; line-height: 1; color: var(--encre); white-space: nowrap; }
-.marque i { font-style: normal; color: var(--or); }
+.marque { display: inline-flex; align-items: center; gap: .3em; font-family: var(--police-titre); font-weight: 650; font-optical-sizing: auto; font-size: 26px; letter-spacing: -.02em; line-height: 1; color: var(--encre); white-space: nowrap; }
+.marque .cabas { flex: none; max-width: none; width: auto; height: 1.18em; margin-top: -.12em; }
+.marque-texte { display: grid; gap: .3em; text-align: left; }
+.marque-slogan { font-family: var(--police); font-size: max(9.5px, .37em); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--encre-3); }
+.marque.avec-slogan .cabas { height: 1.62em; margin-top: 0; }
 .entete-actions { display: flex; align-items: center; gap: 2px; margin-right: -6px; }
 .entete-page .entete-in { padding: 0 var(--gouttiere-d) 0 max(6px, env(safe-area-inset-left, 0px)); gap: var(--e1); }
 .entete-titre { flex: 1; min-width: 0; }
@@ -84,8 +87,8 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .heros-kicker { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: var(--r-rond); background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .22); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-size: 12.5px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
 .heros-kicker .ic { --ic: 15px; color: var(--or); }
 .heros-marque { margin: 8px 0 6px; }
-.heros-marque .marque { color: #fff; font-size: clamp(58px, 17vw, 124px); font-weight: 640; letter-spacing: -.035em; text-shadow: 0 2px 30px rgba(0, 0, 0, .35); }
-.heros-marque .marque i { color: var(--or); }
+.heros-marque .marque { flex-direction: column; gap: 10px; color: #fff; font-size: clamp(58px, 17vw, 124px); font-weight: 640; letter-spacing: -.035em; text-shadow: 0 2px 30px rgba(0, 0, 0, .35); }
+.heros-marque .marque .cabas { height: .8em; margin: 0; filter: drop-shadow(0 2px 14px rgba(0, 0, 0, .35)); }
 .heros-slogan { font-size: clamp(16px, 4.3vw, 21px); font-weight: 550; color: rgba(255, 255, 255, .92); text-shadow: 0 1px 12px rgba(0, 0, 0, .4); }
 .heros-legende { margin-top: var(--e5); display: grid; gap: 4px; justify-items: center; animation: apparait 600ms var(--sortie) both; min-height: 64px; }
 .heros-surtitre { font-size: 12.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #F3D49B; }
@@ -332,14 +335,21 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 
 /* ---------- Reçu ---------- */
 .recu { position: relative; background: var(--surface); border: 1px solid var(--ligne); border-radius: var(--r-l); padding: var(--e5); box-shadow: var(--ombre-1); display: grid; gap: var(--e4); }
-.recu-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); flex-wrap: wrap; }
-.recu-tete h2 { font-family: var(--police-titre); font-size: 19px; font-weight: 700; text-align: right; }
-.recu-tete small { display: block; text-align: right; color: var(--encre-3); font-size: 13px; }
+.recu-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e3) var(--e5); flex-wrap: wrap; }
+.recu-tete .marque { font-size: 26px; }
+.recu-tete h2 { font-family: var(--police-titre); font-size: 19px; font-weight: 700; }
+.recu-tete small { display: block; color: var(--encre-3); font-size: 13px; }
 .recu-numero { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 14px 14px 18px; border-radius: var(--r-m); background: var(--fond-2); border: 1.5px dashed var(--ligne-saisie); }
 .recu-numero small { display: block; font-size: 12.5px; color: var(--encre-3); font-weight: 600; }
 .recu-numero b { display: block; font-size: 28px; line-height: 1.15; letter-spacing: .14em; }
 .recu-infos dd b { font-weight: 700; }
 .recu-trait { height: 0; border-top: 1.5px dashed var(--ligne); margin: 0 calc(-1 * var(--e5)); }
+/* Le timbre de la boutique, comme un tampon encreur posé sur le reçu payé. */
+.recu-cachet { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); }
+.recu-cachet p { display: grid; gap: 2px; font-size: 14px; }
+.recu-cachet b { font-family: var(--police-titre); font-size: 17px; font-weight: 650; color: var(--marque-texte); }
+.recu-cachet small { font-size: 13px; color: var(--encre-3); }
+.recu-timbre { flex: none; width: 124px; height: 124px; margin: -6px -4px -10px 0; background: var(--marque-texte); -webkit-mask: url(../commun/marque/timbre.svg) center / contain no-repeat; mask: url(../commun/marque/timbre.svg) center / contain no-repeat; transform: rotate(-11deg); opacity: .88; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .recu-pied { display: grid; gap: 6px; font-size: 13px; color: var(--encre-3); line-height: 1.5; border-top: 1px solid var(--ligne); padding-top: var(--e3); }
 .recu-pied b { color: var(--encre-2); }
 .rangee-boutons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e2); }
@@ -384,6 +394,7 @@ body[data-bas="barre"] .pied { padding-bottom: calc(96px + env(safe-area-inset-b
 .page + .pied, .page ~ .pied { margin-top: 0; }
 .pied-in { display: grid; gap: var(--e8); }
 .pied .marque { color: var(--sur-ebene); font-size: 30px; }
+.pied .marque-slogan { color: color-mix(in srgb, var(--sur-ebene) 70%, transparent); }
 .pied-marque p { margin: 12px 0 16px; max-width: 42ch; font-size: 14.5px; line-height: 1.55; }
 .pied .operateur { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .12); color: var(--sur-ebene); }
 .pied nav { display: grid; gap: 2px; align-content: start; }

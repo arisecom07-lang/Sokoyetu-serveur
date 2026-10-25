@@ -33,7 +33,7 @@ export function Connexion() {
     <main class="connexion" id="contenu">
       <form class="connexion-carte entree" onSubmit={envoyer} noValidate>
         <img src="icone-192.png" alt="" width="64" height="64" class="connexion-logo" />
-        <h1><span class="marque">Sokoyetu<i>.</i></span><small>Administration</small></h1>
+        <h1><span class="marque">Sokoyetu</span><small>Administration</small></h1>
         <p class="attenue">Connectez-vous avec le compte administrateur de la boutique.</p>
         {DEMO ? <Note ton="info" icone="info">Démonstration : le compte est déjà rempli, touchez « Se connecter ».</Note> : null}
         <div class="formulaire">

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
+import { Cabas } from '../../commun/js/logo.jsx';
 import { ouvrirFeuille } from '../../commun/js/interface.jsx';
 import { dollars, telephone, lienWhatsApp, classes } from '../../commun/js/outils.js';
 import { lien, route, retour, naviguer } from '../routeur.js';
@@ -9,9 +10,15 @@ import { cfg, nbArticles, favoris, moyensPaiement } from '../etat.js';
 import { PuceOperateur } from './produits.jsx';
 import { PAGES_LEGALES } from '../../commun/js/legal.js';
 
-export function Marque({ petite }) {
+/* Le logo : le cabas, le nom et, en dessous, le slogan (Réglages → Identité). */
+export function Marque({ petite, slogan, grande }) {
   const c = cfg.value;
-  return <span class={classes('marque', petite && 'petite')}>{c.name || 'Sokoyetu'}<i aria-hidden="true">.</i></span>;
+  return (
+    <span class={classes('marque', petite && 'petite', slogan && 'avec-slogan')}>
+      <Cabas taille={grande ? 96 : 36} />
+      <span class="marque-texte"><span class="marque-nom">{c.name || 'Sokoyetu'}</span>{slogan && c.tagline ? <small class="marque-slogan">{c.tagline}</small> : null}</span>
+    </span>
+  );
 }
 
 function useDefilement() {
@@ -52,7 +59,7 @@ export function EnteteBoutique({ classe, accueil }) {
   return (
     <header class={classes('entete', defile && 'defile', accueil && 'sur-accueil', classe)}>
       <div class="entete-in conteneur">
-        <a href={lien('/')} class="entete-marque" aria-label={`${cfg.value.name}, accueil`}><Marque /></a>
+        <a href={lien('/')} class="entete-marque" aria-label={`${cfg.value.name}, accueil`}><Marque slogan /></a>
         <nav class="entete-nav seulement-ordi" aria-label="Navigation principale">
           {lienNav('/', 'Accueil', nom === 'accueil')}{lienNav('/categories', 'Rayons', nom === 'rayons' || nom === 'rayon')}{lienNav('/nouveautes', 'Nouveautés', nom === 'nouveautes')}
         </nav>
@@ -116,7 +123,7 @@ export function Pied() {
     <footer class="pied">
       <div class="conteneur pied-in">
         <div class="pied-marque">
-          <Marque />
+          <Marque slogan />
           <p>{c.tagline}. Articles en stock à {c.city} et importés de Chine, livrés à Bukavu et Goma.</p>
           {ms.length ? <div class="operateurs">{ms.map((m) => <PuceOperateur key={m.k} m={m} />)}</div> : null}
         </div>
