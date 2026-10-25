@@ -27,7 +27,7 @@ serveur/pb_hooks/           sokoyetu.pb.js (routes, hôtes, sécurité) + lib/se
 serveur/pb_migrations/      1792800000_sokoyetu_init.js (inchangée, compatibilité v1) + 1793000000_sokoyetu_v2.js + 1793100000_sokoyetu_paiement.js + 1793200000_sokoyetu_audience.js + 1793300000_sokoyetu_comptes.js
 serveur/scripts/            installer.sh, mise-a-jour.sh, service.sh, mot-de-passe.sh, ia.sh, paiement.sh, codes.sh, android.sh
 demo/                       api-demo.js (serveur simulé dans le navigateur), index.html (page d'accueil de la démo)
-medias/photos/              photos d'exemple (ban-*, cat-*, pNN-* ; -s = petite taille), medias/marque/ (SVG des icônes)
+medias/photos/              photos d'exemple (ban-*, cat-*, pNN-* ; -s = petite taille), medias/marque/ (SVG des icônes), medias/marque/operateurs/ (logos d’origine des opérateurs ; versions web 144 px en WebP dans src/commun/marque/operateurs/, composant LogoOperateur)
 outils/                     construire.mjs, serveur-local.sh, charger-exemple.mjs, captures-manifeste.mjs, images-marque.mjs
 tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, accessibilite.mjs, captures.mjs, demo.mjs, flexpay-simule.mjs (faux FlexPay)
 ```

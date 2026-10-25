@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
-import { Champ, Note, Vide, Bascule, toast, ouvrirFeuille, fermerFeuille, confirmer, Pastille } from '../../commun/js/interface.jsx';
+import { Champ, LogoOperateur, Note, Vide, Bascule, toast, ouvrirFeuille, fermerFeuille, confirmer, Pastille } from '../../commun/js/interface.jsx';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, dateHeure, telephone, lienWhatsApp, pluriel, copier, classes } from '../../commun/js/outils.js';
 import { lien, route, naviguer } from '../routeur.js';
@@ -73,7 +73,7 @@ function Recu({ o }) {
       </div>
       <dl class="infos recu-infos">
         <dt>Statut</dt><dd><Pastille ton="ok" point>{p.status === 'refunded' ? 'Remboursée' : 'Payée'}</Pastille></dd>
-        <dt>Payée avec</dt><dd>{p.label}{p.phone ? ` · ${masque(p.phone)}` : ''}</dd>
+        <dt>Payée avec</dt><dd><span class="mode-op"><LogoOperateur k={p.method} m={R.OPERATEURS[p.method] || p} />{p.label}{p.phone ? ` · ${masque(p.phone)}` : ''}</span></dd>
         {p.reference ? <><dt>Transaction</dt><dd class="code">{p.reference}</dd></> : null}
         <dt>Client</dt><dd>{o.customer.name}</dd>
         <dt>{retrait ? 'Retrait' : 'Livraison'}</dt><dd>{o.shipping.zoneName}{o.shipping.address ? ` · ${o.shipping.address}` : ''}</dd>
@@ -403,7 +403,7 @@ export function Suivi() {
             <section class="carte">
               <h2 class="carte-titre"><Icone n="portefeuille" />Paiement</h2>
               <dl class="infos">
-                <dt>Mode</dt><dd>{o.payment.label}{o.payment.phone ? ` · ${masque(o.payment.phone)}` : ''}</dd>
+                <dt>Mode</dt><dd><span class="mode-op"><LogoOperateur k={o.payment.method} m={R.OPERATEURS[o.payment.method] || o.payment} />{o.payment.label}{o.payment.phone ? ` · ${masque(o.payment.phone)}` : ''}</span></dd>
                 {o.payment.reference ? <><dt>Transaction</dt><dd class="code">{o.payment.reference}</dd></> : null}
                 <dt>Statut</dt><dd>{STATUT_PAIEMENT[o.payment.status] || 'En attente'}</dd>
               </dl>

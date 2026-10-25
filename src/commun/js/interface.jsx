@@ -158,6 +158,12 @@ export function CaseACocher({ coche, onClick, children }) {
   );
 }
 
+/* Logo d'un opérateur Mobile Money (images : commun/marque/operateurs/, styles .logo-op). Sans logo : son initiale sur sa couleur. */
+export function LogoOperateur({ k, m, taille, classe }) {
+  const o = m || {};
+  return <span class={classes('logo-op', classe)} data-op={k || o.k} style={{ '--op': o.color, '--t': taille ? `${taille}px` : undefined }} aria-hidden="true">{o.init || String(o.label || 'M')[0]}</span>;
+}
+
 export function Choix({ actif, onClick, icone, couleur, titre, sous, desactive }) {
   return (
     <button type="button" class="choix" role="radio" aria-checked={actif ? 'true' : 'false'} onClick={onClick} disabled={desactive}>

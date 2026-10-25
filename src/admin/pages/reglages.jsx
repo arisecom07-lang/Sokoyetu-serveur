@@ -2,7 +2,7 @@
 import { useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
-import { Champ, Note, Bascule, toast, confirmer } from '../../commun/js/interface.jsx';
+import { Champ, LogoOperateur, Note, Bascule, toast, confirmer } from '../../commun/js/interface.jsx';
 import { uid, copie, classes, copier } from '../../commun/js/outils.js';
 import { PAGES_LEGALES, ANCIENNES_CLES, modeleLegal } from '../../commun/js/legal.js';
 import { aller, route, lien } from '../routeur.js';
@@ -118,7 +118,7 @@ function Formulaire({ section }) {
                 const p = f.payments[k] || {}; const possible = proposes.includes(k);
                 return (
                   <section key={k} class="carte">
-                    <div class="operateur-tete"><span class="op-carre" style={{ background: o.color }} aria-hidden="true">{o.init}</span><Bascule actif={possible && !!p.enabled} desactive={!possible} onClick={() => pay(k, 'enabled', !p.enabled)} libelle={o.label} sous={!possible ? `Non proposé par ${NOM_FOURNISSEUR[fournisseur]}` : p.enabled ? 'Proposé aux clients' : 'Désactivé'} /></div>
+                    <div class="operateur-tete"><LogoOperateur k={k} m={o} taille={44} /><Bascule actif={possible && !!p.enabled} desactive={!possible} onClick={() => pay(k, 'enabled', !p.enabled)} libelle={o.label} sous={!possible ? `Non proposé par ${NOM_FOURNISSEUR[fournisseur]}` : p.enabled ? 'Proposé aux clients' : 'Désactivé'} /></div>
                   </section>
                 );
               })}

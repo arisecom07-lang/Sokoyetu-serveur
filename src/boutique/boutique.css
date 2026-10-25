@@ -248,7 +248,7 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .zones-mini b { color: var(--encre); font-weight: 700; }
 .operateurs { display: flex; flex-wrap: wrap; gap: 6px; }
 .operateur { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 5px; border-radius: var(--r-rond); background: var(--surface); border: 1px solid var(--ligne); font-size: 13px; font-weight: 700; color: var(--encre-2); }
-.operateur i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11.5px; font-weight: 900; color: #fff; background: var(--op); }
+.operateur .logo-op { border-radius: 6px; }
 .produit-description { display: grid; gap: var(--e3); }
 .produit-description p { color: var(--encre-2); line-height: 1.6; }
 .caracteristiques { display: grid; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--ligne); }
@@ -303,7 +303,6 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .ajout-code { display: flex; gap: 8px; align-items: flex-start; }
 .ajout-code .btn { flex: none; height: 50px; }
 .carte-paiement { border-color: color-mix(in srgb, var(--op) 35%, var(--ligne)); background: linear-gradient(180deg, color-mix(in srgb, var(--op) 6%, var(--surface)), var(--surface) 140px); }
-.op-pastille { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-weight: 900; font-size: 15px; color: #fff; background: var(--op); }
 .etapes-paiement { display: grid; gap: 10px; margin: 4px 0 12px; }
 .etapes-paiement li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; font-size: 14.5px; color: var(--encre-2); line-height: 1.45; }
 .etapes-paiement li > span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ebene); color: var(--sur-ebene); font-size: 12.5px; font-weight: 800; }
@@ -330,11 +329,12 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .paiement-attente .gauche { text-align: left; justify-self: stretch; }
 .paiement-attente .pile { justify-self: stretch; }
 .paiement-attente .etapes-paiement { justify-self: stretch; max-width: 420px; margin: 6px auto; }
-.op-grande { width: 44px; height: 44px; border-radius: 13px; font-size: 20px; }
 .attente-onde { position: relative; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--op) 14%, var(--surface)); color: var(--op); margin: 4px 0; }
 .attente-onde .ic { --ic: 34px; }
 .attente-onde::before, .attente-onde::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--op) 45%, transparent); animation: onde 2.4s var(--sortie) infinite; }
 .attente-onde::after { animation-delay: 1.2s; }
+.attente-logo { position: absolute; right: -6px; bottom: -4px; z-index: 1; box-shadow: 0 0 0 3px var(--surface); }
+.attente-logo[data-op="mpesa"] { box-shadow: inset 0 0 0 1px rgba(26, 18, 12, .12), 0 0 0 3px var(--surface); }
 @keyframes onde { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
 .point-vivant { display: inline-block; vertical-align: 1px; margin-right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 50%, transparent); animation: vivant 1.6s ease-out infinite; }
 @keyframes vivant { to { box-shadow: 0 0 0 8px transparent; } }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
-import { Etapes, Note, Vide, toast } from '../../commun/js/interface.jsx';
+import { Etapes, LogoOperateur, Note, Vide, toast } from '../../commun/js/interface.jsx';
 import { requete } from '../../commun/js/api.js';
 import { dollars, francs, telephone, classes } from '../../commun/js/outils.js';
 import { lien, naviguer, route } from '../routeur.js';
@@ -137,13 +137,13 @@ export function Paiement() {
             <section class={classes('carte paiement-attente entree', echec && 'en-echec')} style={{ '--op': moyen.color }} aria-live="polite">
               {echec ? (
                 <>
-                  <span class="op-pastille op-grande" aria-hidden="true">{moyen.init}</span>
+                  <LogoOperateur k={o.payment.method} m={moyen} taille={48} />
                   <h1 class="titre-serif">Paiement non abouti</h1>
                   <p class="attenue">{o.payment.error || 'Le paiement a été refusé ou annulé.'} Rien n’a été débité : vous pouvez réessayer.</p>
                 </>
               ) : (
                 <>
-                  <span class="attente-onde" aria-hidden="true"><Icone n="mobile" /></span>
+                  <span class="attente-onde" aria-hidden="true"><Icone n="mobile" /><LogoOperateur k={o.payment.method} m={moyen} taille={30} classe="attente-logo" /></span>
                   <h1 class="titre-serif">Validez le paiement sur votre téléphone</h1>
                   <p class="attenue">Une demande de <b>{dollars(o.total)}</b>{francs(o.total, c) ? ` (${francs(o.total, c)})` : ''} a été envoyée au <b>{telephone(o.payment.phone)}</b> ({o.payment.label}).</p>
                   <ol class="etapes-paiement gauche">
