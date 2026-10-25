@@ -328,8 +328,87 @@ async function serveur(chemin, method, corps) {
     enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update'));
     return { effacees: l.length };
   }
+  if (p === 'sokoyetu/visite') { visiteDemo(corps); return null; }
+  if (p === 'sokoyetu/audience') { exigerGerant(); return resumeDemo(q.get('jours'), q.get('graphe')); }
+  if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant(); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
   throw new ErreurApi(404, 'Adresse inconnue dans la démonstration.');
+}
+
+/* ---------- Fréquentation (comme serveur/pb_hooks/lib/audience.js), avec deux semaines de visites inventées ---------- */
+
+const CLE_AUDIENCE = 'sokoyetu-demo:audience';
+const jourDe = (t) => new Date(t + 2 * 3600e3).toISOString().slice(0, 10);
+function audienceDemo() {
+  let a = null;
+  try { a = JSON.parse(localStorage.getItem(CLE_AUDIENCE) || 'null'); } catch (e) { }
+  if (a && a.visiteurs) return a;
+  a = { visiteurs: {}, articles: {}, etats: {} };
+  const ids = Object.keys(base().cols.products); let graine = 7;
+  const hasard = () => { graine = (graine * 16807) % 2147483647; return graine / 2147483647; };
+  for (let d = 13; d >= 1; d--) {
+    const j = jourDe(Date.now() - d * JOUR);
+    const n = 18 + Math.round(hasard() * 30) + (13 - d) * 2;
+    for (let i = 0; i < n; i++) {
+      const v = 'demo' + Math.floor(hasard() * 160); const k = j + '|' + v;
+      const x = a.visiteurs[k] = a.visiteurs[k] || { jour: j, v, vu: 0, vues: 0, produit: '' };
+      for (let q = Math.ceil(hasard() * 4); q > 0; q--) {
+        const p = ids[Math.floor(Math.pow(hasard(), 1.8) * ids.length)]; if (!p) continue;
+        const ka = j + '|' + p + '|' + v; const y = a.articles[ka] = a.articles[ka] || { jour: j, p, v, vues: 0, panier: 0, favori: 0 };
+        y.vues++; x.vues++;
+        if (hasard() < 0.12) { y.panier++; a.etats[v + '|panier|' + p] = 1; }
+        if (hasard() < 0.08) { y.favori++; a.etats[v + '|favori|' + p] = 1; }
+      }
+    }
+  }
+  try { localStorage.setItem(CLE_AUDIENCE, JSON.stringify(a)); } catch (e) { }
+  return a;
+}
+function visiteDemo(c) {
+  const v = String((c && c.v) || ''); if (!/^[a-z0-9]{16,40}$/.test(v)) return;
+  const a = audienceDemo(); const now = Date.now(); const j = jourDe(now);
+  const p = /^[a-z0-9-]{2,40}$/.test(String(c.p || '')) ? String(c.p) : '';
+  const act = ['vue', 'panier', 'favori'].includes(c.a) && p ? c.a : '';
+  const x = a.visiteurs[j + '|' + v] = a.visiteurs[j + '|' + v] || { jour: j, v, vu: 0, vues: 0, produit: '' };
+  x.vu = now; x.produit = p; if (act === 'vue') x.vues++;
+  if (act) { const k = j + '|' + p + '|' + v; const y = a.articles[k] = a.articles[k] || { jour: j, p, v, vues: 0, panier: 0, favori: 0 }; y[act === 'vue' ? 'vues' : act]++; }
+  [['panier', 'panier'], ['favori', 'favoris']].forEach(([type, cle]) => {
+    if (!Array.isArray(c[cle])) return;
+    Object.keys(a.etats).filter((k) => k.startsWith(v + '|' + type + '|')).forEach((k) => delete a.etats[k]);
+    c[cle].slice(0, 60).forEach((id) => { a.etats[v + '|' + type + '|' + id] = 1; });
+  });
+  try { localStorage.setItem(CLE_AUDIENCE, JSON.stringify(a)); } catch (e) { }
+}
+function periodeDemo(n) { n = Math.max(1, Math.min(90, parseInt(n, 10) || 7)); return Array.from({ length: n }, (_, i) => jourDe(Date.now() - (n - 1 - i) * JOUR)); }
+function resumeDemo(jours, graphe) {
+  const a = audienceDemo(); const P = periodeDemo(jours); const G = periodeDemo(Math.max(P.length, parseInt(graphe, 10) || 0));
+  const vis = Object.values(a.visiteurs); const recent = Date.now() - 90e3;
+  const premier = {}; vis.forEach((x) => { if (!premier[x.v] || x.jour < premier[x.v]) premier[x.v] = x.jour; });
+  const produits = {}; const fiche = (id) => (produits[id] = produits[id] || { id, vues: 0, visiteurs: 0, paniers: 0, favoris: 0, dansPaniers: 0, dansFavoris: 0, enLigne: 0 });
+  Object.values(a.articles).filter((y) => y.jour >= P[0]).forEach((y) => { const f = fiche(y.p); f.vues += y.vues; f.visiteurs += y.vues > 0 ? 1 : 0; f.paniers += y.panier > 0 ? 1 : 0; f.favoris += y.favori > 0 ? 1 : 0; });
+  Object.keys(a.etats).forEach((k) => { const [, type, p] = k.split('|'); fiche(p)[type === 'panier' ? 'dansPaniers' : 'dansFavoris']++; });
+  const enLigne = new Set(); vis.filter((x) => x.vu > recent).forEach((x) => { enLigne.add(x.v); if (x.produit) fiche(x.produit).enLigne++; });
+  const dansP = vis.filter((x) => x.jour >= P[0]);
+  return {
+    maintenant: Date.now(), periode: P.length, enLigne: enLigne.size, visiteurs: new Set(dansP.map((x) => x.v)).size,
+    nouveaux: Object.values(premier).filter((j) => j >= P[0]).length, vues: dansP.reduce((s, x) => s + x.vues, 0),
+    visiteursTotal: Object.keys(premier).length, gardeJours: 90,
+    jours: G.map((j) => { const l = vis.filter((x) => x.jour === j); return { jour: j, visiteurs: l.length, vues: l.reduce((s, x) => s + x.vues, 0), nouveaux: Object.values(premier).filter((d) => d === j).length }; }),
+    produits: Object.values(produits)
+  };
+}
+function articleDemo(id, jours, graphe) {
+  const a = audienceDemo(); const P = periodeDemo(jours); const G = periodeDemo(Math.max(P.length, parseInt(graphe, 10) || 0));
+  const l = Object.values(a.articles).filter((y) => y.p === id);
+  const etats = Object.keys(a.etats).filter((k) => k.endsWith('|' + id));
+  const jx = G.map((j) => { const d = l.filter((y) => y.jour === j); return { jour: j, vues: d.reduce((s, y) => s + y.vues, 0), visiteurs: d.filter((y) => y.vues > 0).length, paniers: d.filter((y) => y.panier > 0).length, favoris: d.filter((y) => y.favori > 0).length }; });
+  const dansP = l.filter((y) => y.jour >= P[0]);
+  return {
+    maintenant: Date.now(), id, periode: P.length, jours: jx,
+    enLigne: Object.values(a.visiteurs).filter((x) => x.vu > Date.now() - 90e3 && x.produit === id).length,
+    dansPaniers: etats.filter((k) => k.includes('|panier|')).length, dansFavoris: etats.filter((k) => k.includes('|favori|')).length,
+    total: { vues: dansP.reduce((s, y) => s + y.vues, 0), visiteurs: new Set(dansP.filter((y) => y.vues > 0).map((y) => y.v)).size, paniers: dansP.filter((y) => y.panier > 0).length, favoris: dansP.filter((y) => y.favori > 0).length }
+  };
 }
 
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */

@@ -82,6 +82,8 @@ export function Plus() {
     <>
       <TetePage titre="Plus" sous="Catalogue, vitrine et réglages" />
       <div class="pile-l formulaire-etroit">
+        <p class="intertitre">Suivi</p>
+        <div class="menu">{item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article')}</div>
         <p class="intertitre">Catalogue</p>
         <div class="menu">
           {item(lien('/rayons'), 'rayons', 'Rayons', pluriel(rayons.value.length, 'rayon'))}

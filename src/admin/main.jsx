@@ -14,6 +14,7 @@ import { Produits, FicheProduit } from './pages/produits.jsx';
 import { Rayons, Bannieres, Remises, FicheCatalogue } from './pages/catalogue.jsx';
 import { Clients, Client, Plus, Compte } from './pages/clients.jsx';
 import { Reglages } from './pages/reglages.jsx';
+import { Audience, AudienceArticle } from './pages/audience.jsx';
 
 function page(segs) {
   const [a, b] = segs;
@@ -21,6 +22,7 @@ function page(segs) {
   if (a === 'commandes') return b ? Commande : Commandes;
   if (a === 'produits') return b ? FicheProduit : Produits;
   if (a === 'clients') return b ? Client : Clients;
+  if (a === 'audience') return b ? AudienceArticle : Audience;
   if (a === 'rayons') return b ? () => <FicheCatalogue type="rayons" /> : Rayons;
   if (a === 'bannieres') return b ? () => <FicheCatalogue type="bannieres" /> : Bannieres;
   if (a === 'remises') return b ? () => <FicheCatalogue type="remises" /> : Remises;

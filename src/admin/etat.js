@@ -152,3 +152,8 @@ export async function retirerExemples() {
   for (const k of ['products', 'collections', 'banners', 'discounts']) for (const x of donnees.value[k].filter((y) => y.demo)) await retirer(k, x.id);
 }
 export const nbExemples = computed(() => ['products', 'collections', 'banners', 'discounts'].reduce((a, k) => a + donnees.value[k].filter((x) => x.demo).length, 0));
+
+/* ---------- Fréquentation de la boutique (compteurs anonymes tenus par le serveur) ---------- */
+
+export const lireAudience = (jours, graphe = 7) => requete(`sokoyetu/audience?jours=${jours}&graphe=${graphe}`);
+export const lireAudienceArticle = (id, jours, graphe = 7) => requete(`sokoyetu/audience/${encodeURIComponent(id)}?jours=${jours}&graphe=${graphe}`);

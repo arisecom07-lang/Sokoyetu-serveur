@@ -9,6 +9,7 @@ import { chargerCatalogue, suivreCatalogue, actualiserMesCommandes, suivreComman
 import { NavBas } from './composants/cadre.jsx';
 import { BarreMiseAJour, enregistrerServiceWorker } from './installation.jsx';
 import { consentement, consentir, mesureConfiguree, chargerMesure } from './mesure.js';
+import { suivreVisites } from './visites.js';
 import { Accueil } from './pages/accueil.jsx';
 import { Rayons, Rayon, Nouveautes, Recherche, Favoris } from './pages/catalogue.jsx';
 import { Produit } from './pages/produit.jsx';
@@ -62,5 +63,5 @@ if (suivi) suivreCommande(suivi.id, suivi.t);
 const racine = document.getElementById('app');
 racine.textContent = '';
 render(<App />, racine);
-chargerCatalogue().then(() => { suivreCatalogue(); actualiserMesCommandes(); });
+chargerCatalogue().then(() => { suivreCatalogue(); actualiserMesCommandes(); suivreVisites(); });
 enregistrerServiceWorker();

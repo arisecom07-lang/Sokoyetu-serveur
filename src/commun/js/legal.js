@@ -71,14 +71,18 @@ export function modeleLegal(cle, c) {
       'Nous ne vous envoyons aucun message publicitaire sans votre accord préalable. Vous pouvez retirer cet accord à tout moment, sans frais.',
       '## Sécurité',
       'Connexion chiffrée (HTTPS), accès administrateur protégé, prix et montants recalculés par notre serveur, et collecte limitée au strict nécessaire.',
+      '## Fréquentation de la boutique',
+      'Notre serveur compte les visites de façon anonyme : combien de personnes sont en ligne, quels articles sont consultés, ajoutés au panier ou aux favoris. Votre appareil n’y est reconnu que par un code tiré au sort, sans nom, téléphone ni adresse IP, et ces compteurs sont effacés au bout de 90 jours. Ils ne quittent jamais la boutique.',
       '## Mesure d’audience',
-      'Un outil de statistiques n’est activé que si vous l’acceptez. Voir « Cookies et données de l’appareil ».'
+      'Un outil de statistiques extérieur n’est activé que si vous l’acceptez. Voir « Cookies et données de l’appareil ».'
     ],
     cookies: [
       '## Ce qui est enregistré sur votre appareil',
       'Pour fonctionner, la boutique garde sur votre appareil votre panier, vos favoris, vos coordonnées pré-remplies, vos recherches récentes, les liens de suivi de vos commandes et votre choix concernant la mesure d’audience. Ces informations, strictement nécessaires, ne servent qu’à vous et ne sont pas utilisées pour de la publicité.',
+      '## Fréquentation (anonyme)',
+      'Un code tiré au sort, gardé sur votre appareil, permet à notre serveur de compter les visiteurs et les articles consultés, mis au panier ou en favori, sans savoir qui vous êtes. Ces compteurs sont effacés au bout de 90 jours. Si vous refusez la mesure d’audience, ou si votre navigateur demande à ne pas être suivi, rien n’est compté.',
       '## Mesure d’audience (facultative)',
-      c.analytics && c.analytics.provider ? 'Si vous l’acceptez, un outil de statistiques mesure de façon agrégée les pages consultées et les étapes de commande, pour améliorer la boutique. Sans votre accord, rien n’est chargé.' : 'Aucun outil de statistiques n’est utilisé actuellement. Si nous en ajoutons un, il ne sera activé qu’avec votre accord.',
+      c.analytics && c.analytics.provider ? 'Si vous l’acceptez, un outil de statistiques mesure de façon agrégée les pages consultées et les étapes de commande, pour améliorer la boutique. Sans votre accord, rien n’est chargé.' : 'Aucun outil de statistiques extérieur n’est utilisé actuellement. Si nous en ajoutons un, il ne sera activé qu’avec votre accord.',
       '## Modifier votre choix',
       'Vous pouvez changer d’avis à tout moment avec les boutons ci-dessous, ou effacer toutes les informations enregistrées sur cet appareil.'
     ],
