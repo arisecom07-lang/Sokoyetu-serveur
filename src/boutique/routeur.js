@@ -8,7 +8,7 @@ const HASH = typeof __DEMO__ !== 'undefined' && __DEMO__;
 const ROUTES = [
   ['/', 'accueil'], ['/categories', 'rayons'], ['/nouveautes', 'nouveautes'], ['/c/:id/:slug?', 'rayon'], ['/p/:id/:slug?', 'produit'],
   ['/recherche', 'recherche'], ['/favoris', 'favoris'], ['/panier', 'panier'], ['/commander', 'commander'], ['/paiement/:id', 'paiement'], ['/merci/:id', 'merci'],
-  ['/compte', 'compte'], ['/compte/commandes', 'commandes'], ['/compte/retrouver', 'retrouver'], ['/suivi/:id', 'suivi'], ['/infos/:page', 'infos']
+  ['/compte', 'compte'], ['/compte/commandes', 'commandes'], ['/compte/retrouver', 'retrouver'], ['/compte/connexion', 'connexion'], ['/suivi/:id', 'suivi'], ['/infos/:page', 'infos']
 ].map(([motif, nom]) => {
   const cles = [];
   const re = new RegExp('^' + motif.replace(/\/:(\w+)(\?)?/g, (_, k, opt) => { cles.push(k); return opt ? '(?:/([^/]+))?' : '/([^/]+)'; }) + '/?$');

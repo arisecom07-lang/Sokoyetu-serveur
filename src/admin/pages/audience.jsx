@@ -6,12 +6,22 @@ import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
 import { Note, Segment, Pastille, Vide } from '../../commun/js/interface.jsx';
 import { Local } from '../../commun/js/stockage.js';
-import { debutJour, JOUR, pluriel, groupe, classes } from '../../commun/js/outils.js';
+import { debutJour, JOUR, pluriel, groupe, classes, dollars, ilya, telephone } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { commandes, clients, produitsParId, pret, lireAudience, lireAudienceArticle, gererErreur } from '../etat.js';
+import { commandes, clients, comptes, produitsParId, pret, lireAudience, lireAudienceArticle, gererErreur } from '../etat.js';
 import { TetePage, Kpi } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
 import { Chargement, LigneCommandeCourte, venteDu, estVente } from './accueil.jsx';
+import { panierDuCompte } from './clients.jsx';
+
+/* Un client avec compte : nom, téléphone, et ce qu'il a mis de côté. */
+const LigneCompte = ({ a, texte }) => (
+  <a class="ligne" href={lien('/clients/' + R.chiffres(a.phone))}>
+    <span class="ligne-vignette ronde" aria-hidden="true">{(a.name || '?')[0].toUpperCase()}</span>
+    <span class="ligne-texte"><b>{a.name || 'Client'}</b><small>{telephone(a.phone) || a.phone} · {texte}</small></span>
+    <Icone n="droite" classe="chevron" />
+  </a>
+);
 
 const RYTHME = 15000;
 const PERIODES = [[1, 'Aujourd’hui'], [7, '7 jours'], [30, '30 jours']];
@@ -91,7 +101,7 @@ export function Audience() {
             <Kpi grand libelle="En ligne maintenant" icone="oeil" valeur={nb(a.enLigne)} sous={a.enLigne ? pluriel(a.enLigne, 'personne sur la boutique', 'personnes sur la boutique') : 'Personne pour l’instant'} ton={a.enLigne ? 'ok' : ''} />
             <Kpi libelle={`Visiteurs ${lib}`} icone="personnes" valeur={nb(a.visiteurs)} sous={a.nouveaux ? `dont ${pluriel(a.nouveaux, 'nouveau', 'nouveaux')}` : 'appareils différents'} />
             <Kpi libelle={`Articles vus ${lib}`} icone="etiquette" valeur={nb(a.vues)} sous={a.visiteurs ? `${(a.vues / Math.max(1, a.visiteurs)).toFixed(1).replace('.', ',')} par visiteur` : 'pages d’articles ouvertes'} />
-            <Kpi libelle="Clients" icone="recu" valeur={nb(nClients)} sous={`ont déjà commandé · ${nb(a.visiteursTotal)} visiteurs en ${a.gardeJours} j`} href={lien('/clients')} />
+            <Kpi libelle="Clients" icone="recu" valeur={nb(nClients)} sous={`${comptes.value.length ? pluriel(comptes.value.length, 'compte') + ' · ' : ''}${nb(a.visiteursTotal)} visiteurs en ${a.gardeJours} j`} href={lien('/clients')} />
           </div>
           <div class="tableau-grille">
             <div class="pile-l">
@@ -118,12 +128,25 @@ export function Audience() {
                   </a>
                 ))}</div> : <p class="attenue petit">{a.enLigne ? `${pluriel(a.enLigne, 'visiteur parcourt', 'visiteurs parcourent')} la boutique, sans article ouvert.` : 'Aucun visiteur sur la boutique en ce moment.'}</p>}
               </section>
-              <Note ton="info" icone="cadenas">La boutique n’a pas de comptes clients : un visiteur est un téléphone ou un ordinateur, compté sans nom ni numéro. Les personnes sont connues quand elles commandent : vous voyez alors leur nom et leur téléphone dans la commande. Compteurs effacés au bout de {a.gardeJours} jours.</Note>
+              <PaniersARelancer />
+              <Note ton="info" icone="cadenas">Un visiteur sans compte est un téléphone ou un ordinateur, compté sans nom ni numéro. Vous connaissez une personne quand elle commande, ou quand elle crée son compte : vous voyez alors son nom, son téléphone, son panier et ses favoris. Compteurs effacés au bout de {a.gardeJours} jours.</Note>
             </div>
           </div>
         </div>
       )}
     </>
+  );
+}
+
+/* Clients avec compte dont le panier attend : les plus récents d'abord, pour les relancer. */
+function PaniersARelancer() {
+  const l = comptes.value.map((a) => ({ a, pa: panierDuCompte(a) })).filter((x) => x.pa.lignes.length).sort((x, y) => y.pa.depuis - x.pa.depuis);
+  return (
+    <section class="carte">
+      <h2 class="carte-titre"><Icone n="sac" />Paniers à relancer<span class="fin">{pluriel(l.length, 'client')}</span></h2>
+      {l.length ? <div class="liste sans-bord">{l.slice(0, 8).map(({ a, pa }) => <LigneCompte key={a.id} a={a} texte={`${pluriel(pa.lignes.reduce((s, x) => s + x.qty, 0), 'article')} · ${dollars(pa.valeur)}${pa.depuis ? ' · ' + ilya(pa.depuis) : ''}`} />)}</div>
+        : <p class="attenue petit">{comptes.value.length ? 'Aucun client avec compte n’a d’article en attente dans son panier.' : 'Quand un client avec compte met un article au panier sans commander, il apparaît ici avec son nom et son téléphone.'}</p>}
+    </section>
   );
 }
 
@@ -159,6 +182,13 @@ export function AudienceArticle() {
   const jours = ((a && a.jours) || []).map((j) => ({ t: versDate(j.jour), v: j.vues, n: j.visiteurs, paniers: j.paniers, favoris: j.favoris }));
   const t = (a && a.total) || { vues: 0, visiteurs: 0, paniers: 0, favoris: 0 };
   const conversion = t.visiteurs ? Math.round((acheteurs / t.visiteurs) * 100) : 0;
+  // Clients avec compte qui ont l'article au panier ou en favori, les plus récents d'abord.
+  const gardes = comptes.value.map((c) => {
+    const ligne = c.panier.find((l) => l.productId === id); const fav = c.favoris.includes(id);
+    if (!ligne && !fav) return null;
+    const d = c.dates || {}; const quand = Math.max(d['panier:' + id] || 0, d['favori:' + id] || 0);
+    return { a: c, quand, texte: [ligne ? `au panier (${ligne.qty})` : '', fav ? 'en favori' : '', quand ? ilya(quand) : ''].filter(Boolean).join(' · ') };
+  }).filter(Boolean).sort((x, y) => y.quand - x.quand);
 
   return (
     <>
@@ -192,7 +222,12 @@ export function AudienceArticle() {
                 </div>
                 <a class="btn btn-secondaire btn-s espace-haut" href={lien('/produits/' + id)}><Icone n="crayon" />Modifier la fiche</a>
               </section>
-              <Note ton="info" icone="cadenas">Paniers et favoris sont anonymes : la boutique sait combien de personnes ont mis l’article de côté, pas qui. Pour leur donner envie de finir l’achat, une réduction ou une bannière sur cet article est un bon levier.</Note>
+              <section class="carte">
+                <h2 class="carte-titre"><Icone n="personne" />Clients avec compte<span class="fin">{pluriel(gardes.length, 'client')}</span></h2>
+                {gardes.length ? <div class="liste sans-bord">{gardes.map((x) => <LigneCompte key={x.a.id} a={x.a} texte={x.texte} />)}</div>
+                  : <p class="attenue petit">Aucun client avec compte n’a cet article dans son panier ou ses favoris.</p>}
+              </section>
+              <Note ton="info" icone="cadenas">Sans compte, paniers et favoris sont anonymes : la boutique sait combien de personnes ont mis l’article de côté, pas qui. Ceux qui ont un compte sont nommés ci-dessus : vous pouvez les appeler. Pour les autres, une réduction ou une bannière sur cet article est un bon levier.</Note>
             </div>
           </div>
         </div>

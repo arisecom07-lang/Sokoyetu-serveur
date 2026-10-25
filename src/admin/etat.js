@@ -6,7 +6,7 @@ import { toast } from '../commun/js/interface.jsx';
 
 export const compte = signal(Auth.charger() ? Auth.compte : null);
 export const pret = signal(false);          // données chargées
-export const etatServeur = signal({ version: '', ia: false, paiement: { fournisseur: '', pret: false, test: false } });
+export const etatServeur = signal({ version: '', ia: false, paiement: { fournisseur: '', pret: false, test: false }, codes: { pret: false, canaux: [], test: false } });
 
 export const donnees = signal({ config: null, collections: [], banners: [], products: [], discounts: [], orders: [] });
 // Le fournisseur de paiement se règle sur le serveur (paiement.sh) : l'administration le lit dans l'état du serveur.
@@ -24,7 +24,12 @@ export const commandes = computed(() => [...donnees.value.orders].sort((a, b) =>
 export const produitsParId = computed(() => new Map(donnees.value.products.map((p) => [p.id, p])));
 export const aTraiter = computed(() => donnees.value.orders.filter(R.aTraiter).length);
 
-/* Clients : déduits des commandes (une fiche par numéro de téléphone). */
+/* Comptes clients (facultatifs) : panier, favoris et coordonnées gardés par le serveur. */
+export const comptes = signal([]);
+const versCompte = (r) => ({ id: r.id, phone: r.phone || '', name: r.name || '', created: Date.parse(String(r.created || '').replace(' ', 'T')) || 0, seen: R.num(r.seen), ...R.docCompte(r.doc) });
+export const comptesParTel = computed(() => new Map(comptes.value.map((c) => [R.chiffres(c.phone), c])));
+
+/* Clients : déduits des commandes (une fiche par numéro de téléphone), plus les comptes qui n'ont pas encore commandé. */
 export const clients = computed(() => {
   const m = new Map();
   for (const o of donnees.value.orders) {
@@ -35,7 +40,15 @@ export const clients = computed(() => {
     if ((o.createdAt || 0) >= c.derniere) { c.derniere = o.createdAt || 0; c.nom = (o.customer && o.customer.name) || c.nom; c.zone = (o.shipping && o.shipping.zoneName) || c.zone; c.affiche = (o.customer && o.customer.phone) || c.affiche; }
     m.set(k, c);
   }
-  return [...m.values()].sort((a, b) => b.derniere - a.derniere);
+  for (const a of comptes.value) {
+    const k = R.chiffres(a.phone); if (!k) continue;
+    const c = m.get(k) || { tel: k, affiche: a.phone, nom: '', commandes: [], depense: 0, derniere: 0, zone: '' };
+    c.compte = a; if (a.name) c.nom = c.nom || a.name;
+    m.set(k, c);
+  }
+  // Tri : dernière activité (commande, ou passage sur la boutique avec son compte).
+  const activite = (c) => Math.max(c.derniere, (c.compte && c.compte.seen) || 0);
+  return [...m.values()].sort((a, b) => activite(b) - activite(a));
 });
 
 /* ---------- Chargement et temps réel ---------- */
@@ -53,6 +66,7 @@ export function quandNouvelleCommande(fn) { surNouvelleCommande = fn; }
 
 export async function charger() {
   const res = await Promise.all(COLLECTIONS.map((c) => tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => { if (e.status === 401 || e.status === 403) throw e; return []; })));
+  chargerComptes();
   batch(() => {
     const d = {}; COLLECTIONS.forEach((c, i) => { d[c] = res[i]; });
     donnees.value = { config: d.config.find((x) => x.id === 'store') || null, collections: d.collections, banners: d.banners, products: d.products, discounts: d.discounts, orders: d.orders };
@@ -61,9 +75,27 @@ export async function charger() {
   requete('sokoyetu/etat').then((e) => { etatServeur.value = e || etatServeur.value; }).catch(() => { });
 }
 
+async function chargerComptes() {
+  const l = [];
+  try {
+    for (let page = 1; page < 100; page++) {
+      const j = await requete(`collections/clients/records?page=${page}&perPage=500&skipTotal=1`);
+      (j.items || []).forEach((r) => l.push(versCompte(r)));
+      if ((j.items || []).length < 500) break;
+    }
+    comptes.value = l;
+  } catch (e) { /* serveur sans comptes clients (ancienne version) */ }
+}
+
 let suivi = false;
 export function suivreEnDirect() {
   if (suivi) return; suivi = true;
+  // Un client met un article au panier ou en favori, crée son compte : l'administration le voit aussitôt.
+  TempsReel.abonner('clients/*', (m) => {
+    if (!m || !m.record) return;
+    const autres = comptes.value.filter((c) => c.id !== m.record.id);
+    comptes.value = m.action === 'delete' ? autres : [...autres, versCompte(m.record)];
+  });
   COLLECTIONS.forEach((col) => TempsReel.abonner(col + '/*', (m) => {
     if (!m || !m.record) return;
     const ligne = versLigne(m.record);

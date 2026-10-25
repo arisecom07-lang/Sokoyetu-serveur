@@ -7,7 +7,8 @@ import { Champ, Note, Vide, Bascule, toast, ouvrirFeuille, fermerFeuille, confir
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, dateHeure, telephone, lienWhatsApp, pluriel, copier, classes } from '../../commun/js/outils.js';
 import { lien, route, naviguer } from '../routeur.js';
-import { cfg, commandes, suivis, commandesChargees, actualiserMesCommandes, suivreCommande, jetonDe, profil, enregistrerProfil, favoris, effacerAppareil, produitsParId, retrouverCommande, remettreAuPanier } from '../etat.js';
+import { cfg, commandes, suivis, commandesChargees, actualiserMesCommandes, suivreCommande, jetonDe, profil, enregistrerProfil, favoris, effacerAppareil, produitsParId, retrouverCommande, remettreAuPanier, client, comptesOuverts, chargerCompte, seDeconnecterCompte, supprimerCompte } from '../etat.js';
+import { InvitationCompte } from './connexion.jsx';
 import { EnteteBoutique, EntetePage, Pied, Marque, ouvrirLivraisonPaiement } from '../composants/cadre.jsx';
 import { installable, installer, estIOS } from '../installation.jsx';
 import { Montants as MontantsDevis } from './commander.jsx';
@@ -120,6 +121,7 @@ export function Merci() {
             </div>
             <a class="btn btn-fantome btn-bloc" href={lien('/')}>Continuer mes achats</a>
           </div>
+          {comptesOuverts.value && !client.value ? <InvitationCompte classe="non-imprime" titre="Retrouvez cette commande sur tous vos appareils" texte={`Créez votre compte avec le ${telephone(o.customer.phone) || 'même numéro'} : cette commande et les prochaines y seront rangées.`} retour={'/merci/' + o.id} tel={o.customer.phone} /> : null}
         </div>
       </main>
       <Pied />
@@ -133,7 +135,7 @@ function ouvrirProfil() {
     titre: 'Mes coordonnées',
     contenu: () => (
       <div class="formulaire">
-        <p class="attenue petit">Elles pré-remplissent vos prochaines commandes. Elles restent sur ce téléphone.</p>
+        <p class="attenue petit">{client.value ? 'Elles pré-remplissent vos prochaines commandes, sur tous vos appareils connectés à votre compte.' : 'Elles pré-remplissent vos prochaines commandes. Elles restent sur ce téléphone.'}</p>
         <Champ libelle="Nom complet">{(a) => <input class="saisie" {...a} defaultValue={nom} onInput={(e) => { nom = e.currentTarget.value; }} autocomplete="name" />}</Champ>
         <Champ libelle="Téléphone">{(a) => <input class="saisie" {...a} defaultValue={tel} onInput={(e) => { tel = e.currentTarget.value; }} type="tel" inputmode="tel" autocomplete="tel" placeholder="099 123 4567" />}</Champ>
       </div>
@@ -160,9 +162,18 @@ function ouvrirInstallationIOS() {
   });
 }
 
+async function confirmerDeconnexion() {
+  if (!(await confirmer({ titre: 'Se déconnecter ?', texte: 'Votre panier, vos favoris et vos commandes restent dans votre compte : vous les retrouvez en vous reconnectant, sur ce téléphone ou un autre.', ok: 'Se déconnecter' }))) return;
+  seDeconnecterCompte(); toast('Vous êtes déconnecté', { icone: 'sortie' }); naviguer('/');
+}
+async function confirmerSuppression() {
+  if (!(await confirmer({ titre: 'Supprimer votre compte ?', texte: 'Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.', ok: 'Supprimer mon compte', danger: true }))) return;
+  try { await supprimerCompte(); toast('Compte supprimé', { icone: 'poubelle' }); naviguer('/'); } catch (e) { toast(e.message, { icone: 'alerte', ton: 'danger' }); }
+}
+
 export function Compte() {
-  const c = cfg.value; const pf = profil.value;
-  useEffect(() => { actualiserMesCommandes(); }, []);
+  const c = cfg.value; const pf = profil.value; const cl = client.value;
+  useEffect(() => { chargerCompte(); actualiserMesCommandes(); }, []);
   useSeo(() => ({ titre: 'Mon compte', noindex: true }), []);
   const liste = [...commandes.value.values()];
   const enCours = liste.filter((o) => o.status !== 'cancelled' && o.fulfillment !== 'delivered');
@@ -178,10 +189,14 @@ export function Compte() {
       <main id="contenu" class="page conteneur page-compte">
         <div class="titre-page"><h1 class="titre-serif">Mon compte</h1></div>
         <section class="carte profil">
-          <span class="initiale" aria-hidden="true">{(pf.name || '?').trim()[0].toUpperCase()}</span>
-          <div class="profil-texte"><b>{pf.name || 'Bienvenue'}</b><small>{pf.phone ? telephone(pf.phone) : 'Pas de compte à créer : vos commandes sont suivies sur ce téléphone.'}</small></div>
-          <button class="btn btn-secondaire btn-s" onClick={ouvrirProfil}><Icone n="crayon" />{pf.phone ? 'Modifier' : 'Ajouter'}</button>
+          <span class="initiale" aria-hidden="true">{((cl && cl.name) || pf.name || '?').trim()[0].toUpperCase()}</span>
+          <div class="profil-texte">
+            <b>{(cl && cl.name) || pf.name || 'Bienvenue'}</b>
+            <small>{cl ? <><span class="sans-coupure">{telephone(cl.phone) || cl.phone}</span> · <span class="ok-texte">connecté</span></> : pf.phone ? telephone(pf.phone) : 'Vos commandes sont suivies sur ce téléphone.'}</small>
+          </div>
+          <button class="btn btn-secondaire btn-s profil-modifier" onClick={ouvrirProfil} aria-label={pf.phone || cl ? 'Modifier mes coordonnées' : 'Ajouter mes coordonnées'}><Icone n="crayon" /><span class="libelle">{pf.phone || cl ? 'Modifier' : 'Ajouter'}</span></button>
         </section>
+        {comptesOuverts.value && !cl ? <InvitationCompte titre="Créez votre compte" texte="Facultatif, gratuit, sans mot de passe. Vous pouvez aussi continuer à commander sans compte." retour="/compte" tel={pf.phone} /> : null}
         {enCours.length ? (
           <a class="carte encours" href={lien(seule ? (ouvrirPaiement(seule) ? '/paiement/' : '/suivi/') + seule.id : '/compte/commandes')}>
             <span class="menu-icone"><Icone n="camion" /></span>
@@ -201,7 +216,9 @@ export function Compte() {
             <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur ce téléphone' : 'Désactivé : thème clair'} />
             {installable.value ? item({ onClick: () => (estIOS ? ouvrirInstallationIOS() : installer()), icone: 'mobile', titre: 'Installer l’application', sous: 'Sur l’écran d’accueil, même avec une connexion faible' }) : null}
             {item({ href: lien('/infos/conditions'), icone: 'recu', titre: 'Conditions et confidentialité', sous: 'Vente, retours, données personnelles' })}
-            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
+            {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: 'Se déconnecter', sous: 'Panier, favoris et commandes restent dans votre compte' }) : null}
+            {cl ? item({ onClick: confirmerSuppression, icone: 'poubelle', titre: 'Supprimer mon compte', sous: 'Vos commandes restent chez la boutique' }) : null}
+            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
           </div>
         </div>
       </main>
@@ -230,7 +247,7 @@ function CarteCommande({ o }) {
 }
 
 export function Commandes() {
-  useEffect(() => { actualiserMesCommandes(); }, []);
+  useEffect(() => { Promise.resolve(chargerCompte()).then(actualiserMesCommandes); }, []);
   useSeo(() => ({ titre: 'Mes commandes', noindex: true }), []);
   const liste = [...commandes.value.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const enCours = liste.filter(estEnCours); const passees = liste.filter((o) => !estEnCours(o));
@@ -239,7 +256,7 @@ export function Commandes() {
   const depense = recues.reduce((a, o) => a + R.num(o.total), 0);
   return (
     <>
-      <EntetePage titre="Mes commandes" sous={liste.length ? 'Passées ou retrouvées sur ce téléphone' : ''} repli="/compte" />
+      <EntetePage titre="Mes commandes" sous={liste.length ? (client.value ? 'Toutes les commandes de votre compte' : 'Passées ou retrouvées sur ce téléphone') : ''} repli="/compte" />
       <main id="contenu" class="page conteneur">
         {!liste.length && suivis.value.length && !commandesChargees.value ? <div class="pile">{[1, 2].map((i) => <div key={i} class="squelette" style={{ height: 120 }} />)}</div>
           : !liste.length ? (

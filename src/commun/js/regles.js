@@ -564,6 +564,69 @@ function margeCommande(o) {
   return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - num(o.discount && o.discount.amount) + num(o.serviceFee) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
 }
 
+/* ---------- Comptes clients (facultatifs) : connexion par code (WhatsApp ou SMS), panier et favoris sur tous les appareils ---------- */
+
+const MAX_FAVORIS = 200;
+const CODE_CHIFFRES = 6;
+const codeConnexion = (s) => { const v = chiffres(s); return v.length === CODE_CHIFFRES ? v : ''; };
+/* Numéro international pour l'envoi du code : 0991234567 → +243991234567. */
+function telephoneInternational(s) {
+  const t = valider.telephone(s);
+  if (!t) return '';
+  return t[0] === '+' ? t : '+243' + t.slice(1);
+}
+const idProduit = (x) => valider.identifiant(x);
+function panierCompte(l) {
+  const vus = {}; const out = [];
+  for (const x of Array.isArray(l) ? l : []) {
+    if (!estObjet(x) || !idProduit(x.productId)) continue;
+    const ligne = { productId: x.productId, color: nettoyer(x.color, 40), size: nettoyer(x.size, 40), qty: Math.min(MAX_QTE, Math.max(1, int(x.qty))) };
+    const cle = `${ligne.productId}|${ligne.color}|${ligne.size}`;
+    if (vus[cle] || !int(x.qty)) continue;
+    vus[cle] = true; out.push(ligne);
+    if (out.length >= MAX_LIGNES) break;
+  }
+  return out;
+}
+const favorisCompte = (l) => (Array.isArray(l) ? l : []).map(String).filter((x, i, a) => idProduit(x) && a.indexOf(x) === i).slice(0, MAX_FAVORIS);
+/* Coordonnées de livraison et de paiement retenues pour les prochaines commandes. */
+function profilCompte(p) {
+  const x = estObjet(p) ? p : {};
+  return { zoneId: nettoyer(x.zoneId, 40), address: nettoyer(x.address, 120), landmark: nettoyer(x.landmark, 80), payMethod: nettoyer(x.payMethod, 20), payPhone: valider.mobileMoney(x.payPhone) };
+}
+/* Le compte : panier, favoris, coordonnées, et depuis quand chaque article est au panier ou en favori (« panier:<id> »). */
+function docCompte(d) {
+  const x = estObjet(d) ? d : {};
+  const c = { panier: panierCompte(x.panier), favoris: favorisCompte(x.favoris), profil: profilCompte(x.profil), dates: {} };
+  const dates = estObjet(x.dates) ? x.dates : {};
+  c.panier.forEach((l) => { if (int(dates['panier:' + l.productId])) c.dates['panier:' + l.productId] = int(dates['panier:' + l.productId]); });
+  c.favoris.forEach((id) => { if (int(dates['favori:' + id])) c.dates['favori:' + id] = int(dates['favori:' + id]); });
+  return c;
+}
+/* Articles nouvellement au panier ou en favori : datés de maintenant ; les autres gardent leur date. */
+function daterCompte(d, maintenant) {
+  const c = docCompte(d); const now = maintenant || Date.now();
+  c.panier.forEach((l) => { c.dates['panier:' + l.productId] = c.dates['panier:' + l.productId] || now; });
+  c.favoris.forEach((id) => { c.dates['favori:' + id] = c.dates['favori:' + id] || now; });
+  return c;
+}
+/*
+ * Première connexion sur un appareil : ce qui y a été mis de côté avant de se connecter rejoint le compte.
+ * Panier : une ligne par article, couleur et taille (la plus grande quantité des deux) ; favoris : réunis.
+ */
+function fusionCompte(compte, appareil) {
+  const c = docCompte(compte); const a = estObjet(appareil) ? appareil : {};
+  const dates = c.dates;
+  const panier = panierCompte(c.panier.concat(panierCompte(a.panier)).reduce((acc, l) => {
+    const k = acc.find((y) => y.productId === l.productId && y.color === l.color && y.size === l.size);
+    if (k) k.qty = Math.max(k.qty, l.qty); else acc.push(Object.assign({}, l));
+    return acc;
+  }, []));
+  const profil = profilCompte(a.profil);
+  Object.keys(c.profil).forEach((k) => { if (c.profil[k]) profil[k] = c.profil[k]; });
+  return docCompte({ panier, favoris: c.favoris.concat(favorisCompte(a.favoris)), profil, dates });
+}
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, ACTIONS, JOUR,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
@@ -573,5 +636,6 @@ module.exports = {
   ErreurCommande, reservations, livraisonEstimee, preparerCommande, numeroCommande, numeroValide, numeroNettoye,
   estAnnulee, estPayee, estRetraitCmd, enAttentePaiement, nonAboutie, aVerifier, aPreparer, aExpedier, aTraiter, statutClient, etapesSuivi,
   relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire,
-  etapeCommande, reservationsAnciennes, incoherences, margeCommande
+  etapeCommande, reservationsAnciennes, incoherences, margeCommande,
+  MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte
 };

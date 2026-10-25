@@ -2,35 +2,52 @@
 import { useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
-import { Champ, Note, Vide, Bascule, toast, confirmer, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
+import { Champ, Note, Vide, Bascule, Pastille, toast, confirmer, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
+import { Photo } from '../../commun/js/medias.jsx';
 import { changerMotDePasse } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, pret, compte, etatServeur, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises } from '../etat.js';
+import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
+
+/* Panier d'un compte : lignes avec leur article (ceux retirés du catalogue sont écartés) et sa valeur. */
+export function panierDuCompte(a) {
+  const m = produitsParId.value;
+  const lignes = (a.panier || []).map((l) => ({ ...l, p: m.get(l.productId), depuis: (a.dates || {})['panier:' + l.productId] || 0 })).filter((l) => l.p);
+  return { lignes, valeur: lignes.reduce((s, l) => s + R.num(l.p.price) * l.qty, 0), depuis: Math.max(0, ...lignes.map((l) => l.depuis)) };
+}
 
 export function Clients() {
   const [q, setQ] = useState('');
   const tous = clients.value; const mots = normaliser(q).split(/\s+/).filter(Boolean);
   const liste = tous.filter((c) => !mots.length || mots.every((m) => normaliser(c.nom + ' ' + c.tel).includes(m)));
+  const nComptes = comptes.value.length;
   return (
     <>
-      <TetePage titre="Clients" sous={`${pluriel(tous.length, 'client')}${tous.length ? ` · ${dollars(tous.reduce((a, c) => a + c.depense, 0))} dépensés` : ''}`} />
+      <TetePage titre="Clients" sous={`${pluriel(tous.length, 'client')}${nComptes ? ` · ${pluriel(nComptes, 'compte')}` : ''}${tous.length ? ` · ${dollars(tous.reduce((a, c) => a + c.depense, 0))} dépensés` : ''}`} />
       <div class="outils-liste"><label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom ou téléphone" aria-label="Rechercher un client" /></label></div>
       {!pret.value ? <Chargement /> : liste.length ? (
         <div class="liste">
-          {liste.map((c) => (
-            <a key={c.tel} class="ligne" href={lien('/clients/' + c.tel)}>
-              <span class="ligne-vignette ronde" aria-hidden="true">{(c.nom || '?')[0].toUpperCase()}</span>
-              <span class="ligne-texte"><b>{c.nom || 'Client'}</b><small>{telephone(c.affiche) || c.affiche} · {pluriel(c.commandes.length, 'commande')}{c.zone ? ' · ' + c.zone : ''}</small></span>
-              <span class="ligne-fin"><b>{dollars(c.depense)}</b><small>{ilya(c.derniere)}</small></span>
-            </a>
-          ))}
+          {liste.map((c) => {
+            const pa = c.compte ? panierDuCompte(c.compte) : null;
+            return (
+              <a key={c.tel} class="ligne" href={lien('/clients/' + c.tel)}>
+                <span class="ligne-vignette ronde" aria-hidden="true">{(c.nom || '?')[0].toUpperCase()}</span>
+                <span class="ligne-texte"><b>{c.nom || 'Client'}</b><small>{telephone(c.affiche) || c.affiche} · {pluriel(c.commandes.length, 'commande')}{c.zone ? ' · ' + c.zone : ''}</small>
+                  {c.compte ? <span class="ligne-pastilles">
+                    <Pastille ton="info" icone="personne">Compte</Pastille>
+                    {pa.lignes.length ? <Pastille ton="marque" icone="sac">{pluriel(pa.lignes.reduce((s, l) => s + l.qty, 0), 'article')} au panier</Pastille> : null}
+                    {c.compte.favoris.length ? <Pastille ton="neutre" icone="coeur">{pluriel(c.compte.favoris.length, 'favori')}</Pastille> : null}
+                  </span> : null}</span>
+                <span class="ligne-fin"><b>{dollars(c.depense)}</b><small>{ilya(Math.max(c.derniere, (c.compte && c.compte.seen) || 0))}</small></span>
+              </a>
+            );
+          })}
         </div>
-      ) : <div class="carte"><Vide icone="personnes" titre={tous.length ? 'Aucun client trouvé' : 'Vos clients apparaîtront ici'} texte={tous.length ? '' : 'Chaque personne qui commande est ajoutée automatiquement, avec son historique.'} /></div>}
+      ) : <div class="carte"><Vide icone="personnes" titre={tous.length ? 'Aucun client trouvé' : 'Vos clients apparaîtront ici'} texte={tous.length ? '' : 'Chaque personne qui commande ou crée son compte est ajoutée automatiquement, avec son historique.'} /></div>}
     </>
   );
 }
@@ -52,21 +69,51 @@ export function Client() {
           <Kpi libelle="Commandes payées" icone="recu" valeur={String(valides.length)} sous={c.commandes.length - valides.length ? `${c.commandes.length - valides.length} non payée(s) ou annulée(s)` : ''} />
           <Kpi libelle="Total dépensé" icone="portefeuille" valeur={dollars(c.depense)} />
           <Kpi libelle="Panier moyen" icone="sac" valeur={dollars(c.depense / Math.max(1, valides.length))} />
-          <Kpi libelle="Dernière commande" icone="calendrier" valeur={date(c.derniere, { day: 'numeric', month: 'short' })} sous={ilya(c.derniere)} />
+          <Kpi libelle="Dernière commande" icone="calendrier" valeur={c.derniere ? date(c.derniere, { day: 'numeric', month: 'short' }) : '—'} sous={c.derniere ? ilya(c.derniere) : 'pas encore de commande'} />
         </div>
         <div class="rangee-l">
           <a class="btn btn-primaire" href={lienWhatsApp(c.affiche, `Bonjour ${String(c.nom).split(' ')[0]}, `)} target="_blank" rel="noopener"><Icone n="bulle" />WhatsApp</a>
           <a class="btn btn-secondaire" href={lienAppel(c.affiche)}><Icone n="appel" />Appeler</a>
           <button class="btn btn-secondaire" onClick={async () => { if (await copier(R.chiffres(c.affiche))) toast('Numéro copié'); }}><Icone n="copier" />Copier le numéro</button>
         </div>
-        <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Commandes</h2><div class="liste sans-bord">{c.commandes.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div></section>
+        {c.compte ? <CompteClient a={c.compte} /> : null}
+        <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Commandes</h2>{c.commandes.length ? <div class="liste sans-bord">{c.commandes.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div> : <p class="attenue petit">Pas encore de commande.</p>}</section>
         <section class="carte">
           <h2 class="carte-titre"><Icone n="cadenas" />Données personnelles</h2>
-          <p class="attenue petit">À la demande du client (droit à l’effacement), ses données sont retirées de toutes ses commandes. Les montants restent pour la comptabilité.</p>
+          <p class="attenue petit">À la demande du client (droit à l’effacement), ses données sont retirées de toutes ses commandes{c.compte ? ' et son compte est supprimé' : ''}. Les montants restent pour la comptabilité.</p>
           <button class="btn btn-danger btn-s espace-haut" onClick={effacer}><Icone n="poubelle" />Effacer les données de ce client</button>
         </section>
       </div>
     </>
+  );
+}
+
+/* Compte du client : son panier en ce moment (à relancer), ses favoris, depuis quand. */
+function CompteClient({ a }) {
+  const pa = panierDuCompte(a);
+  const favs = a.favoris.map((id) => ({ id, p: produitsParId.value.get(id), depuis: (a.dates || {})['favori:' + id] || 0 })).filter((x) => x.p);
+  const ligne = (p, texte, k) => (
+    <a key={k} class="ligne" href={lien('/audience/' + p.id)}>
+      <span class="ligne-vignette"><Photo m={R.imagePrincipale(p)} alt="" tailles="48px" /></span>
+      <span class="ligne-texte"><b>{p.title}</b><small>{texte}</small></span>
+    </a>
+  );
+  return (
+    <section class="carte">
+      <h2 class="carte-titre"><Icone n="personne" />Compte client<span class="fin">créé {ilya(a.created)}{a.seen ? ` · vu ${ilya(a.seen)}` : ''}</span></h2>
+      <div class="pile-l">
+        <div>
+          <p class="intertitre">Panier en ce moment{pa.lignes.length ? ` · ${dollars(pa.valeur)}` : ''}</p>
+          {pa.lignes.length ? <div class="liste sans-bord">{pa.lignes.map((l, k) => ligne(l.p, [pluriel(l.qty, 'pièce'), [l.color, l.size].filter(Boolean).join(' · '), l.depuis ? 'ajouté ' + ilya(l.depuis) : ''].filter(Boolean).join(' · '), k))}</div>
+            : <p class="attenue petit">Panier vide.</p>}
+        </div>
+        <div>
+          <p class="intertitre">Favoris</p>
+          {favs.length ? <div class="liste sans-bord">{favs.map((x) => ligne(x.p, x.depuis ? 'en favori ' + ilya(x.depuis) : 'en favori', x.id))}</div> : <p class="attenue petit">Aucun favori.</p>}
+        </div>
+        {pa.lignes.length ? <Note ton="info" icone="bulle">Ce client n’a pas encore commandé son panier. Un message, un appel ou une réduction peut l’aider à finir son achat (boutons ci-dessus).</Note> : null}
+      </div>
+    </section>
   );
 }
 
@@ -149,6 +196,30 @@ function AlertesCommandes() {
   );
 }
 
+/* Comptes clients : ouverts quand le serveur peut envoyer les codes de connexion (WhatsApp, SMS en secours). */
+function ComptesClients({ s }) {
+  const x = s || { pret: false, canaux: [], test: false };
+  const noms = { whatsapp: 'WhatsApp', sms: 'SMS' };
+  return (
+    <section class="carte">
+      <h2 class="carte-titre"><Icone n="personnes" />Comptes clients</h2>
+      {x.pret ? (
+        <div class="pile">
+          <Note ton={x.test ? 'alerte' : 'ok'} icone={x.test ? 'alerte' : 'coche'}>{x.test ? <><b>Mode test :</b> le code s’affiche à l’écran, rien n’est envoyé. N’ouvrez pas la boutique au public ainsi.</> : <>Ouverts. Code de connexion envoyé par {x.canaux.map((k) => noms[k]).join(', puis ')}.</>}</Note>
+          <p class="attenue petit">{pluriel(comptes.value.length, 'compte créé', 'comptes créés')}. Les clients peuvent toujours commander sans compte.</p>
+        </div>
+      ) : (
+        <div class="pile">
+          <p class="attenue petit">Fermés pour l’instant : les clients commandent sans compte. Pour les ouvrir, branchez l’envoi des codes par WhatsApp (API WhatsApp Business de Meta) dans la console de votre Droplet :</p>
+          <code class="commande">sudo /opt/sokoyetu/codes.sh whatsapp ID_DU_NUMERO 'JETON'</code>
+          <p class="attenue petit">SMS de secours, pour les clients sans WhatsApp :</p>
+          <code class="commande">sudo /opt/sokoyetu/codes.sh sms-twilio SID 'JETON' Sokoyetu</code>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function Compte() {
   const s = etatServeur.value;
   return (
@@ -171,6 +242,7 @@ export function Compte() {
             </div>
           )}
         </section>
+        <ComptesClients s={s.codes} />
         <section class="carte">
           <h2 class="carte-titre"><Icone n="info" />Serveur</h2>
           <dl class="infos"><dt>Version</dt><dd>{s.version || __VERSION__}</dd><dt>Sauvegardes</dt><dd>Chaque nuit, 7 gardées</dd></dl>

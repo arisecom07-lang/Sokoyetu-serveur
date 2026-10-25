@@ -1,3 +1,24 @@
+# Sokoyetu — comptes clients facultatifs (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Commander sans compte reste possible.** Avant de commander, la boutique propose : « Créez votre compte et commencez à commander dès maintenant », ou **Continuer sans compte**. La proposition revient aussi après un achat (page de remerciement) et dans Mon compte.
+- **Connexion sans mot de passe** : le client donne son numéro de téléphone et reçoit un **code à 6 chiffres sur WhatsApp** ; s'il n'a pas WhatsApp, il peut le recevoir **par SMS** (si le SMS de secours est branché).
+- **Un compte sur tous ses téléphones** : panier, favoris, coordonnées de livraison et historique des commandes se retrouvent partout. Les commandes déjà passées avec ce numéro y apparaissent aussi. Déconnexion (rien ne reste sur un téléphone prêté) et suppression du compte depuis Mon compte.
+- **Administration** : dans **Clients**, les clients avec compte (même sans commande) avec ce qu'ils ont **au panier** et **en favori** ; dans **Audience**, une carte « **Paniers à relancer** » et, sur chaque article, les clients avec compte qui l'ont au panier ou en favori.
+- **Brancher l'envoi des codes** : `sudo /opt/sokoyetu/codes.sh whatsapp ID_DU_NUMERO 'JETON'` (voir LISEZMOI, section 6). Sans canal branché, la boutique ne propose pas de compte. Mode test : `codes.sh test` (code affiché à l'écran).
+- Politique de confidentialité mise à jour (compte client facultatif).
+
+## Détails techniques
+
+- Migration `1793300000_sokoyetu_comptes.js` : collection d'authentification `clients` (téléphone unique, nom, `doc` = panier, favoris, profil ; aucune règle d'écriture publique), champ `orders.client`, tables `sokoyetu_codes` (empreinte salée du code, essais, envois) et `sokoyetu_envois_jours` (plafond quotidien). Limites par IP sur les routes.
+- `pb_hooks/lib/envoi.js` (WhatsApp Cloud API de Meta, modèle « authentification » ; SMS Twilio ou Plivo ; simulation) et `lib/comptes.js` (codes : 60 s entre deux envois, 5 par 3 h, 5 essais, 10 min ; création du compte à la première connexion ; fusion panier et favoris de l'appareil).
+- Routes : `POST compte/code`, `POST compte/connexion` (réponse d'authentification PocketBase, jeton 90 jours), `GET`/`POST compte`, `POST compte/supprimer`. Une commande passée connecté est rattachée au compte.
+- Boutique : page `/compte/connexion`, synchronisation du compte (envoi groupé après 1 s, rechargement au retour sur l'onglet). Règles partagées dans `regles.js` (`docCompte`, `fusionCompte`). Démo : comptes simulés, code affiché à l'écran.
+- Tests : test serveur des comptes (22 au total), `tests/comptes.mjs` (trois téléphones et l'administration), faux services WhatsApp, Twilio et Plivo (`tests/codes-simule.mjs`).
+
+---
+
 # Sokoyetu — audience en direct (octobre 2026)
 
 ## Ce qui change pour vous
