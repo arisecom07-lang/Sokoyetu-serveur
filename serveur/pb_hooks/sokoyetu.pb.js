@@ -100,6 +100,9 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     S.appliquerStock(tx, prep.reserve, -1);
     const rec = new Record(tx.findCollectionByNameOrId('orders'));
     rec.set('token', jeton);
+    // Client connecté à son compte : la commande s'y rattache (sinon, commande sans compte).
+    const compte = require(`${__hooks}/lib/comptes.js`).compteDe(e);
+    if (compte) rec.set('client', compte.id);
     S.enregistrerCommande(tx, rec, prep.commande);
     id = rec.id;
   });
@@ -161,6 +164,62 @@ cronAdd('sokoyetu-paiements', '* * * * *', () => {
   require(`${__hooks}/lib/commandes.js`).surveiller($app);
 });
 
+/* ---------- Boutique : comptes clients facultatifs (voir lib/comptes.js) ---------- */
+
+// Envoie un code de connexion sur WhatsApp (ou par SMS : canal « sms ») au numéro indiqué.
+routerAdd('POST', '/api/sokoyetu/compte/code', (e) => require(`${__hooks}/lib/comptes.js`).repondre(e, (C) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  const hote = String(e.request.host || '').toLowerCase().split(':')[0].replace(/^www\./, '');
+  const b = S.corps(e);
+  return e.json(200, C.demanderCode(e.app, b.telephone, /\.[a-z]{2,}$/.test(hote) ? hote : '', b.canal));
+}));
+
+// Vérifie le code et connecte le client (compte créé au premier code). Le panier et les favoris de l'appareil rejoignent le compte.
+routerAdd('POST', '/api/sokoyetu/compte/connexion', (e) => require(`${__hooks}/lib/comptes.js`).repondre(e, (C) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  const b = S.corps(e);
+  const rec = C.verifierCode(e.app, b.telephone, b.code, b.name);
+  C.enregistrer(e.app, rec, { panier: b.panier, favoris: b.favoris, profil: b.profil }, true);
+  return $apis.recordAuthResponse(e, rec, 'code', { compte: C.vue(rec), commandes: C.commandes(e.app, rec) });
+}));
+
+// Le compte connecté : nom, téléphone, panier, favoris, coordonnées, et ses commandes (identifiant et jeton de suivi).
+routerAdd('GET', '/api/sokoyetu/compte', (e) => {
+  const C = require(`${__hooks}/lib/comptes.js`);
+  const rec = C.exigerCompte(e);
+  return e.json(200, { compte: C.vue(rec), commandes: C.commandes(e.app, rec) });
+});
+
+// Panier, favoris, coordonnées ou nom changés sur un appareil : enregistrés pour tous les autres.
+routerAdd('POST', '/api/sokoyetu/compte', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  const C = require(`${__hooks}/lib/comptes.js`);
+  const rec = C.exigerCompte(e);
+  return e.json(200, { compte: C.enregistrer(e.app, rec, S.corps(e), false) });
+});
+
+// Le client supprime son compte (ses commandes restent, détachées du compte).
+routerAdd('POST', '/api/sokoyetu/compte/supprimer', (e) => {
+  const C = require(`${__hooks}/lib/comptes.js`);
+  C.supprimer(e.app, C.exigerCompte(e));
+  return e.json(200, { ok: true });
+});
+
+/* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
+
+// La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
+routerAdd('POST', '/api/sokoyetu/visite', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  try { require(`${__hooks}/lib/audience.js`).enregistrer(e.app, S.corps(e), e.request.header.get('User-Agent')); } catch (err) { console.log('sokoyetu visite', err); }
+  return e.noContent(204);
+});
+
+// Chaque nuit : compteurs de plus de 90 jours effacés.
+cronAdd('sokoyetu-audience', '17 3 * * *', () => {
+  require(`${__hooks}/lib/audience.js`).purger($app);
+  require(`${__hooks}/lib/comptes.js`).purger($app);
+});
+
 /* ---------- Administration ---------- */
 
 // Étapes d'une commande : paiement confirmé, préparation, expédition, livraison, annulation (stock restitué)…
@@ -204,7 +263,8 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
       S.enregistrerCommande(tx, rec, d); n++;
     });
   });
-  return e.json(200, { effacees: n });
+  const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
+  return e.json(200, { effacees: n, comptes });
 });
 
 // Assistant IA : rédige une fiche produit à partir d'une photo.
@@ -219,11 +279,24 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
   }
 });
 
+// Fréquentation : en ligne maintenant, visiteurs par jour, chiffres par article (?jours=1 à 90, &graphe=7 : colonnes du graphique).
+routerAdd('GET', '/api/sokoyetu/audience', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  return e.json(200, require(`${__hooks}/lib/audience.js`).resume(e.app, (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']));
+});
+routerAdd('GET', '/api/sokoyetu/audience/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  const r = require(`${__hooks}/lib/audience.js`).article(e.app, e.request.pathValue('id'), (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']);
+  return r ? e.json(200, r) : e.json(404, { message: 'Article introuvable.' });
+});
+
 // État du serveur pour l'administration.
 routerAdd('GET', '/api/sokoyetu/etat', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
   S.exigerGerant(e);
-  return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: require(`${__hooks}/lib/ia.js`).active(), paiement: require(`${__hooks}/lib/paiement.js`).etat() });
+  return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: require(`${__hooks}/lib/ia.js`).active(), paiement: require(`${__hooks}/lib/paiement.js`).etat(), codes: require(`${__hooks}/lib/envoi.js`).etat() });
 });
 
 /* ---------- Champs techniques tenus à jour automatiquement ---------- */

@@ -24,5 +24,7 @@ ARGS=(--dir="$DATA" --hooksDir="$D/pb_hooks" --migrationsDir="$D/pb_migrations")
 "$PB" superuser upsert technique@sokoyetu.test 'Technique-2026' "${ARGS[@]}" >/dev/null
 # Paiement en mode test (aucun argent) : confirmé au bout de quelques secondes, refusé si le numéro finit par 0000.
 export SOKOYETU_PAIEMENT="${SOKOYETU_PAIEMENT:-simulation}" SOKOYETU_SIMULATION_DELAI="${SOKOYETU_SIMULATION_DELAI:-3}"
-echo "Boutique : http://localhost:$PORT   ·   Administration : http://admin.localhost:$PORT   ·   Paiement : $SOKOYETU_PAIEMENT"
+# Comptes clients en mode test : rien n'est envoyé (ni WhatsApp ni SMS), le code de connexion s'affiche à l'écran.
+export SOKOYETU_WHATSAPP="${SOKOYETU_WHATSAPP-simulation}" SOKOYETU_SMS="${SOKOYETU_SMS-simulation}"
+echo "Boutique : http://localhost:$PORT   ·   Administration : http://admin.localhost:$PORT   ·   Paiement : $SOKOYETU_PAIEMENT   ·   Codes : WhatsApp ${SOKOYETU_WHATSAPP:-fermé}, SMS ${SOKOYETU_SMS:-fermé}"
 exec "$PB" serve --http=127.0.0.1:$PORT "${ARGS[@]}" --publicDir="$D/pb_public"

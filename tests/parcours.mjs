@@ -41,8 +41,9 @@ const client = await tel.newPage(); surveiller(client, 'client');
 await client.goto(BASE + '/p/ex-p17/montre-classique-bracelet-cuir'); await client.waitForSelector('.produit-titre');
 await client.click('.barre-action .btn-primaire'); await client.waitForTimeout(500);
 await client.goto(BASE + '/panier'); await client.waitForSelector('.barre-action .btn-primaire');
-await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.page-commande');
-etape('article ajouté au panier, commande ouverte');
+await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.page-choix-compte');
+await client.click('button:has-text("Continuer sans compte")'); await client.waitForSelector('.page-commande');
+etape('article ajouté au panier, création de compte proposée, commande ouverte sans compte');
 
 await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.champ-erreur');
 etape('étape 1 vide : erreurs affichées près des champs');

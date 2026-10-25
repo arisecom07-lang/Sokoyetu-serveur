@@ -3,12 +3,13 @@
 // (regles.js : devis, commandes, paiement, stock, étapes, réductions) et prévient en direct les autres onglets
 // ouverts sur la démo : une commande payée dans la boutique apparaît aussitôt dans l'administration.
 // Paiement en mode test, comme SOKOYETU_PAIEMENT=simulation : confirmé après quelques secondes, refusé si le numéro finit par 0000.
+// Comptes clients en mode test, comme SOKOYETU_WHATSAPP=simulation : le code de connexion s'affiche à l'écran.
 import R from '../src/commun/js/regles.js';
 import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 5;
+const VERSION_BASE = 6;
 const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
@@ -39,12 +40,18 @@ const CLIENTS = [
   ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', 'paye', ['preparing'], 1],
   ['Didier Kambale', '0821234506', 'goma', 'Katindo, av. Mapendo 21', [{ productId: 'ex-p18', qty: 2 }], 'mpesa', 'echu', [], 3]
 ];
+// [nom, téléphone, panier, favoris, dernière visite (heures)]
+const COMPTES = [
+  ['Grâce Mapendo', '0991234501', [{ productId: 'ex-p04', qty: 1 }], ['ex-p05', 'ex-p13'], 3],
+  ['Aline Zawadi', '0971234507', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 2 }], ['ex-p10'], 20],
+  ['Patient Bisimwa', '0971234502', [], ['ex-p18'], 50]
+];
 /* Configuration telle que le serveur la voit : paiement en mode test. */
 const configPaiement = (doc) => R.config({ ...(doc || {}), payment: { ...((doc && doc.payment) || {}), provider: 'simulation' } });
 
 function creerBase() {
   const now = Date.now();
-  const b = { v: VERSION_BASE, cols: { config: {}, collections: {}, products: {}, banners: {}, discounts: {}, orders: {}, media: {} } };
+  const b = { v: VERSION_BASE, cols: { config: {}, collections: {}, products: {}, banners: {}, discounts: {}, orders: {}, media: {}, clients: {} }, codes: {} };
   const poser = (col, id, doc, extra) => { b.cols[col][id] = { id, doc, created: now, updated: now, ...extra }; };
   poser('config', 'store', R.copie(CONFIG_DEMO));
   for (const k of ['collections', 'products', 'banners', 'discounts']) {
@@ -69,6 +76,12 @@ function creerBase() {
     if (mode === 'echu') { const x = R.paiementExpire(o, { maintenant: t + 31 * 60000 }); stock(b, x.entrees, 1); o = x.commande; }
     suites.forEach((a, j) => { const r = R.etapeCommande(o, a, { maintenant: t + (j + 1) * 5400e3, produit }); o = r.commande; });
     poser('orders', 'cmd' + uid().slice(0, 12), o, { token: jeton(), phone: o.phone, status: o.status, created: t });
+  });
+  // Quelques clients ont créé leur compte : panier en attente, favoris (page Clients, Audience → Paniers à relancer).
+  COMPTES.forEach(([name, phone, panier, favoris, heures]) => {
+    const t = now - heures * 3600e3; const dates = {};
+    panier.forEach((l) => { dates['panier:' + l.productId] = t; }); favoris.forEach((id) => { dates['favori:' + id] = t - 3600e3; });
+    poser('clients', 'cli' + uid().slice(0, 12), R.docCompte({ panier, favoris, dates }), { phone, name, seen: t, created: t - 9 * JOUR });
   });
   return b;
 }
@@ -122,9 +135,10 @@ function vue(col, rec, gerant) {
   const r = { id: rec.id, collectionId: col, collectionName: col, created: new Date(rec.created).toISOString(), updated: new Date(rec.updated).toISOString(), doc: R.copie(rec.doc) };
   if (col === 'products') r.active = rec.active !== false;
   if (col === 'media') r.file = rec.file;
+  if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, created: new Date(rec.created).toISOString().replace('T', ' ') });
   if (!gerant) { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = commandePublique(rec.doc); }
   // Comme le serveur : la boutique apprend quel paiement est ouvert (ici, le mode test).
-  if (col === 'config') { const c = configPaiement(rec.doc); r.doc.payment = { provider: 'simulation', holdMinutes: c.payment.holdMinutes, test: true }; }
+  if (col === 'config') { const c = configPaiement(rec.doc); r.doc.payment = { provider: 'simulation', holdMinutes: c.payment.holdMinutes, test: true }; r.doc.accounts = { open: true, test: true, channels: ['whatsapp', 'sms'] }; }
   return r;
 }
 const remiseParCode = (b, code) => { const c = R.valider.codePromo(code); const rec = c && Object.values(b.cols.discounts).find((x) => x.code === c); return rec ? rec.doc : null; };
@@ -135,15 +149,22 @@ const b64 = (o) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_
 const fauxJeton = () => `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ id: COMPTE.id, exp: Math.floor(Date.now() / 1000) + 30 * 86400 })}.demo`;
 function expiration(j) { try { return JSON.parse(atob(j.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000; } catch (e) { return 0; } }
 let auth = null;
+let cleAuth = 'auth';
 export const Auth = {
-  charger() { const a = Local.lire('auth', null); auth = a && a.token && expiration(a.token) > Date.now() + 60000 ? a : null; if (!auth) Local.retirer('auth'); return auth; },
-  enregistrer(a) { auth = a; Local.ecrire('auth', a); },
-  effacer() { auth = null; Local.retirer('auth'); },
+  utiliserCle(cle) { cleAuth = cle; },
+  charger() { const a = Local.lire(cleAuth, null); auth = a && a.token && expiration(a.token) > Date.now() + 60000 ? a : null; if (!auth) Local.retirer(cleAuth); return auth; },
+  enregistrer(a) { auth = a; Local.ecrire(cleAuth, a); },
+  effacer() { auth = null; Local.retirer(cleAuth); },
   get jeton() { return auth ? auth.token : ''; },
   get compte() { return auth && auth.record ? auth.record : null; },
   get expireBientot() { return false; }
 };
-const gerant = () => !!auth;
+const gerant = () => !!auth && !!auth.record && auth.record.collectionName === 'admins';
+/* Client connecté à son compte (boutique), sinon null. */
+const clientConnecte = (b) => (auth && auth.record && auth.record.collectionName === 'clients' ? b.cols.clients[auth.record.id] || null : null);
+const jetonClient = (id) => `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ id, exp: Math.floor(Date.now() / 1000) + 90 * 86400 })}.demo`;
+const vueCompte = (rec) => ({ id: rec.id, phone: rec.phone, name: rec.name, created: new Date(rec.created).toISOString(), doc: R.docCompte(rec.doc) });
+const commandesDuCompte = (b, rec) => Object.values(b.cols.orders).filter((o) => o.client === rec.id || (o.phone && o.phone === R.chiffres(rec.phone))).sort((x, y) => y.created - x.created).map((o) => ({ id: o.id, t: o.token }));
 function exigerGerant() { if (!gerant()) throw new ErreurApi(403, 'Réservé à l’administration de la boutique.'); }
 
 /* ---------- Temps réel entre les onglets de la démo ---------- */
@@ -166,7 +187,7 @@ function recevoir({ col, id, action, avant }) {
       if (col === 'media') continue;
       message = { action, record: action === 'delete' ? { id, ...(avant ? vue(col, avant, true) : {}) } : vue(col, rec, true) };
     } else {
-      if (col === 'discounts' || col === 'media') continue;
+      if (col === 'discounts' || col === 'media' || col === 'clients') continue;
       if (col === 'orders') {
         let t = ''; try { t = JSON.parse(decodeURIComponent((options || '').replace(/^options=/, ''))).query.t; } catch (e) { }
         if (cible === '*' || !rec || !t || rec.token !== t) continue;
@@ -193,6 +214,8 @@ export const TempsReel = {
 function routeRecords(b, col, id, method, corps, q) {
   const table = b.cols[col]; if (!table) throw new ErreurApi(404, 'Collection inconnue.');
   const lecturePublique = ['config', 'collections', 'banners', 'products'].includes(col);
+  if (col === 'clients' && method !== 'GET') throw new ErreurApi(403, 'Les comptes se modifient par la boutique.');
+  if (col === 'clients' && id && !gerant()) throw new ErreurApi(404, 'Introuvable.');
   if (method === 'GET' && !id) {
     if (!lecturePublique && !gerant()) return { items: [], page: 1, perPage: 500 };
     let l = Object.values(table);
@@ -241,10 +264,52 @@ async function serveur(chemin, method, corps) {
     return { token: fauxJeton(), record: { ...COMPTE, email: String(corps.identity).trim().toLowerCase() } };
   }
   if (p === 'collections/admins/auth-refresh') { exigerGerant(); return { token: fauxJeton(), record: Auth.compte }; }
+  if (p === 'collections/clients/auth-refresh') { const c = clientConnecte(b); if (!c) throw new ErreurApi(401, 'Connectez-vous à votre compte.'); return { token: jetonClient(c.id), record: { id: c.id, collectionName: 'clients', phone: c.phone, name: c.name } }; }
   if ((m = p.match(/^collections\/admins\/records\/(.+)$/))) { exigerGerant(); return Auth.compte; }
   if ((m = p.match(/^collections\/([a-z]+)\/records(?:\/([^/]+))?$/))) return routeRecords(b, m[1], m[2] && decodeURIComponent(m[2]), method, corps, q);
 
-  if (p === 'sokoyetu/etat') { exigerGerant(); return { version: __VERSION__ + ' · démo', ia: false, paiement: { fournisseur: 'simulation', pret: true, test: true } }; }
+  if (p === 'sokoyetu/etat') { exigerGerant(); return { version: __VERSION__ + ' · démo', ia: false, paiement: { fournisseur: 'simulation', pret: true, test: true }, codes: { pret: true, canaux: ['whatsapp', 'sms'], test: true } }; }
+
+  // Comptes clients (comme serveur/pb_hooks/lib/comptes.js) : code affiché à l'écran, comme en mode test.
+  if (p === 'sokoyetu/compte/code') {
+    const tel = R.valider.telephone(corps && corps.telephone);
+    if (!tel) throw new ErreurApi(400, 'Numéro invalide. Exemple : 099 123 4567 ou +243 99 123 4567.', { champ: 'telephone' });
+    const canal = corps.canal === 'sms' ? 'sms' : 'whatsapp';
+    const x = b.codes[tel];
+    if (x && Date.now() < x.expire && Date.now() - x.envoye < 60000) return { telephone: tel, canal, canaux: ['whatsapp', 'sms'], renvoi: Math.ceil((60000 - (Date.now() - x.envoye)) / 1000), test: true, deja: true, code: x.code };
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    b.codes[tel] = { code, envoye: Date.now(), expire: Date.now() + 600000, essais: 0 }; enregistrer(b);
+    return { telephone: tel, canal, canaux: ['whatsapp', 'sms'], renvoi: 60, test: true, code };
+  }
+  if (p === 'sokoyetu/compte/connexion') {
+    const tel = R.valider.telephone(corps.telephone); const x = tel && b.codes[tel]; const code = R.codeConnexion(corps.code);
+    if (!x || Date.now() > x.expire || x.essais >= 5) throw new ErreurApi(400, 'Ce code a expiré. Demandez-en un nouveau.', { champ: 'code', expire: true });
+    if (code !== x.code) { x.essais++; enregistrer(b); throw new ErreurApi(400, `Code incorrect. Encore ${5 - x.essais} essai${5 - x.essais > 1 ? 's' : ''}.`, { champ: 'code', expire: x.essais >= 5 }); }
+    delete b.codes[tel];
+    let rec = Object.values(b.cols.clients).find((c) => c.phone === tel);
+    if (!rec) { const id = 'cli' + uid().slice(0, 12); rec = b.cols.clients[id] = { id, phone: tel, name: '', doc: R.docCompte({}), created: Date.now(), updated: Date.now() }; }
+    if (!rec.name && R.valider.nom(corps.name)) rec.name = R.valider.nom(corps.name);
+    rec.doc = R.daterCompte(R.fusionCompte(rec.doc, corps), Date.now()); rec.seen = Date.now(); rec.updated = Date.now();
+    enregistrer(b); diffuser('clients', rec.id, 'update');
+    return { token: jetonClient(rec.id), record: { id: rec.id, collectionName: 'clients', phone: rec.phone, name: rec.name }, meta: { compte: vueCompte(rec), commandes: commandesDuCompte(b, rec) } };
+  }
+  if (p === 'sokoyetu/compte' || p === 'sokoyetu/compte/supprimer') {
+    const rec = clientConnecte(b); if (!rec) throw new ErreurApi(401, 'Connectez-vous à votre compte.');
+    if (p === 'sokoyetu/compte/supprimer') {
+      Object.values(b.cols.orders).filter((o) => o.client === rec.id).forEach((o) => { o.client = ''; });
+      delete b.cols.clients[rec.id]; enregistrer(b); diffuser('clients', rec.id, 'delete', rec); return { ok: true };
+    }
+    if (method === 'GET') return { compte: vueCompte(rec), commandes: commandesDuCompte(b, rec) };
+    const d = R.docCompte(rec.doc);
+    if (Array.isArray(corps.panier)) d.panier = R.panierCompte(corps.panier);
+    if (Array.isArray(corps.favoris)) d.favoris = R.favorisCompte(corps.favoris);
+    if (R.estObjet(corps.profil)) d.profil = R.profilCompte({ ...d.profil, ...corps.profil });
+    rec.doc = R.daterCompte(d, Date.now());
+    if (corps.name !== undefined && R.valider.nom(corps.name)) rec.name = R.valider.nom(corps.name);
+    rec.seen = Date.now(); rec.updated = Date.now();
+    enregistrer(b); diffuser('clients', rec.id, 'update');
+    return { compte: vueCompte(rec) };
+  }
   if (p === 'sokoyetu/discount') {
     const code = R.valider.codePromo(q.get('code'));
     const r = R.verifierRemise(code ? remiseParCode(b, code) : null, code, R.num(q.get('subtotal')), Date.now());
@@ -271,7 +336,8 @@ async function serveur(chemin, method, corps) {
     } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message, { champ: err.champ || '' }); throw err; }
     const modifies = stock(b, prep.reserve, -1);
     const id = 'cmd' + uid().slice(0, 12); const now = Date.now();
-    b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now };
+    const cl = clientConnecte(b);
+    b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now, client: cl ? cl.id : '' };
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
     diffuser('orders', id, 'create');
@@ -325,11 +391,92 @@ async function serveur(chemin, method, corps) {
       d.erasedAt = Date.now(); (d.timeline = d.timeline || []).push({ at: Date.now(), text: 'Données personnelles effacées à la demande du client' });
       rec.phone = ''; rec.updated = Date.now();
     });
-    enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update'));
-    return { effacees: l.length };
+    const comptes = Object.values(b.cols.clients).filter((c) => R.chiffres(c.phone) === tel);
+    comptes.forEach((c) => { delete b.cols.clients[c.id]; });
+    enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update')); comptes.forEach((c) => diffuser('clients', c.id, 'delete', c));
+    return { effacees: l.length, comptes: comptes.length };
   }
+  if (p === 'sokoyetu/visite') { visiteDemo(corps); return null; }
+  if (p === 'sokoyetu/audience') { exigerGerant(); return resumeDemo(q.get('jours'), q.get('graphe')); }
+  if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant(); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
   throw new ErreurApi(404, 'Adresse inconnue dans la démonstration.');
+}
+
+/* ---------- Fréquentation (comme serveur/pb_hooks/lib/audience.js), avec deux semaines de visites inventées ---------- */
+
+const CLE_AUDIENCE = 'sokoyetu-demo:audience';
+const jourDe = (t) => new Date(t + 2 * 3600e3).toISOString().slice(0, 10);
+function audienceDemo() {
+  let a = null;
+  try { a = JSON.parse(localStorage.getItem(CLE_AUDIENCE) || 'null'); } catch (e) { }
+  if (a && a.visiteurs) return a;
+  a = { visiteurs: {}, articles: {}, etats: {} };
+  const ids = Object.keys(base().cols.products); let graine = 7;
+  const hasard = () => { graine = (graine * 16807) % 2147483647; return graine / 2147483647; };
+  for (let d = 13; d >= 1; d--) {
+    const j = jourDe(Date.now() - d * JOUR);
+    const n = 18 + Math.round(hasard() * 30) + (13 - d) * 2;
+    for (let i = 0; i < n; i++) {
+      const v = 'demo' + Math.floor(hasard() * 160); const k = j + '|' + v;
+      const x = a.visiteurs[k] = a.visiteurs[k] || { jour: j, v, vu: 0, vues: 0, produit: '' };
+      for (let q = Math.ceil(hasard() * 4); q > 0; q--) {
+        const p = ids[Math.floor(Math.pow(hasard(), 1.8) * ids.length)]; if (!p) continue;
+        const ka = j + '|' + p + '|' + v; const y = a.articles[ka] = a.articles[ka] || { jour: j, p, v, vues: 0, panier: 0, favori: 0 };
+        y.vues++; x.vues++;
+        if (hasard() < 0.12) { y.panier++; a.etats[v + '|panier|' + p] = 1; }
+        if (hasard() < 0.08) { y.favori++; a.etats[v + '|favori|' + p] = 1; }
+      }
+    }
+  }
+  try { localStorage.setItem(CLE_AUDIENCE, JSON.stringify(a)); } catch (e) { }
+  return a;
+}
+function visiteDemo(c) {
+  const v = String((c && c.v) || ''); if (!/^[a-z0-9]{16,40}$/.test(v)) return;
+  const a = audienceDemo(); const now = Date.now(); const j = jourDe(now);
+  const p = /^[a-z0-9-]{2,40}$/.test(String(c.p || '')) ? String(c.p) : '';
+  const act = ['vue', 'panier', 'favori'].includes(c.a) && p ? c.a : '';
+  const x = a.visiteurs[j + '|' + v] = a.visiteurs[j + '|' + v] || { jour: j, v, vu: 0, vues: 0, produit: '' };
+  x.vu = now; x.produit = p; if (act === 'vue') x.vues++;
+  if (act) { const k = j + '|' + p + '|' + v; const y = a.articles[k] = a.articles[k] || { jour: j, p, v, vues: 0, panier: 0, favori: 0 }; y[act === 'vue' ? 'vues' : act]++; }
+  [['panier', 'panier'], ['favori', 'favoris']].forEach(([type, cle]) => {
+    if (!Array.isArray(c[cle])) return;
+    Object.keys(a.etats).filter((k) => k.startsWith(v + '|' + type + '|')).forEach((k) => delete a.etats[k]);
+    c[cle].slice(0, 60).forEach((id) => { a.etats[v + '|' + type + '|' + id] = 1; });
+  });
+  try { localStorage.setItem(CLE_AUDIENCE, JSON.stringify(a)); } catch (e) { }
+}
+function periodeDemo(n) { n = Math.max(1, Math.min(90, parseInt(n, 10) || 7)); return Array.from({ length: n }, (_, i) => jourDe(Date.now() - (n - 1 - i) * JOUR)); }
+function resumeDemo(jours, graphe) {
+  const a = audienceDemo(); const P = periodeDemo(jours); const G = periodeDemo(Math.max(P.length, parseInt(graphe, 10) || 0));
+  const vis = Object.values(a.visiteurs); const recent = Date.now() - 90e3;
+  const premier = {}; vis.forEach((x) => { if (!premier[x.v] || x.jour < premier[x.v]) premier[x.v] = x.jour; });
+  const produits = {}; const fiche = (id) => (produits[id] = produits[id] || { id, vues: 0, visiteurs: 0, paniers: 0, favoris: 0, dansPaniers: 0, dansFavoris: 0, enLigne: 0 });
+  Object.values(a.articles).filter((y) => y.jour >= P[0]).forEach((y) => { const f = fiche(y.p); f.vues += y.vues; f.visiteurs += y.vues > 0 ? 1 : 0; f.paniers += y.panier > 0 ? 1 : 0; f.favoris += y.favori > 0 ? 1 : 0; });
+  Object.keys(a.etats).forEach((k) => { const [, type, p] = k.split('|'); fiche(p)[type === 'panier' ? 'dansPaniers' : 'dansFavoris']++; });
+  const enLigne = new Set(); vis.filter((x) => x.vu > recent).forEach((x) => { enLigne.add(x.v); if (x.produit) fiche(x.produit).enLigne++; });
+  const dansP = vis.filter((x) => x.jour >= P[0]);
+  return {
+    maintenant: Date.now(), periode: P.length, enLigne: enLigne.size, visiteurs: new Set(dansP.map((x) => x.v)).size,
+    nouveaux: Object.values(premier).filter((j) => j >= P[0]).length, vues: dansP.reduce((s, x) => s + x.vues, 0),
+    visiteursTotal: Object.keys(premier).length, gardeJours: 90,
+    jours: G.map((j) => { const l = vis.filter((x) => x.jour === j); return { jour: j, visiteurs: l.length, vues: l.reduce((s, x) => s + x.vues, 0), nouveaux: Object.values(premier).filter((d) => d === j).length }; }),
+    produits: Object.values(produits)
+  };
+}
+function articleDemo(id, jours, graphe) {
+  const a = audienceDemo(); const P = periodeDemo(jours); const G = periodeDemo(Math.max(P.length, parseInt(graphe, 10) || 0));
+  const l = Object.values(a.articles).filter((y) => y.p === id);
+  const etats = Object.keys(a.etats).filter((k) => k.endsWith('|' + id));
+  const jx = G.map((j) => { const d = l.filter((y) => y.jour === j); return { jour: j, vues: d.reduce((s, y) => s + y.vues, 0), visiteurs: d.filter((y) => y.vues > 0).length, paniers: d.filter((y) => y.panier > 0).length, favoris: d.filter((y) => y.favori > 0).length }; });
+  const dansP = l.filter((y) => y.jour >= P[0]);
+  return {
+    maintenant: Date.now(), id, periode: P.length, jours: jx,
+    enLigne: Object.values(a.visiteurs).filter((x) => x.vu > Date.now() - 90e3 && x.produit === id).length,
+    dansPaniers: etats.filter((k) => k.includes('|panier|')).length, dansFavoris: etats.filter((k) => k.includes('|favori|')).length,
+    total: { vues: dansP.reduce((s, y) => s + y.vues, 0), visiteurs: new Set(dansP.filter((y) => y.vues > 0).map((y) => y.v)).size, paniers: dansP.filter((y) => y.panier > 0).length, favoris: dansP.filter((y) => y.favori > 0).length }
+  };
 }
 
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
@@ -394,7 +541,7 @@ export async function connexion(email, motDePasse) {
   Auth.enregistrer({ token: r.token, record: r.record });
   return r.record;
 }
-export async function prolongerSession() { const r = await requete('collections/admins/auth-refresh', { method: 'POST' }); Auth.enregistrer({ token: r.token, record: r.record }); }
+export async function prolongerSession(col = 'admins') { const r = await requete(`collections/${col}/auth-refresh`, { method: 'POST' }); Auth.enregistrer({ token: r.token, record: r.record }); }
 export async function changerMotDePasse(ancien, nouveau) { if (!ancien) throw new ErreurApi(400, 'Mot de passe actuel incorrect.'); await pause(300); return nouveau; }
 
 let derniere = '';

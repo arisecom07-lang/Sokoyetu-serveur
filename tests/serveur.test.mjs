@@ -1,5 +1,5 @@
 // Tests d'intégration du serveur. Nécessite le serveur local, paiement en mode test (base vide) :
-//   npm run build && SOKOYETU_SIMULATION_DELAI=1 DATA=.local/essai bash outils/serveur-local.sh
+//   npm run build && SOKOYETU_SIMULATION_DELAI=1 DATA=.local/essai bash outils/serveur-local.sh   (codes WhatsApp et SMS en mode test)
 //   BASE=http://127.0.0.1:8090 node --test tests/serveur.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -239,9 +239,64 @@ test('paiement confirmé à la main par la boutique (secours)', async () => {
   assert.equal((await enregistrement(r.json.id)).pay_status, 'paid');
 });
 
+let compteJeton = '', compteId = '';
+test('compte client : code sur WhatsApp ou par SMS (mode test), connexion, panier et favoris gardés, commandes retrouvées', async () => {
+  const cat = await api('/api/sokoyetu/catalogue');
+  assert.deepEqual(cat.json.config.accounts, { open: true, test: true, channels: ['whatsapp', 'sms'] });
+  assert.equal((await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone: '12' } })).json.champ, 'telephone');
+  const c = await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone: '099 123 4567' } });
+  assert.equal(c.status, 200, c.texte);
+  assert.match(c.json.code, /^\d{6}$/);
+  assert.deepEqual([c.json.telephone, c.json.canal, c.json.renvoi, c.json.test], ['0991234567', 'whatsapp', 60, true]);
+  const bis = await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone: '0991234567', canal: 'sms' } });
+  assert.deepEqual([bis.json.deja, bis.json.code, bis.json.canal], [true, undefined, 'sms']);
+  // Code de secours par SMS (WhatsApp absent du téléphone) : un autre numéro, tout de suite.
+  const sms = await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone: '0821234567', canal: 'sms' } });
+  assert.deepEqual([sms.json.canal, sms.json.canaux], ['sms', ['whatsapp', 'sms']]);
+  const faux = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '0991234567', code: c.json.code === '000000' ? '111111' : '000000' } });
+  assert.deepEqual([faux.status, faux.json.champ], [400, 'code']);
+  assert.match(faux.json.message, /Encore 4 essais/);
+  const r = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '+243 99 123 4567', code: c.json.code, name: 'Grâce Mapendo', panier: [{ productId: 't-montre', qty: 1 }], favoris: ['t-robe'], profil: { zoneId: 'bukavu' } } });
+  assert.equal(r.status, 200, r.texte);
+  compteJeton = r.json.token; compteId = r.json.record.id;
+  assert.deepEqual([r.json.meta.compte.name, r.json.meta.compte.phone, r.json.meta.compte.doc.favoris, r.json.meta.compte.doc.profil.zoneId], ['Grâce Mapendo', '0991234567', ['t-robe'], 'bukavu']);
+  assert.ok(r.json.meta.compte.doc.dates['panier:t-montre'] > 0);
+  // Commandes passées sans compte avec le même téléphone : elles rejoignent le compte (le SMS prouve que c'est bien lui).
+  assert.ok(r.json.meta.commandes.some((x) => x.id === commandeId && x.t === commandeJeton));
+  const reutilise = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '0991234567', code: c.json.code } });
+  assert.deepEqual([reutilise.status, reutilise.json.expire], [400, true]);
+
+  const moi = { Authorization: compteJeton };
+  assert.equal((await api('/api/sokoyetu/compte')).status, 401);
+  const lu = await api('/api/sokoyetu/compte', { headers: moi });
+  assert.equal(lu.json.compte.id, compteId);
+  const maj = await api('/api/sokoyetu/compte', { method: 'POST', headers: moi, body: { panier: [{ productId: 't-robe', color: 'Noir', size: 'M', qty: 30 }, { productId: '../x', qty: 1 }], favoris: ['t-robe', 't-robe', 't-montre'] } });
+  assert.deepEqual(maj.json.compte.doc.panier, [{ productId: 't-robe', color: 'Noir', size: 'M', qty: 20 }]);
+  assert.deepEqual(maj.json.compte.doc.favoris, ['t-robe', 't-montre']);
+  assert.equal(maj.json.compte.doc.dates['panier:t-montre'], undefined);
+  // Le jeton d'un client n'ouvre rien de l'administration ; l'administration voit les comptes.
+  assert.equal((await api('/api/collections/clients/records', { headers: moi })).json.items.length, 0);
+  assert.equal((await api('/api/sokoyetu/audience', { headers: moi })).status, 403);
+  assert.equal((await api('/api/collections/orders/records', { headers: moi })).json.items.length, 0);
+  const vus = await api('/api/collections/clients/records', { auth: true });
+  assert.deepEqual(vus.json.items.map((x) => x.phone), ['0991234567']);
+  assert.equal((await api('/api/collections/clients/auth-with-password', { method: 'POST', body: { identity: 'x@y.cd', password: 'abcdefghij' } })).status, 403);
+
+  // Commande passée connecté (autre téléphone de contact) : rattachée au compte.
+  const t = secret();
+  const o = await api('/api/sokoyetu/commander', { method: 'POST', headers: moi, body: saisie({ token: t, customer: { name: 'Grâce Mapendo', phone: '0977777777' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0977777777' } }) });
+  assert.equal(o.status, 200, o.texte);
+  assert.equal((await enregistrement(o.json.id)).client, compteId);
+  assert.ok((await api('/api/sokoyetu/compte', { headers: moi })).json.commandes.some((x) => x.id === o.json.id && x.t === t));
+  const renouvele = await api('/api/collections/clients/auth-refresh', { method: 'POST', headers: moi });
+  assert.equal(renouvele.status, 200);
+});
+
 test('effacement des données d’un client', async () => {
   const r = await api('/api/sokoyetu/clients/effacer', { method: 'POST', auth: true, body: { phone: '0991234567' } });
   assert.equal(r.json.effacees, 5);
+  assert.equal(r.json.comptes, 1);
+  assert.equal((await api('/api/sokoyetu/compte', { headers: { Authorization: compteJeton } })).status, 401);
   const o = await enregistrement(commandeId);
   assert.deepEqual([o.doc.customer.name, o.doc.payment.phone], ['Client effacé', '']);
   assert.equal((await api('/api/sokoyetu/retrouver', { method: 'POST', body: { numero: commandeNumero, telephone: '0991234567' } })).status, 404);
@@ -286,4 +341,25 @@ test('administration servie sur son propre sous-domaine', async () => {
   const b = await api('/');
   assert.doesNotMatch(b.texte, /Gestion/);
   assert.match(b.headers.get('content-security-policy') || '', /default-src 'self'/);
+});
+
+test('audience : visites anonymes comptées, robots ignorés, chiffres réservés à l’administration', async () => {
+  const UA = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile' };
+  const v1 = 'essai' + Date.now().toString(36) + 'aaaaaaaa', v2 = 'essai' + Date.now().toString(36) + 'bbbbbbbb';
+  assert.equal((await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: v1, p: 'art-audience', a: 'vue', panier: ['art-audience'], favoris: [] } })).status, 204);
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: v2, p: 'art-audience', a: 'favori', panier: [], favoris: ['art-audience'] } });
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: { 'User-Agent': 'Googlebot/2.1' }, body: { v: 'robotrobotrobotrobot', p: 'art-audience', a: 'vue' } });
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: 'court', p: 'art-audience', a: 'vue' } });
+  assert.equal((await api('/api/sokoyetu/audience')).status, 403);
+  const r = await api('/api/sokoyetu/audience?jours=1&graphe=7', { auth: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.jours.length, 7);
+  assert.ok(r.json.enLigne >= 2);
+  const a = r.json.produits.find((x) => x.id === 'art-audience');
+  assert.deepEqual([a.vues, a.visiteurs, a.paniers, a.favoris, a.dansPaniers, a.dansFavoris, a.enLigne], [1, 1, 0, 1, 1, 1, 2]);
+  // Article retiré du panier : il n'y est plus compté.
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: v1, panier: [] } });
+  const d = await api('/api/sokoyetu/audience/art-audience?jours=7', { auth: true });
+  assert.equal(d.json.dansPaniers, 0);
+  assert.equal(d.json.total.vues, 1);
 });

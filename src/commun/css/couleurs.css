@@ -90,3 +90,10 @@
 
 /* ---- Historique des commandes (admin et boutique) : chaque mois prend la teinte terre cuite ---- */
 :root:not([data-theme="dark"]) .historique-mois-tete > span, :root:not([data-theme="dark"]) .historique-tete > span { color: var(--c1); }
+
+/* ---- Compte client : les trois avantages prennent chacun leur teinte ---- */
+:root:not([data-theme="dark"]) .avantages-compte li:nth-child(3n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .avantages-compte li:nth-child(3n+2) { --c: var(--c5); --c-doux: var(--c5-doux); }
+:root:not([data-theme="dark"]) .avantages-compte li:nth-child(3n+3) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .avantages-compte .menu-icone { background: var(--c-doux); color: var(--c); }
+:root:not([data-theme="dark"]) .invitation-compte, :root:not([data-theme="dark"]) .page-connexion > .carte { border-top: 3px solid var(--c1); }

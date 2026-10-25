@@ -5,10 +5,11 @@ import { appliquerTheme } from '../commun/js/theme.js';
 import { Icone } from '../commun/js/icones.jsx';
 import { Toasts, Feuilles, Annonceur } from '../commun/js/interface.jsx';
 import { route, sens, convertirAncienLien, lien } from './routeur.js';
-import { chargerCatalogue, suivreCatalogue, actualiserMesCommandes, suivreCommande, cfg, horsLigne } from './etat.js';
+import { chargerCatalogue, suivreCatalogue, actualiserMesCommandes, suivreCommande, synchroniserCompte, cfg, horsLigne } from './etat.js';
 import { NavBas } from './composants/cadre.jsx';
 import { BarreMiseAJour, enregistrerServiceWorker } from './installation.jsx';
 import { consentement, consentir, mesureConfiguree, chargerMesure } from './mesure.js';
+import { suivreVisites } from './visites.js';
 import { Accueil } from './pages/accueil.jsx';
 import { Rayons, Rayon, Nouveautes, Recherche, Favoris } from './pages/catalogue.jsx';
 import { Produit } from './pages/produit.jsx';
@@ -16,10 +17,11 @@ import { Panier } from './pages/panier.jsx';
 import { Commander } from './pages/commander.jsx';
 import { Paiement } from './pages/paiement.jsx';
 import { Merci, Compte, Commandes, Suivi, Retrouver } from './pages/compte.jsx';
+import { Connexion } from './pages/connexion.jsx';
 import { Infos } from './pages/infos.jsx';
 import { Introuvable } from './pages/introuvable.jsx';
 
-const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, suivi: Suivi, infos: Infos };
+const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos };
 /* Ce qui occupe le bas de l'écran du téléphone : navigation, barre d'action, ou les deux. */
 const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', paiement: '', merci: '', recherche: '' };
 
@@ -62,5 +64,5 @@ if (suivi) suivreCommande(suivi.id, suivi.t);
 const racine = document.getElementById('app');
 racine.textContent = '';
 render(<App />, racine);
-chargerCatalogue().then(() => { suivreCatalogue(); actualiserMesCommandes(); });
+chargerCatalogue().then(() => { suivreCatalogue(); actualiserMesCommandes(); suivreVisites(); synchroniserCompte(); });
 enregistrerServiceWorker();

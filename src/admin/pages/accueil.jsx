@@ -8,10 +8,11 @@ import { Local } from '../../commun/js/stockage.js';
 import { DEMO } from '../../commun/js/api.js';
 import { dollars, date, debutJour, JOUR, pluriel, ilya, classes } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, paiementServeur } from '../etat.js';
+import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, paiementServeur, lireAudience } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
 import { statutPaiement, statutPreparation, avecPoints } from './commandes.jsx';
+import { useEnDirect } from './audience.jsx';
 
 export function Connexion() {
   const [email, setEmail] = useState(DEMO ? 'demo@sokoyetu.com' : Local.lire('dernierEmail', ''));
@@ -59,8 +60,8 @@ export function Connexion() {
 }
 
 /* Une vente = une commande payée (confirmée par l'opérateur), comptée le jour du paiement. */
-const venteDu = (o) => (o.payment && o.payment.paidAt) || o.createdAt || 0;
-const estVente = (o) => o.status !== 'cancelled' && R.estPayee(o);
+export const venteDu = (o) => (o.payment && o.payment.paidAt) || o.createdAt || 0;
+export const estVente = (o) => o.status !== 'cancelled' && R.estPayee(o);
 function statistiques(liste, debut, fin) {
   const l = liste.filter((o) => estVente(o) && venteDu(o) >= debut && venteDu(o) < fin);
   const ventes = l.reduce((a, o) => a + R.num(o.total), 0);
@@ -138,6 +139,7 @@ export function Tableau() {
             </section>
           </div>
           <div class="pile-l">
+            <EnDirectBoutique />
             <section class="carte">
               <h2 class="carte-titre"><Icone n="coche" />À faire</h2>
               {nPrep || nLiv || faibles.length || nPoints ? (
@@ -176,6 +178,20 @@ export function Tableau() {
         </div>
       </div>
     </>
+  );
+}
+
+/* Raccourci vers l'audience : combien de personnes sont sur la boutique, en direct. */
+function EnDirectBoutique() {
+  const [a] = useEnDirect(() => lireAudience(1, 1), []);
+  if (!a) return null;
+  return (
+    <a class="carte en-direct-carte" href={lien('/audience')}>
+      <span class={classes('en-direct', a.enLigne > 0 && 'actif')}><i aria-hidden="true" />En direct</span>
+      <b>{a.enLigne ? pluriel(a.enLigne, 'personne sur la boutique', 'personnes sur la boutique') : 'Personne sur la boutique'}</b>
+      <small>{pluriel(a.visiteurs, 'visiteur')} aujourd’hui · {pluriel(a.vues, 'article vu', 'articles vus')}</small>
+      <Icone n="droite" />
+    </a>
   );
 }
 

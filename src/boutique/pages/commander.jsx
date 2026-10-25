@@ -10,7 +10,8 @@ import { requete } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { dollars, francs, telephone, secret, pluriel, classes } from '../../commun/js/outils.js';
 import { lien, naviguer } from '../routeur.js';
-import { cfg, lignesPanier, panier, moyensPaiement, profil, enregistrerProfil, viderPanier, suivreCommande, recevoirCommande } from '../etat.js';
+import { cfg, lignesPanier, panier, moyensPaiement, profil, enregistrerProfil, viderPanier, suivreCommande, recevoirCommande, comptesOuverts, connecte, sansCompte, continuerSansCompte, client } from '../etat.js';
+import { InvitationCompte } from './connexion.jsx';
 import { EntetePage, BarreAction } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
 import { devisLocal } from './panier.jsx';
@@ -24,12 +25,15 @@ function brouillonInitial() {
   const b = Local.lire('commandeEnCours', null);
   const frais = b && Date.now() - (b.le || 0) < 6 * 3600e3 ? b : null;
   const zone = R.zoneDe(c, (frais && frais.zoneId) || pf.zoneId) || c.zones[0];
-  return {
+  const f = {
     etape: 1, nom: pf.name || '', tel: pf.phone || '', zoneId: zone ? zone.id : '', adresse: pf.address || '', repere: pf.landmark || '', note: '',
     methode: pf.payMethod || (ms[0] || {}).k || '', telPaiement: pf.payPhone || '', code: '', remise: null, conditions: false,
     ...(frais || {}), erreurs: {}, devis: null, envoi: false,
     jeton: frais && R.valider.jeton(frais.jeton) ? frais.jeton : secret(32)
   };
+  // Brouillon commencé avant de se connecter : les champs restés vides prennent les coordonnées du compte.
+  [['nom', 'name'], ['tel', 'phone'], ['adresse', 'address'], ['repere', 'landmark'], ['telPaiement', 'payPhone']].forEach(([k, kp]) => { if (!String(f[k] || '').trim() && pf[kp]) f[k] = pf[kp]; });
+  return f;
 }
 
 /* Montants : sous-total, réduction, livraison, frais de service, total (commande, reçu, suivi). */
@@ -84,6 +88,20 @@ export function Commander() {
 
   if (!lignes.length) {
     return <><EntetePage titre="Commande" repli="/panier" /><main id="contenu" class="page conteneur"><Vide icone="sac" titre="Votre panier est vide" texte="Ajoutez des articles avant de commander."><a class="btn btn-primaire" href={lien('/')}>Retour à la boutique</a></Vide></main></>;
+  }
+
+  // Avant la commande, la création d'un compte est proposée ; « Continuer sans compte » reste toujours possible.
+  if (comptesOuverts.value && !connecte.value && !sansCompte.value) {
+    return (
+      <>
+        <EntetePage titre="Commande" sous="Avec ou sans compte" repli="/panier" />
+        <main id="contenu" class="page conteneur page-choix-compte">
+          <InvitationCompte titre="Créez votre compte et commencez à commander dès maintenant" texte="En 30 secondes, avec votre numéro de téléphone." retour="/commander" pour="commande" tel={f.tel}
+            sansCompte={() => { continuerSansCompte(); window.scrollTo(0, 0); }} />
+          <p class="discret petit centre">Sans compte, vous commandez tout de suite. Vous pourrez créer votre compte plus tard : vos commandes passées avec le même téléphone vous suivront.</p>
+        </main>
+      </>
+    );
   }
 
   const zone = R.zoneDe(c, f.zoneId); const retrait = R.estRetrait(zone);
@@ -220,6 +238,7 @@ export function Commander() {
               <>
                 <section class="carte entree-avant">
                   <h2 class="carte-titre"><Icone n="personne" />Vos coordonnées</h2>
+                  {client.value ? <p class="discret petit rangee espace-bas"><Icone n="coche" taille={15} />Connecté : la commande s’ajoute à votre compte ({telephone(client.value.phone) || client.value.phone}).</p> : null}
                   <div class="formulaire">
                     <Champ libelle="Nom complet" erreur={f.erreurs.name}>{(a) => <input class="saisie" {...a} value={f.nom} onInput={champ('nom')} autocomplete="name" maxlength="60" placeholder="Ex. : Grâce Mapendo" />}</Champ>
                     <Champ libelle="Téléphone" erreur={f.erreurs.phone} aide="Le livreur vous appelle à ce numéro.">{(a) => <input class="saisie" {...a} value={f.tel} onInput={champ('tel')} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}</Champ>
