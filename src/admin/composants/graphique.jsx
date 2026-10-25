@@ -1,4 +1,4 @@
-// Sokoyetu (administration) — histogramme des ventes par jour.
+// Sokoyetu (administration) — histogramme par jour (ventes, visiteurs…).
 // Une seule série (pas de légende : le titre la nomme), colonnes de 24 px au plus, arrondies en haut,
 // grille discrète, infobulle au survol et au clavier, valeurs aussi disponibles en tableau.
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -15,7 +15,11 @@ function colonne(x, y, l, h) {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + l - r}Q${x + l},${y} ${x + l},${y + r}V${y + h}Z`;
 }
 
-export function Histogramme({ jours, titre = 'Ventes par jour' }) {
+const PAR_DEFAUT = { long: dollars, court: dollarsCourt, detail: (j) => pluriel(j.n, 'commande'), colonnes: ['Commandes', 'Ventes'], vide: 'Aucune vente sur la période' };
+
+/* jours : [{ t, v, n }]. « unites » change l'affichage des valeurs (par défaut des dollars et un nombre de commandes). */
+export function Histogramme({ jours, titre = 'Ventes par jour', unites }) {
+  const U = Object.assign({}, PAR_DEFAUT, unites);
   const boite = useRef(null);
   const [largeur, setLargeur] = useState(340);
   const [survol, setSurvol] = useState(-1);
@@ -31,16 +35,16 @@ export function Histogramme({ jours, titre = 'Ventes par jour' }) {
   const y = (v) => h + ih - (v / max) * ih;
   const iMax = mx > 0 ? jours.findIndex((j) => j.v === mx) : -1; const iAuj = n - 1;
   const etiquettes = new Set([iMax, jours[iAuj] && jours[iAuj].v > 0 ? iAuj : -1].filter((i) => i >= 0));
-  const lib = (j) => `${date(j.t, { weekday: 'short', day: 'numeric', month: 'short' })} : ${dollars(j.v)}, ${pluriel(j.n, 'commande')}`;
+  const lib = (j) => `${date(j.t, { weekday: 'short', day: 'numeric', month: 'short' })} : ${U.long(j.v)}, ${U.detail(j)}`;
   const info = survol >= 0 ? jours[survol] : null;
   return (
     <figure class="graphique" ref={boite}>
-      <figcaption class="sr">{titre}, {n} derniers jours. Maximum {dollars(mx)}.</figcaption>
-      <svg width={largeur} height={H} viewBox={`0 0 ${largeur} ${H}`} role="img" aria-label={`${titre} : maximum ${dollars(mx)}`} onPointerLeave={() => setSurvol(-1)}>
+      <figcaption class="sr">{titre}, {n} derniers jours. Maximum {U.long(mx)}.</figcaption>
+      <svg width={largeur} height={H} viewBox={`0 0 ${largeur} ${H}`} role="img" aria-label={`${titre} : maximum ${U.long(mx)}`} onPointerLeave={() => setSurvol(-1)}>
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line class="g-grille" x1={g} x2={largeur - d} y1={y(max * f)} y2={y(max * f)} />
-            <text class="g-axe" x={g - 8} y={y(max * f) + 4} text-anchor="end">{dollarsCourt(max * f)}</text>
+            <text class="g-axe" x={g - 8} y={y(max * f) + 4} text-anchor="end">{U.court(max * f)}</text>
           </g>
         ))}
         {jours.map((j, i) => {
@@ -50,23 +54,23 @@ export function Histogramme({ jours, titre = 'Ventes par jour' }) {
             <g key={j.t} class={'g-jour' + (survol === i ? ' survol' : '')} tabIndex={0} aria-label={lib(j)} onPointerEnter={() => setSurvol(i)} onFocus={() => setSurvol(i)} onBlur={() => setSurvol(-1)}>
               <rect class="g-cible" x={g + i * pas} y={h} width={pas} height={ih + b} />
               {hh ? <path class="g-barre" d={colonne(x, y(0) - hh, l, hh)} /> : <line class="g-zero" x1={x} x2={x + l} y1={y(0) - 0.5} y2={y(0) - 0.5} />}
-              {etiquettes.has(i) && hh ? <text class="g-valeur" x={x + l / 2} y={y(0) - hh - 7} text-anchor="middle">{dollarsCourt(j.v)}</text> : null}
+              {etiquettes.has(i) && hh ? <text class="g-valeur" x={x + l / 2} y={y(0) - hh - 7} text-anchor="middle">{U.court(j.v)}</text> : null}
               {texte ? <text class={'g-axe' + (i === iAuj ? ' auj' : '')} x={g + i * pas + pas / 2} y={H - 8} text-anchor="middle">{i === iAuj && n <= 7 ? 'auj.' : texte}</text> : null}
             </g>
           );
         })}
-        {!mx ? <text class="g-vide" x={g + iw / 2} y={h + ih / 2} text-anchor="middle">Aucune vente sur la période</text> : null}
+        {!mx ? <text class="g-vide" x={g + iw / 2} y={h + ih / 2} text-anchor="middle">{U.vide}</text> : null}
       </svg>
       {info ? (
         <div class="g-infobulle" role="status" style={{ left: Math.min(largeur - 150, Math.max(0, g + survol * pas + pas / 2 - 75)) + 'px' }}>
-          <b>{dollars(info.v)}</b><span>{pluriel(info.n, 'commande')}</span><small>{date(info.t, { weekday: 'long', day: 'numeric', month: 'long' })}</small>
+          <b>{U.long(info.v)}</b><span>{U.detail(info)}</span><small>{date(info.t, { weekday: 'long', day: 'numeric', month: 'long' })}</small>
         </div>
       ) : null}
       <details class="g-tableau">
         <summary>Voir les chiffres</summary>
         <table>
-          <thead><tr><th scope="col">Jour</th><th scope="col">Commandes</th><th scope="col">Ventes</th></tr></thead>
-          <tbody>{[...jours].reverse().map((j) => <tr key={j.t}><td>{date(j.t, { weekday: 'short', day: 'numeric', month: 'short' })}</td><td class="num">{j.n}</td><td class="num">{dollars(j.v)}</td></tr>)}</tbody>
+          <thead><tr><th scope="col">Jour</th><th scope="col">{U.colonnes[0]}</th><th scope="col">{U.colonnes[1]}</th></tr></thead>
+          <tbody>{[...jours].reverse().map((j) => <tr key={j.t}><td>{date(j.t, { weekday: 'short', day: 'numeric', month: 'short' })}</td><td class="num">{j.n}</td><td class="num">{U.long(j.v)}</td></tr>)}</tbody>
         </table>
       </details>
     </figure>

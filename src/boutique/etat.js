@@ -195,7 +195,7 @@ export function remettreAuPanier(o) {
 }
 
 export function effacerAppareil() {
-  ['panier', 'favoris', 'profil', 'recherches', 'mesCommandes', 'consentement', 'installMasque', 'commandeEnCours'].forEach((k) => Local.retirer(k));
+  ['panier', 'favoris', 'profil', 'recherches', 'mesCommandes', 'consentement', 'installMasque', 'commandeEnCours', 'visiteur'].forEach((k) => Local.retirer(k));
   desabonnements.forEach((f) => f()); desabonnements.clear();
   batch(() => { panier.value = []; favoris.value = new Set(); profil.value = {}; recherches.value = []; suivis.value = []; commandes.value = new Map(); });
 }

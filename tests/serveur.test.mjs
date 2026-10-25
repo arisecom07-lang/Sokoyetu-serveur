@@ -287,3 +287,24 @@ test('administration servie sur son propre sous-domaine', async () => {
   assert.doesNotMatch(b.texte, /Gestion/);
   assert.match(b.headers.get('content-security-policy') || '', /default-src 'self'/);
 });
+
+test('audience : visites anonymes comptées, robots ignorés, chiffres réservés à l’administration', async () => {
+  const UA = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile' };
+  const v1 = 'essai' + Date.now().toString(36) + 'aaaaaaaa', v2 = 'essai' + Date.now().toString(36) + 'bbbbbbbb';
+  assert.equal((await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: v1, p: 'art-audience', a: 'vue', panier: ['art-audience'], favoris: [] } })).status, 204);
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: v2, p: 'art-audience', a: 'favori', panier: [], favoris: ['art-audience'] } });
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: { 'User-Agent': 'Googlebot/2.1' }, body: { v: 'robotrobotrobotrobot', p: 'art-audience', a: 'vue' } });
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: 'court', p: 'art-audience', a: 'vue' } });
+  assert.equal((await api('/api/sokoyetu/audience')).status, 403);
+  const r = await api('/api/sokoyetu/audience?jours=1&graphe=7', { auth: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.jours.length, 7);
+  assert.ok(r.json.enLigne >= 2);
+  const a = r.json.produits.find((x) => x.id === 'art-audience');
+  assert.deepEqual([a.vues, a.visiteurs, a.paniers, a.favoris, a.dansPaniers, a.dansFavoris, a.enLigne], [1, 1, 0, 1, 1, 1, 2]);
+  // Article retiré du panier : il n'y est plus compté.
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v: v1, panier: [] } });
+  const d = await api('/api/sokoyetu/audience/art-audience?jours=7', { auth: true });
+  assert.equal(d.json.dansPaniers, 0);
+  assert.equal(d.json.total.vues, 1);
+});

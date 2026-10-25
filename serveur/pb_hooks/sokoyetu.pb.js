@@ -161,6 +161,20 @@ cronAdd('sokoyetu-paiements', '* * * * *', () => {
   require(`${__hooks}/lib/commandes.js`).surveiller($app);
 });
 
+/* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
+
+// La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
+routerAdd('POST', '/api/sokoyetu/visite', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  try { require(`${__hooks}/lib/audience.js`).enregistrer(e.app, S.corps(e), e.request.header.get('User-Agent')); } catch (err) { console.log('sokoyetu visite', err); }
+  return e.noContent(204);
+});
+
+// Chaque nuit : compteurs de plus de 90 jours effacés.
+cronAdd('sokoyetu-audience', '17 3 * * *', () => {
+  require(`${__hooks}/lib/audience.js`).purger($app);
+});
+
 /* ---------- Administration ---------- */
 
 // Étapes d'une commande : paiement confirmé, préparation, expédition, livraison, annulation (stock restitué)…
@@ -217,6 +231,19 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: 'Assistant indisponible (' + err.code + ').' });
     throw err;
   }
+});
+
+// Fréquentation : en ligne maintenant, visiteurs par jour, chiffres par article (?jours=1 à 90, &graphe=7 : colonnes du graphique).
+routerAdd('GET', '/api/sokoyetu/audience', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  return e.json(200, require(`${__hooks}/lib/audience.js`).resume(e.app, (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']));
+});
+routerAdd('GET', '/api/sokoyetu/audience/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  const r = require(`${__hooks}/lib/audience.js`).article(e.app, e.request.pathValue('id'), (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']);
+  return r ? e.json(200, r) : e.json(404, { message: 'Article introuvable.' });
 });
 
 // État du serveur pour l'administration.

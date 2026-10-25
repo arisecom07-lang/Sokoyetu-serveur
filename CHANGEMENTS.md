@@ -1,3 +1,21 @@
+# Sokoyetu — audience en direct (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Nouvelle page « Audience »** dans l'administration (barre latérale, ou Plus → Audience sur téléphone). Elle se met à jour seule toutes les 15 secondes : **personnes en ligne maintenant**, **visiteurs** et **nouveaux visiteurs** sur la période (aujourd'hui, 7 ou 30 jours), **articles vus**, visiteurs par jour, et les **clients** (personnes qui ont déjà commandé).
+- **Chaque article en détail** : combien le regardent en ce moment, vues et visiteurs différents, dans combien de **paniers** et de **favoris** il se trouve maintenant, ajouts sur la période, commandes payées et pièces vendues, et la liste des **clients qui l'ont commandé** (nom, téléphone, commande).
+- **Tableau de bord** : une carte « En direct » indique combien de personnes sont sur la boutique et mène à l'audience.
+- **Vie privée** : la boutique n'a pas de comptes clients. Un visiteur est un appareil reconnu par un code tiré au sort, sans nom, téléphone ni adresse IP ; paniers et favoris sont donc comptés, pas nominatifs. Les noms n'apparaissent qu'avec les commandes. Compteurs effacés après 90 jours, rien n'est envoyé à un service extérieur ; le visiteur peut refuser (Infos → Cookies), et les navigateurs qui demandent à ne pas être suivis ne sont pas comptés. Pages de confidentialité mises à jour.
+
+## Détails techniques
+
+- `pb_hooks/lib/audience.js`, migration `1793200000_sokoyetu_audience.js` : trois tables SQLite de compteurs (`sokoyetu_visiteurs`, `sokoyetu_articles`, `sokoyetu_etats`), écritures en une requête (`INSERT … ON CONFLICT`), purge chaque nuit (tâche `sokoyetu-audience`).
+- Routes : `POST /api/sokoyetu/visite` (publique, robots ignorés, limite 600/min par IP), `GET /api/sokoyetu/audience?jours=&graphe=` et `GET /api/sokoyetu/audience/{id}` (administration).
+- Boutique : `src/boutique/visites.js` (signal toutes les 45 s tant que la page est visible, article ouvert, ajout au panier ou en favori ; contenu du panier et des favoris envoyé seulement quand il change). Démo : mêmes routes simulées, avec deux semaines de visites inventées.
+- Test serveur ajouté (21 au total).
+
+---
+
 # Sokoyetu — version 2.1 (octobre 2026) : paiement automatique
 
 ## Ce qui change pour vous

@@ -29,9 +29,9 @@ export function Infos() {
             {cle === 'cookies' ? (
               <section class="carte">
                 <h2 class="carte-titre"><Icone n="reglages" />Vos préférences</h2>
-                <p class="attenue petit">{mesure ? <>Mesure d’audience : <b>{choix ? (choix.mesure ? 'acceptée' : 'refusée') : 'pas encore choisie'}</b></> : 'Aucune mesure d’audience n’est active sur cette boutique.'}</p>
+                <p class="attenue petit">{mesure ? <>Mesure d’audience : <b>{choix ? (choix.mesure ? 'acceptée' : 'refusée') : 'pas encore choisie'}</b></> : <>Comptage anonyme des visites : <b>{choix && !choix.mesure ? 'refusé' : 'actif'}</b></>}</p>
                 <div class="rangee-l espace-haut">
-                  {mesure ? <><button class="btn btn-secondaire btn-s" onClick={() => { consentir(true); chargerMesure(c); toast('Merci, mesure d’audience acceptée'); }}>Accepter</button><button class="btn btn-secondaire btn-s" onClick={() => { consentir(false); toast('Choix enregistré'); }}>Refuser</button></> : null}
+                  <button class="btn btn-secondaire btn-s" onClick={() => { consentir(true); chargerMesure(c); toast(mesure ? 'Merci, mesure d’audience acceptée' : 'Merci, choix enregistré'); }}>Accepter</button><button class="btn btn-secondaire btn-s" onClick={() => { consentir(false); toast('Choix enregistré'); }}>Refuser</button>
                   <button class="btn btn-danger btn-s" onClick={async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: 'Panier, favoris, coordonnées et liens de suivi seront supprimés.', ok: 'Effacer', danger: true })) { effacerAppareil(); toast('Données effacées', { icone: 'poubelle' }); naviguer('/'); } }}><Icone n="poubelle" />Effacer les données de ce téléphone</button>
                 </div>
               </section>
