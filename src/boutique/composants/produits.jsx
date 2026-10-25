@@ -4,7 +4,7 @@ import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
 import { dollars, slug, date, JOUR, pluriel } from '../../commun/js/outils.js';
-import { toast } from '../../commun/js/interface.jsx';
+import { toast, LogoOperateur } from '../../commun/js/interface.jsx';
 import { lien } from '../routeur.js';
 import { cfg, favoris, basculerFavori, produits, rayonsParId } from '../etat.js';
 
@@ -105,5 +105,5 @@ export function photoRayon(c) {
 export const nomRayon = (id) => (rayonsParId.value.get(id) || {}).name || '';
 
 export function PuceOperateur({ m }) {
-  return <span class="operateur" style={{ '--op': m.color }}><i aria-hidden="true">{m.init}</i>{m.label}</span>;
+  return <span class="operateur"><LogoOperateur m={m} taille={22} />{m.label}</span>;
 }

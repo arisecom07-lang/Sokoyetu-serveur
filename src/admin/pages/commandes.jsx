@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
-import { Note, Vide, Pastille, toast, confirmer } from '../../commun/js/interface.jsx';
+import { LogoOperateur, Note, Vide, Pastille, toast, confirmer } from '../../commun/js/interface.jsx';
 import { dollars, dateHeure, ilya, pluriel, telephone, lienWhatsApp, lienAppel, copier, classes, normaliser, date } from '../../commun/js/outils.js';
 import { lien, route, aller } from '../routeur.js';
 import { cfg, commandes, produitsParId, pret, etapeCommande, gererErreur } from '../etat.js';
@@ -162,7 +162,7 @@ export function Commande() {
           <section class="carte">
             <h2 class="carte-titre"><Icone n="portefeuille" />Paiement</h2>
             <dl class="infos">
-              <dt>Mode</dt><dd>{o.payment.label}{o.payment.phone ? ` · ${telephone(o.payment.phone)}` : ''}</dd>
+              <dt>Mode</dt><dd><span class="mode-op"><LogoOperateur k={o.payment.method} m={R.OPERATEURS[o.payment.method] || o.payment} />{o.payment.label}{o.payment.phone ? ` · ${telephone(o.payment.phone)}` : ''}</span></dd>
               {o.payment.provider ? <><dt>Service</dt><dd>{FOURNISSEURS[o.payment.provider] || o.payment.provider}</dd></> : null}
               {o.payment.reference ? <><dt>Transaction</dt><dd><span class="code">{o.payment.reference}</span> <button class="btn-icone mini" aria-label="Copier la référence" onClick={async () => { if (await copier(o.payment.reference)) toast('Référence copiée'); }}><Icone n="copier" /></button></dd></> : null}
               {o.payment.ref ? <><dt>Code client</dt><dd><span class="code">{o.payment.ref}</span></dd></> : null}

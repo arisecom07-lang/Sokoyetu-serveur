@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
-import { Champ, Choix, CaseACocher, Etapes, Note, Vide, toast, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
+import { Champ, Choix, CaseACocher, LogoOperateur, Etapes, Note, Vide, toast, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
 import { requete } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { dollars, francs, telephone, secret, pluriel, classes } from '../../commun/js/outils.js';
@@ -55,7 +55,7 @@ export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, tel
   return (
     <>
       <div class="choix-liste" role="radiogroup" aria-label="Opérateur Mobile Money">
-        {ms.map((m) => <Choix key={m.k} actif={methode === m.k} onClick={() => onMethode(m.k)} couleur={m.color} icone={m.init} titre={m.label} sous={m.sub} />)}
+        {ms.map((m) => <Choix key={m.k} actif={methode === m.k} onClick={() => onMethode(m.k)} icone={<LogoOperateur m={m} />} titre={m.label} sous={m.sub} />)}
       </div>
       {erreurs.method ? <p class="champ-erreur"><Icone n="alerte" />{erreurs.method}</p> : null}
       <div class="formulaire espace-haut">

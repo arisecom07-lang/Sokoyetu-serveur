@@ -43,7 +43,7 @@ async function application(nom, dest, options = {}) {
   });
   const css = await build({
     entryPoints: [join(dossier, `${nom}.css`)], bundle: true, minify: true, write: false, charset: 'utf8',
-    loader: { '.woff2': 'file', '.svg': 'file' }, assetNames: '[name]-[hash]', outdir: join(dest, 'assets'), publicPath: './'
+    loader: { '.woff2': 'file', '.svg': 'file', '.webp': 'file' }, assetNames: '[name]-[hash]', outdir: join(dest, 'assets'), publicPath: './'
   });
   const noms = { polices: [] };
   for (const f of js.outputFiles) { const n = `${nom}.${empreinte(f.contents)}.js`; await writeFile(join(dest, 'assets', n), f.contents); noms.js = n; }

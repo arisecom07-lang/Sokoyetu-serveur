@@ -100,6 +100,17 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 .choix:hover { border-color: var(--ligne-saisie); }
 .choix[aria-checked="true"] { border-color: var(--marque); background: color-mix(in srgb, var(--marque-doux) 60%, var(--surface)); }
 .choix-icone { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); color: var(--marque-texte); font-weight: 800; }
+/* Logos des opérateurs Mobile Money. Le logo couvre l'initiale ; sans logo (Afrimoney, Illico Cash), l'initiale reste sur la couleur de l'opérateur. */
+.logo-op { --t: 32px; flex: none; width: var(--t); height: var(--t); border-radius: calc(var(--t) * .28); display: inline-grid; place-items: center; overflow: hidden;
+  background: var(--op, var(--ebene)) center / cover no-repeat; color: #fff; font-size: calc(var(--t) * .46); font-weight: 900; font-style: normal; line-height: 1; }
+.logo-op[data-op="mpesa"], .logo-op[data-op="airtel"], .logo-op[data-op="orange"] { font-size: 0; }
+.logo-op[data-op="mpesa"] { background-color: #fff; background-image: url(../marque/operateurs/mpesa.webp); box-shadow: inset 0 0 0 1px rgba(26, 18, 12, .12); }
+.logo-op[data-op="airtel"] { background-image: url(../marque/operateurs/airtel.webp); }
+.logo-op[data-op="orange"] { background-image: url(../marque/operateurs/orange.webp); }
+:root[data-theme="dark"] .logo-op[data-op="orange"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+.choix-icone .logo-op { --t: 42px; }
+.mode-op { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+.mode-op .logo-op { --t: 22px; }
 .choix-texte b { display: block; font-weight: 700; }
 .choix-texte small { display: block; color: var(--encre-3); font-size: var(--t-s); margin-top: 1px; }
 .choix-radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ligne-saisie); position: relative; transition: border-color var(--rapide); }
