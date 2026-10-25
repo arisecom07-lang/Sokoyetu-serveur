@@ -9,6 +9,7 @@
 - **Frais de service de 2 %** ajoutés au panier (après réduction, hors livraison) et affichés avant de payer : ils reviennent à la boutique, réglables de 0 à 20 % dans Réglages → Paiements.
 - **Paiement refusé ?** Le client réessaie sur la même commande, avec le même numéro ou un autre opérateur (5 tentatives). **Jamais payé ?** La commande s'annule seule après 30 minutes (réglable) et le stock revient en vente.
 - **Administration** : l'alerte sonne à la **commande payée** (plus à la commande commencée) ; plus de paiement à vérifier à la main ; nouveaux filtres « Paiement en cours » et « Non abouties » ; le tableau de bord ne compte que les ventes payées, frais de service inclus dans la marge. Un bouton de secours « Marquer comme payée à la main » reste disponible, avec confirmation.
+- **Couleurs de repère (thème clair).** Chaque étape a sa teinte sombre et sobre : Livraison en terre cuite, Paiement en bleu ardoise, Reçu en vert forêt. Les consignes numérotées, le suivi de commande, les étapes de l'import, les rayons et les indicateurs du tableau de bord suivent le même principe. Le thème sombre ne change pas.
 - **Brancher le paiement** : une commande sur le serveur, `sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'` (le jeton reste sur le serveur). Un **mode test** sans argent permet d'essayer tout le parcours.
 
 ## Détails techniques
