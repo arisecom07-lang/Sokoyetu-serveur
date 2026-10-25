@@ -2,6 +2,7 @@
 @import '../commun/css/jetons.css';
 @import '../commun/css/base.css';
 @import '../commun/css/composants.css';
+@import '../commun/css/couleurs.css';
 
 :root {
   /* Barre latérale et carte vedette : toujours sombres, dans les deux thèmes */

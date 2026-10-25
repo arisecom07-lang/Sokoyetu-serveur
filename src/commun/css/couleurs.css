@@ -1,0 +1,89 @@
+/*
+ * Sokoyetu — couleurs de repère, thème clair seulement (le thème sombre n'est pas touché).
+ * Une teinte sombre et sobre par étape ou par consigne, pour que l'on sache toujours où l'on en est :
+ * terre cuite (1), bleu ardoise (2), vert forêt (3), ocre (4), prune (5).
+ * Contrastes : chaque teinte dépasse 6,9:1 sur blanc et 5,6:1 sur sa version douce.
+ */
+:root:not([data-theme="dark"]) {
+  --c1: #8B4728; --c1-doux: #F5E4DA;   /* terre cuite : étape 1 */
+  --c2: #2F4D6B; --c2-doux: #E1E9F2;   /* bleu ardoise : étape 2 */
+  --c3: #36593A; --c3-doux: #E2EDE0;   /* vert forêt : étape 3 */
+  --c4: #75500F; --c4-doux: #F5EAD2;   /* ocre : étape 4 */
+  --c5: #663B52; --c5-doux: #F1E3EA;   /* prune */
+}
+:root:not([data-theme="dark"]) body { --c: var(--c1); --c-doux: var(--c1-doux); }
+
+/* ---- Barre d'étapes (Livraison → Paiement → Reçu) ---- */
+:root:not([data-theme="dark"]) .etapes > .etape:nth-child(1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .etapes > .etape:nth-child(3) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .etapes > .etape:nth-child(5) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .etape i { background: var(--c-doux); color: var(--c); }
+:root:not([data-theme="dark"]) .etape.actuelle { color: var(--c); }
+:root:not([data-theme="dark"]) .etape.actuelle i { background: var(--c); color: #fff; box-shadow: 0 0 0 4px var(--c-doux); }
+:root:not([data-theme="dark"]) .etape.faite i { background: var(--c); color: #fff; }
+:root:not([data-theme="dark"]) .etapes .trait.fait { background: var(--encre-3); }
+
+/* ---- Le contenu de la page prend la couleur de l'étape en cours ---- */
+:root:not([data-theme="dark"]) .page-commande[data-etape="2"], :root:not([data-theme="dark"]) .page-paiement { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .page-merci { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .page-commande .carte, :root:not([data-theme="dark"]) .page-paiement .carte:not(.paiement-attente) { border-top: 3px solid var(--c); }
+:root:not([data-theme="dark"]) .carte-titre > .ic:first-child { box-sizing: content-box; padding: 6px; border-radius: 10px; background: var(--c-doux); color: var(--c); }
+:root:not([data-theme="dark"]) .page-commande .choix[aria-checked="true"], :root:not([data-theme="dark"]) .page-paiement .choix[aria-checked="true"] { background: var(--c-doux); border-color: var(--c); }
+:root:not([data-theme="dark"]) .page-commande .choix[aria-checked="true"] .choix-icone, :root:not([data-theme="dark"]) .page-paiement .choix[aria-checked="true"] .choix-icone { background: var(--surface); color: var(--c); }
+
+/* ---- Instructions numérotées (payer, installer sur iPhone…) : une couleur par consigne ---- */
+:root:not([data-theme="dark"]) .etapes-paiement li { padding: 10px 12px; border-radius: var(--r-m); background: var(--c-doux); border-left: 3px solid var(--c); color: var(--encre); }
+:root:not([data-theme="dark"]) .etapes-paiement li > span { background: var(--c); color: #fff; }
+:root:not([data-theme="dark"]) .etapes-paiement li:nth-child(5n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .etapes-paiement li:nth-child(5n+2) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .etapes-paiement li:nth-child(5n+3) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .etapes-paiement li:nth-child(5n+4) { --c: var(--c4); --c-doux: var(--c4-doux); }
+:root:not([data-theme="dark"]) .etapes-paiement li:nth-child(5n+5) { --c: var(--c5); --c-doux: var(--c5-doux); }
+
+/* ---- Les 4 étapes de l'import (accueil, « Comment ça marche ») ---- */
+:root:not([data-theme="dark"]) .etapes-import li:nth-child(4n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .etapes-import li:nth-child(4n+2) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .etapes-import li:nth-child(4n+3) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .etapes-import li:nth-child(4n+4) { --c: var(--c4); --c-doux: var(--c4-doux); }
+:root:not([data-theme="dark"]) .etapes-import li { border-top: 3px solid var(--c); }
+:root:not([data-theme="dark"]) .etapes-import .ei-icone { background: var(--c-doux); color: var(--c); }
+
+/* ---- Suivi de commande : chaque étape garde sa couleur ---- */
+:root:not([data-theme="dark"]) .suivi-etape:nth-child(5n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .suivi-etape:nth-child(5n+2) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .suivi-etape:nth-child(5n+3) { --c: var(--c4); --c-doux: var(--c4-doux); }
+:root:not([data-theme="dark"]) .suivi-etape:nth-child(5n+4) { --c: var(--c5); --c-doux: var(--c5-doux); }
+:root:not([data-theme="dark"]) .suivi-etape:nth-child(5n+5) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .suivi-etape.faite .suivi-puce { background: var(--c); }
+:root:not([data-theme="dark"]) .suivi-etape.faite::before { background: var(--c); }
+:root:not([data-theme="dark"]) .suivi-etape.actuelle .suivi-puce { background: var(--c); color: #fff; box-shadow: 0 0 0 5px var(--c-doux); }
+:root:not([data-theme="dark"]) .suivi-etape.actuelle b { color: var(--c); }
+
+/* ---- Administration : « Bien démarrer » et indicateurs ---- */
+:root:not([data-theme="dark"]) .guide li:nth-child(5n+1) { --c: var(--c1); }
+:root:not([data-theme="dark"]) .guide li:nth-child(5n+2) { --c: var(--c2); }
+:root:not([data-theme="dark"]) .guide li:nth-child(5n+3) { --c: var(--c3); }
+:root:not([data-theme="dark"]) .guide li:nth-child(5n+4) { --c: var(--c4); }
+:root:not([data-theme="dark"]) .guide li:nth-child(5n+5) { --c: var(--c5); }
+:root:not([data-theme="dark"]) .guide-coche { border-color: var(--c); }
+:root:not([data-theme="dark"]) .guide-coche.fait { background: var(--c); border-color: var(--c); }
+:root:not([data-theme="dark"]) .kpis > .kpi:nth-child(2) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .kpis > .kpi:nth-child(3) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .kpis > .kpi:nth-child(4) { --c: var(--c5); --c-doux: var(--c5-doux); }
+:root:not([data-theme="dark"]) .kpi:not(.grand) { border-top: 3px solid var(--c); }
+:root:not([data-theme="dark"]) .kpi:not(.grand) .kpi-lib .ic { color: var(--c); }
+
+/* ---- Titres de section de la boutique : petit trait de repère ---- */
+:root:not([data-theme="dark"]) .titre-section::after { content: ''; display: block; width: 34px; height: 3px; margin-top: 7px; border-radius: 3px; background: var(--c1); }
+
+/* ---- Rayons : chaque rond garde sa teinte ---- */
+:root:not([data-theme="dark"]) .rayon-rond:nth-child(5n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .rayon-rond:nth-child(5n+2) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .rayon-rond:nth-child(5n+3) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .rayon-rond:nth-child(5n+4) { --c: var(--c4); --c-doux: var(--c4-doux); }
+:root:not([data-theme="dark"]) .rayon-rond:nth-child(5n+5) { --c: var(--c5); --c-doux: var(--c5-doux); }
+:root:not([data-theme="dark"]) .rayon-rond .rr-photo { border: 2px solid var(--c); box-shadow: 0 0 0 3px var(--c-doux); }
+
+/* ---- Ambiance : liseré or sous la barre d'annonce, voile chaud à peine visible en haut des pages ---- */
+:root:not([data-theme="dark"]) .annonce { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--or) 55%, transparent); }
+:root:not([data-theme="dark"]) body { background-image: radial-gradient(1200px 380px at 50% -120px, color-mix(in srgb, var(--or) 9%, transparent), transparent 70%); background-repeat: no-repeat; }

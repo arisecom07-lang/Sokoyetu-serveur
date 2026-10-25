@@ -212,7 +212,7 @@ export function Commander() {
   return (
     <>
       <EntetePage titre="Commande" sous={`Étape ${f.etape} sur 3 · ${NOMS_ETAPES[f.etape - 1]}`} repli="/panier" cacherTitreOrdi onRetour={f.etape > 1 ? () => allerA(f.etape - 1) : undefined} />
-      <main id="contenu" class="page conteneur page-commande" ref={haut}>
+      <main id="contenu" class="page conteneur page-commande" data-etape={f.etape} ref={haut}>
         <div class="commande-tete"><h1 class="titre-serif seulement-ordi">Finaliser ma commande</h1><Etapes noms={NOMS_ETAPES} actuelle={f.etape} /></div>
         <div class="commande-grille">
           <div class="pile-l" key={f.etape}>
