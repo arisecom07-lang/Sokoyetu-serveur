@@ -29,7 +29,7 @@ for d in pb_hooks pb_migrations pb_admin; do rm -rf "${DIR:?}/$d"; cp -r "$T/s/$
 [ -d "$DIR/pb_public/.well-known" ] && mv "$DIR/pb_public/.well-known" "$T/wk"
 rm -rf "${DIR:?}/pb_public"; cp -r "$T/s/pb_public" "$DIR/pb_public"
 [ -d "$T/wk" ] && mv "$T/wk" "$DIR/pb_public/.well-known"
-for f in mise-a-jour.sh mot-de-passe.sh android.sh ia.sh paiement.sh service.sh; do [ -f "$T/s/$f" ] && cp "$T/s/$f" "$DIR/$f" && chmod 700 "$DIR/$f"; done
+for f in mise-a-jour.sh mot-de-passe.sh android.sh ia.sh paiement.sh codes.sh service.sh; do [ -f "$T/s/$f" ] && cp "$T/s/$f" "$DIR/$f" && chmod 700 "$DIR/$f"; done
 cp "$T/s/LISEZMOI.md" "$DIR/LISEZMOI.md" 2>/dev/null || true
 echo "$PAQUET" > "$DIR/.paquet"
 chown -R sokoyetu:sokoyetu "$DIR"

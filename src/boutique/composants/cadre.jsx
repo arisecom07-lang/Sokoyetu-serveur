@@ -94,7 +94,7 @@ export function EntetePage({ titre, sous, repli = '/', actions, cacherTitreOrdi,
 }
 
 const ONGLETS = [['/', 'accueil', 'Accueil', 'accueil'], ['/categories', 'rayons', 'Rayons', 'rayons'], ['/nouveautes', 'nouveautes', 'Nouveautés', 'etincelle'], ['/panier', 'panier', 'Panier', 'sac'], ['/compte', 'compte', 'Compte', 'personne']];
-const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte' };
+const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte' };
 
 export function NavBas() {
   const nom = route.value.nom; const actif = DANS_ONGLET[nom] || nom; const n = nbArticles.value;

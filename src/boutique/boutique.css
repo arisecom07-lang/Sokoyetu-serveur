@@ -356,6 +356,22 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .page-retrouver form { max-width: 520px; margin: var(--e4) auto 0; }
 .page-retrouver h1 { font-size: 26px; }
 
+/* ---------- Compte client facultatif : invitation, connexion par code SMS ---------- */
+.page-connexion > .carte, .page-choix-compte > .carte { max-width: 520px; margin: var(--e4) auto 0; }
+.page-choix-compte > p { max-width: 520px; margin: var(--e3) auto 0; }
+.page-connexion > p { max-width: 520px; margin-left: auto; margin-right: auto; }
+.page-connexion h1, .invitation-compte h2 { font-size: 26px; line-height: 1.2; }
+.invitation-compte { display: grid; gap: var(--e4); }
+.invitation-compte > p .ic { display: inline; vertical-align: -2px; }
+.avantages-compte { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e2); }
+.avantages-compte li { display: flex; align-items: center; gap: var(--e3); font-size: 14.5px; line-height: 1.4; color: var(--encre-2); }
+.avantages-compte li b { color: var(--encre); font-weight: 700; }
+.avantages-compte .menu-icone { flex: none; }
+.saisie-otp { font-size: 26px; letter-spacing: .5em; text-align: center; font-variant-numeric: tabular-nums; padding-left: .5em; }
+.saisie-otp::placeholder { letter-spacing: .5em; }
+.espace-bas { margin-bottom: var(--e3); }
+.ok-texte { color: var(--ok); font-weight: 650; }
+
 /* ---------- Merci, compte, suivi ---------- */
 .merci-tete { display: grid; justify-items: center; text-align: center; gap: 8px; padding: var(--e8) 0 var(--e5); }
 .merci-coche { width: 86px; height: 86px; border-radius: 50%; display: grid; place-items: center; background: var(--ok); color: #fff; box-shadow: 0 0 0 10px var(--ok-doux); animation: pulse 700ms var(--ressort) 150ms both; margin-bottom: 8px; }
@@ -366,6 +382,8 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .profil-texte { flex: 1; min-width: 0; display: grid; }
 .profil-texte b { font-size: 17px; font-weight: 750; }
 .profil-texte small { color: var(--encre-3); font-size: 13.5px; line-height: 1.4; }
+.profil-texte .sans-coupure { white-space: nowrap; }
+@media (max-width: 440px) { .profil-modifier { padding-inline: 10px; } .profil-modifier .libelle { display: none; } }
 .encours { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin-top: var(--e3); border-color: color-mix(in srgb, var(--info) 30%, var(--ligne)); background: var(--info-doux); }
 .encours .menu-icone { background: var(--surface); color: var(--info); }
 .encours .menu-texte b { display: block; font-weight: 750; }
@@ -519,3 +537,8 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
   .recu { box-shadow: none; border-color: #bbb; break-inside: avoid; }
   .recu-numero { background: #fff; }
 }
+
+/* ---- Mes commandes : « En cours » puis « Historique » ---- */
+.historique-tete { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e3); flex-wrap: wrap; font-family: var(--police-titre); font-size: var(--t-l); font-weight: 600; }
+.historique-tete small { font-family: var(--police); font-size: var(--t-s); font-weight: 600; color: var(--encre-3); }
+.historique-tete small b { color: var(--encre); font-weight: 750; }

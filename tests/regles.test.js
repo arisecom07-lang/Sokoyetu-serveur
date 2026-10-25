@@ -226,3 +226,22 @@ test('numéro de commande et montants', () => {
   assert.deepEqual(R.incoherences({ items: [{ price: 10, qty: 2 }], subtotal: 20, shippingFee: 2, total: 22 }), []);
   assert.deepEqual(R.incoherences({ items: [{ price: 10, qty: 2 }], subtotal: 20, shippingFee: 2, serviceFee: 0.4, total: 22.4 }), []);
 });
+
+test('comptes clients : code, numéro international, fusion du panier et des favoris', () => {
+  assert.equal(R.codeConnexion(' 123 456 '), '123456');
+  assert.equal(R.codeConnexion('12345'), '');
+  assert.equal(R.telephoneInternational('0991234567'), '+243991234567');
+  assert.equal(R.telephoneInternational('n’importe quoi'), '');
+  const compte = { panier: [{ productId: 'robe', color: 'Noir', size: 'M', qty: 1 }], favoris: ['sac'], profil: { zoneId: 'bukavu', address: '' }, dates: { 'panier:robe': 5, 'favori:sac': 7, 'favori:perdu': 9 } };
+  const appareil = { panier: [{ productId: 'robe', color: 'Noir', size: 'M', qty: 3 }, { productId: 'montre', qty: 1 }, { productId: '<x>', qty: 1 }], favoris: ['sac', 'montre'], profil: { zoneId: 'goma', address: 'Av. Lumumba 12' } };
+  const f = R.fusionCompte(compte, appareil);
+  assert.deepEqual(f.panier.map((l) => [l.productId, l.qty]), [['robe', 3], ['montre', 1]]);
+  assert.deepEqual(f.favoris, ['sac', 'montre']);
+  assert.equal(f.profil.zoneId, 'bukavu');
+  assert.equal(f.profil.address, 'Av. Lumumba 12');
+  assert.deepEqual(f.dates, { 'panier:robe': 5, 'favori:sac': 7 });
+  const d = R.daterCompte(f, 100);
+  assert.equal(d.dates['panier:robe'], 5);
+  assert.equal(d.dates['panier:montre'], 100);
+  assert.equal(R.docCompte({ favoris: Array.from({ length: 300 }, (_, i) => 'p' + i) }).favoris.length, R.MAX_FAVORIS);
+});

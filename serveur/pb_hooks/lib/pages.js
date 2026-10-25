@@ -103,7 +103,12 @@ function catalogue(e) {
   try { config = S.versRecord(e.app.findRecordById('config', 'store')); } catch (err) { }
   // Le fournisseur de paiement (sans aucune clé) : la boutique n'affiche que les moyens réellement encaissables.
   const cfg = S.configuration(e.app);
-  config = Object.assign({ id: 'store' }, config || {}, { payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.provider === 'simulation' } });
+  // Comptes clients : proposés seulement si l'envoi des codes (WhatsApp ou SMS) est prêt ; sinon, commande sans compte.
+  const codes = require(`${__hooks}/lib/envoi.js`).etat();
+  config = Object.assign({ id: 'store' }, config || {}, {
+    payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.provider === 'simulation' },
+    accounts: { open: codes.pret, test: codes.test, channels: codes.canaux }
+  });
   const donnees = {
     config,
     collections: liste('collections', 'id != ""'),

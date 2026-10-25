@@ -114,6 +114,11 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 | Paiement en mode test (aucun argent) | `sudo /opt/sokoyetu/paiement.sh test` |
 | Fermer le paiement | `sudo /opt/sokoyetu/paiement.sh arreter` |
 | Voir l'état du paiement | `sudo /opt/sokoyetu/paiement.sh` |
+| Envoyer les codes de connexion par WhatsApp | `sudo /opt/sokoyetu/codes.sh whatsapp ID_DU_NUMERO 'JETON'` |
+| SMS de secours (Twilio) | `sudo /opt/sokoyetu/codes.sh sms-twilio SID 'JETON' Sokoyetu` |
+| Comptes clients en mode test (code affiché à l'écran) | `sudo /opt/sokoyetu/codes.sh test` |
+| Fermer les comptes clients | `sudo /opt/sokoyetu/codes.sh arreter` |
+| Voir l'état des codes | `sudo /opt/sokoyetu/codes.sh` |
 | Activer l'assistant IA | `sudo /opt/sokoyetu/ia.sh 'sk-ant-...'` |
 | Retirer l'assistant IA | `sudo /opt/sokoyetu/ia.sh --retirer` |
 | Voir si le site tourne | `systemctl status sokoyetu` |
@@ -152,7 +157,30 @@ Le jeton reste sur le serveur (`/opt/sokoyetu/sokoyetu.env`, lisible par l'admin
 
 ---
 
-## 6. Assistant IA des fiches produits (facultatif)
+## 6. Comptes clients et code WhatsApp (facultatif)
+
+Le client peut toujours commander **sans compte**. Avant de commander, la boutique lui propose : « Créez votre compte et commencez à commander dès maintenant », avec un bouton **Continuer sans compte** (la question n'est plus reposée sur cet appareil).
+
+- **Pas de mot de passe.** Le client donne son numéro, reçoit un **code à 6 chiffres sur WhatsApp** (bouton « Copier le code ») et le tape. Pas de WhatsApp ? Il touche « Recevoir le code par SMS » si le SMS de secours est branché.
+- **Un compte, tous ses téléphones** : panier, favoris, coordonnées de livraison et commandes le suivent. Il se déconnecte (rien ne reste sur un téléphone prêté) ou supprime son compte depuis **Mon compte**.
+- **Administration** : **Clients** montre qui a un compte, ce qu'il a **au panier** et **en favori** ; **Audience** ajoute « **Paniers à relancer** » et, sur chaque article, les clients avec compte qui l'ont au panier ou en favori.
+- **Limites contre les abus** : un nouveau code toutes les 60 s au plus, 5 codes par numéro en 3 heures, 5 essais par code, code valable 10 minutes, et un **plafond de 200 codes par jour** pour toute la boutique (`codes.sh plafond 300` pour le changer).
+- Tant qu'aucun canal n'est branché, la boutique ne propose pas de compte et tout fonctionne comme avant.
+
+### Brancher WhatsApp (une fois)
+
+1. Créez un compte **Meta Business** (business.facebook.com) et, dans **WhatsApp Manager**, ajoutez un **numéro dédié** à la boutique (un numéro qui n'est pas déjà utilisé dans l'application WhatsApp).
+2. Créez un **modèle de message** de catégorie **Authentification**, nommé `code_connexion`, langue **Français**, avec le bouton **Copier le code**. Attendez sa validation par Meta.
+3. Créez un **utilisateur système** avec un **jeton d'accès permanent** (droit `whatsapp_business_messaging`) et notez le **Phone number ID** du numéro (WhatsApp Manager → API).
+4. Dans la console du Droplet : `sudo /opt/sokoyetu/codes.sh whatsapp ID_DU_NUMERO 'JETON'`, puis essayez avec votre propre téléphone : **Mon compte → Créer mon compte**.
+
+Coût : Meta facture chaque code envoyé (tarif « authentification » du pays du client, souvent moins d'un centime de dollar ; vérifiez le tarif pour la RDC dans WhatsApp Manager). Le **SMS de secours** coûte davantage par message (Twilio ou Plivo : `codes.sh sms-twilio` / `codes.sh sms-plivo`). Les jetons restent sur le serveur, dans `/opt/sokoyetu/sokoyetu.env`.
+
+**Mode test** (`sudo /opt/sokoyetu/codes.sh test`) : rien n'est envoyé, le code s'affiche à l'écran. Pour vos essais seulement, jamais pour le public.
+
+---
+
+## 7. Assistant IA des fiches produits (facultatif)
 
 Il rédige le titre, la description et les caractéristiques d'un article à partir d'une photo, repère les couleurs et choisit le rayon. Vous relisez, puis vous mettez le prix.
 
@@ -164,7 +192,7 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 
 ---
 
-## 7. Application sur téléphone
+## 8. Application sur téléphone
 
 - **Boutique** : dans Chrome sur Android, la boutique propose **Installer l'application**. Elle s'ouvre ensuite comme une application, reste rapide avec une connexion faible et affiche une page hors connexion.
 - **Administration** : ouvrez https://admin.sokoyakwetu.com dans Chrome → menu ⋮ → **Ajouter à l'écran d'accueil**. Dans **Plus → Mon compte → Alertes de commande payée**, activez le son et les notifications : une commande payée s'annonce même quand l'onglet est en arrière-plan, avec le nombre de commandes à préparer dans le titre (et sur l'icône quand le téléphone le permet).
@@ -172,7 +200,7 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 
 ---
 
-## 8. Sauvegardes
+## 9. Sauvegardes
 
 - Automatiques **chaque nuit** (7 dernières gardées) dans `/opt/sokoyetu/pb_data/backups`, téléchargeables depuis le tableau technique (`/_/` → Settings → Backups).
 - Copie avant chaque mise à jour dans `/opt/sokoyetu/sauvegardes`.
@@ -180,7 +208,7 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 
 ---
 
-## 9. Pour un développeur
+## 10. Pour un développeur
 
 ```bash
 npm install

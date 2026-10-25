@@ -24,7 +24,8 @@ await client.goto(BASE + '/boutique/index.html'); await client.waitForSelector('
 await client.screenshot({ path: SORTIE + 'demo-boutique.png' });
 await client.goto(BASE + '/boutique/index.html#/p/ex-p17/montre-classique-bracelet-cuir'); await client.waitForSelector('.produit-titre');
 await client.click('.barre-action .btn-primaire'); await client.waitForTimeout(400);
-await client.goto(BASE + '/boutique/index.html#/commander'); await client.waitForSelector('.page-commande');
+await client.goto(BASE + '/boutique/index.html#/commander'); await client.waitForSelector('.page-choix-compte');
+await client.click('button:has-text("Continuer sans compte")'); await client.waitForSelector('.page-commande');
 await client.fill('input[autocomplete="name"]', 'Amani Bahati'); await client.fill('input[type=tel]', '0997654321');
 await client.click('[aria-label="Zone de livraison"] .choix >> nth=0'); await client.fill('input[autocomplete="street-address"]', 'Nguba, av. de la Mission 7');
 await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Opérateur Mobile Money"]');

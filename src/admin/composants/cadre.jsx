@@ -17,6 +17,7 @@ const SECTIONS = [
   ['/commandes', 'commandes', 'Commandes', 'recu'],
   ['/produits', 'produits', 'Produits', 'etiquette'],
   ['/clients', 'clients', 'Clients', 'personnes'],
+  ['/audience', 'audience', 'Audience', 'oeil'],
   ['/rayons', 'rayons', 'Rayons', 'rayons'],
   ['/bannieres', 'bannieres', 'Bannières', 'megaphone'],
   ['/remises', 'remises', 'Réductions', 'pourcent'],
@@ -26,6 +27,7 @@ export function sectionActive() {
   const s = route.value.segs[0] || '';
   if (!s) return 'tableau';
   if (s === 'plus' || s === 'compte') return 'plus';
+  if (s === 'historique') return 'commandes';
   return s;
 }
 
@@ -55,7 +57,7 @@ export function BarreLaterale() {
 export function NavBasAdmin() {
   const actif = sectionActive(); const n = aTraiter.value;
   const onglets = [['/', 'tableau', 'Accueil', 'accueil'], ['/commandes', 'commandes', 'Commandes', 'recu'], ['/produits', 'produits', 'Produits', 'etiquette'], ['/clients', 'clients', 'Clients', 'personnes'], ['/plus', 'plus', 'Plus', 'rayons']];
-  const dansPlus = ['rayons', 'bannieres', 'remises', 'reglages', 'plus'].includes(actif);
+  const dansPlus = ['audience', 'rayons', 'bannieres', 'remises', 'reglages', 'plus'].includes(actif);
   return (
     <nav class="nav-bas seulement-mobile" aria-label="Navigation">
       <div class="nav-bas-in" style={{ '--n': 5 }}>

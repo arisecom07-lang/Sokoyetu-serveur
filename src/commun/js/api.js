@@ -11,15 +11,18 @@ function expiration(jeton) {
   try { return JSON.parse(atob(jeton.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000; } catch (e) { return 0; }
 }
 let auth = null;
+let cleAuth = 'auth';
 export const Auth = {
+  /* La boutique garde la session de son client sous une autre clé que l'administration. */
+  utiliserCle(cle) { cleAuth = cle; },
   charger() {
-    const a = Local.lire('auth', null);
+    const a = Local.lire(cleAuth, null);
     auth = a && a.token && expiration(a.token) > Date.now() + 60000 ? a : null;
-    if (!auth) Local.retirer('auth');
+    if (!auth) Local.retirer(cleAuth);
     return auth;
   },
-  enregistrer(a) { auth = a; Local.ecrire('auth', a); },
-  effacer() { auth = null; Local.retirer('auth'); },
+  enregistrer(a) { auth = a; Local.ecrire(cleAuth, a); },
+  effacer() { auth = null; Local.retirer(cleAuth); },
   get jeton() { return auth ? auth.token : ''; },
   get compte() { return auth && auth.record ? auth.record : null; },
   get expireBientot() { return !!auth && expiration(auth.token) - Date.now() < 7 * 864e5; }
@@ -74,8 +77,8 @@ export async function connexion(email, motDePasse) {
   Auth.enregistrer({ token: r.token, record: r.record });
   return r.record;
 }
-export async function prolongerSession() {
-  const r = await requete('collections/admins/auth-refresh', { method: 'POST' });
+export async function prolongerSession(col = 'admins') {
+  const r = await requete(`collections/${col}/auth-refresh`, { method: 'POST' });
   Auth.enregistrer({ token: r.token, record: r.record });
 }
 export async function changerMotDePasse(ancien, nouveau) {

@@ -42,6 +42,12 @@ const article = await (await fetch(BASE + '/api/collections/products/records/ex-
 await fetch(BASE + '/api/collections/products/records/ex-p15', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc: { ...article.doc, stock: 10 } }) });
 const payee = await commande('0991231234'); const refusee = await commande('0991230000');
 await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee]);
+await controler('Boutique · commande : avec ou sans compte', BASE + '/commander', '.page-choix-compte');
+await controler('Boutique · créer un compte', BASE + '/compte/connexion?pour=commande&retour=/commander', '.page-connexion');
+await controler('Boutique · code de connexion', BASE + '/compte/connexion?retour=/compte', '.page-connexion', async () => {
+  await p.fill('input[type=tel]', '0991239999'); await p.click('button[type=submit]'); await p.waitForSelector('.saisie-otp');
+});
+await p.evaluate(() => sessionStorage.setItem('sokoyetu:sansCompte', 'true'));
 await controler('Boutique · commande, paiement', BASE + '/commander', '.page-commande', async () => {
   await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
   await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement');
@@ -59,6 +65,8 @@ await controler('Admin · produits', ADMIN + '/#/produits', '.liste .ligne');
 await controler('Admin · fiche produit', ADMIN + '/#/produits/ex-p08', '.grille-photos');
 await controler('Admin · réglages paiements', ADMIN + '/#/reglages/paiements', '.operateur-tete');
 await controler('Admin · compte', ADMIN + '/#/compte', '.menu');
+await controler('Admin · clients', ADMIN + '/#/clients', '.page, .liste');
+await controler('Admin · audience', ADMIN + '/#/audience', '.kpis');
 await b.close();
 console.log(total ? `\n${total} problème(s) d’accessibilité.` : '\nAucune violation d’accessibilité détectée.');
 process.exit(total ? 1 : 0);
