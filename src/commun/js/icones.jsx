@@ -1,0 +1,83 @@
+// Sokoyetu — jeu d'icônes maison (grille 24 px, trait 1,8 px, bouts arrondis), cohérent dans les deux applications.
+const P = {
+  accueil: <path d="M4 10.4 12 4l8 6.4V19a1.6 1.6 0 0 1-1.6 1.6H15v-5.8H9v5.8H5.6A1.6 1.6 0 0 1 4 19z" />,
+  rayons: <><rect x="4" y="4" width="7" height="7" rx="2.2" /><rect x="13" y="4" width="7" height="7" rx="2.2" /><rect x="4" y="13" width="7" height="7" rx="2.2" /><rect x="13" y="13" width="7" height="7" rx="2.2" /></>,
+  etincelle: <><path d="M11 3.5l1.9 4.6 4.6 1.9-4.6 1.9L11 16.5l-1.9-4.6L4.5 10l4.6-1.9z" /><path d="M18 15l.8 1.9 1.9.8-1.9.8L18 20.4l-.8-1.9-1.9-.8 1.9-.8z" /></>,
+  sac: <><path d="M5 8h14l-1.1 11a2 2 0 0 1-2 1.8H8.1a2 2 0 0 1-2-1.8z" /><path d="M9 10V7a3 3 0 0 1 6 0v3" /></>,
+  personne: <><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4" /></>,
+  personnes: <><circle cx="9" cy="9" r="3.4" /><path d="M3 19c.9-3 3.2-4.6 6-4.6s5.1 1.6 6 4.6" /><path d="M15.5 5.8a3.2 3.2 0 0 1 0 6.3M17.5 14.6c1.8.6 3 2 3.5 4.4" /></>,
+  recherche: <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></>,
+  coeur: <path d="M12 20s-7.2-4.4-8.7-9.1A4.7 4.7 0 0 1 12 7.2a4.7 4.7 0 0 1 8.7 3.7C19.2 15.6 12 20 12 20z" />,
+  retour: <path d="M14.5 5.5 8 12l6.5 6.5" />,
+  droite: <path d="M9.5 5.5 16 12l-6.5 6.5" />,
+  bas: <path d="M6 9.5l6 6 6-6" />,
+  haut: <path d="M6 14.5l6-6 6 6" />,
+  fermer: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  plus: <path d="M12 5.5v13M5.5 12h13" />,
+  moins: <path d="M5.5 12h13" />,
+  camion: <><path d="M3 6.5h11v9H3z" /><path d="M14 9.5h3.6l3.4 3.4v2.6h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></>,
+  bouclier: <><path d="M12 3.5 5 6v5.6c0 4.2 3 7.6 7 8.9 4-1.3 7-4.7 7-8.9V6z" /><path d="m9 12 2.2 2.2L15.5 10" /></>,
+  echange: <path d="M7 8h12l-3.5-3.5M17 16H5l3.5 3.5" />,
+  mobile: <><rect x="7" y="3" width="10" height="18" rx="2.6" /><path d="M11 17.6h2" /></>,
+  bulle: <path d="M20 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-4.2A8 8 0 1 1 20 11.5z" />,
+  colis: <><path d="M4 8l8-4 8 4v8.5l-8 4-8-4z" /><path d="M4 8l8 4 8-4M12 12v8.5" /></>,
+  recu: <><path d="M6 3.5h12v17l-2.5-1.5-2.5 1.5-2.5-1.5-2.5 1.5L6 19.3z" /><path d="M9 8h6M9 11.5h6M9 15h3.5" /></>,
+  graphique: <><path d="M4 20h16" /><rect x="5.5" y="11" width="3" height="6" rx="1" /><rect x="10.5" y="6" width="3" height="11" rx="1" /><rect x="15.5" y="9" width="3" height="8" rx="1" /></>,
+  etiquette: <><path d="M3.5 12.2V5A1.5 1.5 0 0 1 5 3.5h7.2L20.5 12 12 20.5z" /><circle cx="8" cy="8" r="1.4" /></>,
+  reglages: <><circle cx="12" cy="12" r="3" /><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6" /></>,
+  image: <><rect x="3.5" y="5" width="17" height="14" rx="3" /><circle cx="9" cy="10" r="1.7" /><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5" /></>,
+  crayon: <><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>,
+  poubelle: <path d="M5 7h14M10 7V5h4v2M7 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4L17 7" />,
+  coche: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  copier: <><rect x="8" y="8" width="12" height="12" rx="2.6" /><path d="M16 8V5.6A1.6 1.6 0 0 0 14.4 4H5.6A1.6 1.6 0 0 0 4 5.6v8.8A1.6 1.6 0 0 0 5.6 16H8" /></>,
+  dupliquer: <><rect x="8" y="8" width="12" height="12" rx="2.6" /><path d="M14 11v6M11 14h6" /><path d="M16 8V5.6A1.6 1.6 0 0 0 14.4 4H5.6A1.6 1.6 0 0 0 4 5.6v8.8A1.6 1.6 0 0 0 5.6 16H8" /></>,
+  boutique: <><path d="M4 9.5 5.5 4h13L20 9.5a3 3 0 0 1-5.3 1.8A3 3 0 0 1 12 12.5a3 3 0 0 1-2.7-1.2A3 3 0 0 1 4 9.5z" /><path d="M5.5 12.5V20h13v-7.5M10 20v-4h4v4" /></>,
+  horloge: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4.5l3 1.8" /></>,
+  portefeuille: <><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><rect x="4" y="8" width="16" height="11" rx="2.6" /><path d="M16 13.5h1.5" /></>,
+  repere: <><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></>,
+  plusieurs: <><circle cx="6" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="18" cy="12" r="1.4" /></>,
+  lune: <path d="M19.5 14.2A7.6 7.6 0 0 1 9.8 4.5a7.6 7.6 0 1 0 9.7 9.7z" />,
+  cadenas: <><rect x="5" y="10.5" width="14" height="10" rx="2.6" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></>,
+  avion: <path d="M10.5 13.5 3.5 11l1.6-1.6 7.2 1L17 5.7a1.8 1.8 0 0 1 2.6 2.6L14.9 13l1 7.2-1.6 1.6-2.5-7" />,
+  navire: <><path d="M3 15.5l1.6 4h14.8l1.6-4z" /><path d="M5.5 15.5V10h13v5.5M9 10V6.5h6V10M12 6.5V3.5" /></>,
+  conteneur: <><rect x="3" y="6" width="18" height="12" rx="1.6" /><path d="M7 9v6M10.3 9v6M13.7 9v6M17 9v6" /></>,
+  douane: <><path d="M12 3.5 5 6v5.6c0 4.2 3 7.6 7 8.9 4-1.3 7-4.7 7-8.9V6z" /><path d="M9 11.5h6M9 14.5h4" /></>,
+  etoile: <path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z" />,
+  calques: <><path d="m12 4 8.5 4.5L12 13 3.5 8.5z" /><path d="m3.5 12.5 8.5 4.5 8.5-4.5" /></>,
+  megaphone: <><path d="M4 10v4h3l8.5 4.5v-13L7 10z" /><path d="M18.5 9.5a3.5 3.5 0 0 1 0 5" /></>,
+  pourcent: <><path d="M18 6 6 18" /><circle cx="7.5" cy="7.5" r="2.3" /><circle cx="16.5" cy="16.5" r="2.3" /></>,
+  oeil: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.8" /></>,
+  oeilBarre: <><path d="M4 4l16 16" /><path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5C18 5.5 21.5 12 21.5 12a17 17 0 0 1-3 3.8M6.5 7.6A16.6 16.6 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.2-1" /><path d="M10 10.2a2.8 2.8 0 0 0 3.9 3.9" /></>,
+  billet: <><rect x="3" y="6.5" width="18" height="11" rx="2.6" /><circle cx="12" cy="12" r="2.6" /><path d="M6.5 9.5v5M17.5 9.5v5" /></>,
+  alerte: <><path d="M12 4.5 20.5 19h-17z" /><path d="M12 10v4M12 16.8v.1" /></>,
+  info: <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5M12 8v.1" /></>,
+  lien: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
+  envoyer: <><path d="M12 15.5V5M7.5 9.5 12 5l4.5 4.5" /><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15" /></>,
+  sortie: <><path d="M14 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5H14" /><path d="M10 12h10M16.5 8.5 20 12l-3.5 3.5" /></>,
+  actualiser: <><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" /><path d="M19.5 4.5v4h-4" /></>,
+  partager: <><path d="M12 14.5V4M8 7.5 12 3.5l4 4" /><path d="M8.5 10.5H6.5A1.5 1.5 0 0 0 5 12v7.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V12a1.5 1.5 0 0 0-1.5-1.5h-2" /></>,
+  drapeau: <path d="M5 21V4.5M5 5h11l-2 3.5 2 3.5H5" />,
+  pause: <><path d="M9 6.5v11M15 6.5v11" /></>,
+  lecture: <path d="M8 5.8v12.4a.8.8 0 0 0 1.2.7l9.6-6.2a.8.8 0 0 0 0-1.4L9.2 5.1a.8.8 0 0 0-1.2.7z" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  filtre: <path d="M4 7h16M7 12h10M10 17h4" />,
+  appel: <path d="M8.2 4.5 6 4.6a2 2 0 0 0-1.9 2.2c.8 7 6.1 12.3 13.1 13.1a2 2 0 0 0 2.2-1.9l.1-2.2a1.5 1.5 0 0 0-1.1-1.5l-2.8-.8a1.5 1.5 0 0 0-1.5.4l-1.2 1.2a11 11 0 0 1-4.8-4.8l1.2-1.2a1.5 1.5 0 0 0 .4-1.5l-.8-2.8a1.5 1.5 0 0 0-1.5-1.1z" />,
+  calendrier: <><rect x="4" y="5.5" width="16" height="14.5" rx="2.6" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></>,
+  telecharger: <><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5" /><path d="M5 19.5h14" /></>,
+  globe: <><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5s1.2-6.1 3.6-8.5z" /></>,
+  cloche: <><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></>,
+  ia: <><path d="M12 3.5l1.6 4.4 4.4 1.6-4.4 1.6L12 15.5l-1.6-4.4L6 9.5l4.4-1.6z" /><path d="M18.5 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" /><path d="M6 16.5l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z" /></>
+};
+
+/* <Icone n="sac" /> — décorative par défaut (aria-hidden) ; passez « titre » si elle porte seule un sens. */
+export function Icone({ n, taille, plein, titre, classe, style }) {
+  return (
+    <svg class={'ic' + (classe ? ' ' + classe : '')} viewBox="0 0 24 24" fill={plein ? 'currentColor' : 'none'} stroke="currentColor"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden={titre ? undefined : 'true'} role={titre ? 'img' : undefined}
+      aria-label={titre || undefined} style={taille ? { '--ic': typeof taille === 'number' ? taille + 'px' : taille, ...(style || {}) } : style}>
+      {P[n] || null}
+    </svg>
+  );
+}
+
+export const ICONES = Object.keys(P);

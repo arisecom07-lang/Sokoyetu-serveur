@@ -1,0 +1,35 @@
+Photos d'exemple de Sokoyetu
+
+Toutes ces photos viennent d'Unsplash (https://unsplash.com) et sont publiées sous la licence Unsplash :
+usage libre, y compris commercial, sans obligation de citer l'auteur (https://unsplash.com/license).
+Elles ont été recadrées et converties en WebP. Elles illustrent le catalogue d'exemple : remplacez-les par les photos
+de vos propres articles (Administration → Plus → Général → Retirer les exemples).
+
+Merci aux photographes d'Unsplash. Photos d'origine :
+ban-port.webp : Port à conteneurs : grues de chargement et porte-conteneurs à quai — https://images.unsplash.com/photo-1578575437130-527eed3abbec
+ban-douane.webp : Terminal à conteneurs vu du ciel, avec ses grues — https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3
+ban-transit.webp : Camion de marchandises sur une route de montagne — https://images.unsplash.com/photo-1519003722824-194d4455a60c
+cat-femmes.webp : Portrait d’une femme élégante — https://images.unsplash.com/photo-1531123897727-8f129e1688ce
+cat-hommes.webp : Homme souriant en pull et béret — https://images.unsplash.com/photo-1531384441138-2736e62e0919
+cat-montres.webp : Montre à gousset suspendue à sa chaîne — https://images.unsplash.com/photo-1509048191080-d2984bad6ae5
+cat-sacs.webp : Cabas en cuir tressé — https://images.unsplash.com/photo-1598532163257-ae3c6b2524b6
+cat-bijoux.webp : Collier de perles dans son écrin — https://images.unsplash.com/photo-1515562141207-7a88fb7ce338
+cat-electronique.webp : Casque audio sur fond jaune — https://images.unsplash.com/photo-1505740420928-5e560c06d30e
+p01-1.webp : Robe midi bordeaux en velours côtelé — https://images.unsplash.com/photo-1585487000160-6ebcfceb0d03
+p02-1.webp : Escarpins à motif fleuri — https://images.unsplash.com/photo-1543163521-1bf539c55dd2
+p03-1.webp : Sac bandoulière en cuir camel — https://images.unsplash.com/photo-1600857062241-98e5dba7f214
+p04-1.webp : Boucles d’oreilles pendantes, strass bleus — https://images.unsplash.com/photo-1535632066927-ab7c9ab60908
+p05-1.webp : Colliers dorés à pendentifs — https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f
+p06-1.webp : Bracelet or rose serti — https://images.unsplash.com/photo-1611591437281-460bfbe1220a
+p07-1.webp : Montres blanches minimalistes — https://images.unsplash.com/photo-1523275335684-37898b6baf30
+p08-1.webp : Chemise en chambray sur cintre — https://images.unsplash.com/photo-1596755094514-f87e34085b2c
+p09-1.webp : Chemises habillées en coton pliées — https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf
+p10-1.webp : Sac à dos en cuir marron — https://images.unsplash.com/photo-1622560480605-d83c853bc5c3
+p11-1.webp : Lunettes de soleil rondes, monture dorée — https://images.unsplash.com/photo-1511499767150-a48a237f0083
+p12-1.webp : Cartable en cuir gris — https://images.unsplash.com/photo-1605733513597-a8f8341084e6
+p13-1.webp : Batterie externe et ses câbles — https://images.unsplash.com/photo-1585995603413-eb35b5f4a50b
+p14-1.webp : Écouteurs sans fil noirs et leur boîtier — https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46
+p15-1.webp : Enceinte de bureau noire — https://images.unsplash.com/photo-1531104985437-603d6490e6d4
+p16-1.webp : Casque audio noir — https://images.unsplash.com/photo-1583394838336-acd977736f90
+p17-1.webp : Montre classique à cadran blanc, bracelet en cuir — https://images.unsplash.com/photo-1524592094714-0f0654e20314
+p18-1.webp : Montre connectée noire — https://images.unsplash.com/photo-1617043786394-f977fa12eddf

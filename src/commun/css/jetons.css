@@ -1,0 +1,156 @@
+/*
+ * Sokoyetu — jetons de design (couleurs, typographie, espacements, rayons, ombres, mouvements).
+ * Thème clair par défaut : cacao et ébène sur ivoire. Thème sombre en option (Compte → Thème sombre).
+ * Contrastes vérifiés : tous les textes ≥ 4,5:1 sur leurs fonds (WCAG AA), en clair comme en sombre.
+ */
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../polices/fraunces.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url(../polices/plus-jakarta-sans.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Fonds et surfaces */
+  --fond: #FBF8F4;
+  --fond-2: #F4EDE5;
+  --surface: #FFFFFF;
+  --surface-2: #F7F1EA;
+  --surface-3: #EDE3D8;
+  --ligne: #E9DFD4;
+  --ligne-2: #DCCFC1;
+  --ligne-saisie: #A39184;
+
+  /* Textes */
+  --encre: #1E1611;
+  --encre-2: #5A4B41;
+  --encre-3: #75665B;
+  --sur-sombre: #FFF8F1;
+
+  /* Marque : cacao, ébène, or */
+  --marque: #6B4430;
+  --marque-texte: #7A4C33;
+  --marque-doux: #F3E8DE;
+  --marque-doux-2: #EAD9CA;
+  --ebene: #2A1D16;
+  --ebene-2: #3A2A21;
+  --sur-ebene: #FFF8F1;
+  --or: #C8902E;
+  --or-texte: #8A5A12;
+
+  /* États */
+  --promo: #AE3426;
+  --promo-doux: #FAE7E3;
+  --ok: #1F6B45;
+  --ok-doux: #E4F1E8;
+  --alerte: #8A5208;
+  --alerte-doux: #FAEED9;
+  --info: #2D5C99;
+  --info-doux: #E5EDF8;
+  --danger: #AE3426;
+  --danger-doux: #FAE7E3;
+
+  /* Ombres (teintées de brun) */
+  --ombre-1: 0 1px 2px rgba(42, 29, 22, .05), 0 1px 1px rgba(42, 29, 22, .03);
+  --ombre-2: 0 2px 6px rgba(42, 29, 22, .05), 0 10px 28px rgba(42, 29, 22, .07);
+  --ombre-3: 0 18px 50px rgba(42, 29, 22, .18), 0 4px 12px rgba(42, 29, 22, .08);
+  --ombre-haut: 0 -8px 28px rgba(42, 29, 22, .08);
+  --voile: rgba(24, 16, 11, .48);
+
+  /* Typographie */
+  --police: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --police-titre: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --t-xs: 12.5px;
+  --t-s: 13.5px;
+  --t-m: 15px;
+  --t-base: 16px;
+  --t-l: 18px;
+  --t-xl: 21px;
+  --t-2xl: 26px;
+  --t-3xl: 32px;
+
+  /* Espacements (rythme de 4 px) */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 16px;
+  --e5: 20px;
+  --e6: 24px;
+  --e8: 32px;
+  --e10: 40px;
+  --e12: 48px;
+  --gouttiere: max(16px, env(safe-area-inset-left, 0px));
+  --gouttiere-d: max(16px, env(safe-area-inset-right, 0px));
+
+  /* Rayons */
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 20px;
+  --r-xl: 28px;
+  --r-rond: 999px;
+
+  /* Mouvements */
+  --rapide: 140ms;
+  --moyen: 240ms;
+  --lent: 420ms;
+  --sortie: cubic-bezier(.22, 1, .36, 1);
+  --ressort: cubic-bezier(.34, 1.4, .64, 1);
+
+  /* Dimensions */
+  --cible: 44px;
+  --h-entete: 60px;
+  --h-nav: 64px;
+  --contenu: 1240px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fond: #15110E;
+  --fond-2: #1A1511;
+  --surface: #1E1814;
+  --surface-2: #27201B;
+  --surface-3: #332A23;
+  --ligne: #352C26;
+  --ligne-2: #463B33;
+  --ligne-saisie: #7B6B5F;
+  --encre: #F6EFE8;
+  --encre-2: #CFC1B5;
+  --encre-3: #AE9E91;
+  --marque: #D6A882;
+  --marque-texte: #DDB08B;
+  --marque-doux: #2E241D;
+  --marque-doux-2: #3A2D24;
+  --ebene: #F1E4D6;
+  --ebene-2: #E4D3C1;
+  --sur-ebene: #1E1611;
+  --or: #E2B25C;
+  --or-texte: #E2B25C;
+  --promo: #F2927F;
+  --promo-doux: #38201C;
+  --ok: #6FCB98;
+  --ok-doux: #1C2E23;
+  --alerte: #E7B062;
+  --alerte-doux: #33281A;
+  --info: #8DB4EE;
+  --info-doux: #1C2636;
+  --danger: #F2927F;
+  --danger-doux: #38201C;
+  --ombre-1: 0 1px 2px rgba(0, 0, 0, .3);
+  --ombre-2: 0 2px 8px rgba(0, 0, 0, .28), 0 10px 28px rgba(0, 0, 0, .25);
+  --ombre-3: 0 18px 50px rgba(0, 0, 0, .5);
+  --ombre-haut: 0 -8px 28px rgba(0, 0, 0, .35);
+  --voile: rgba(0, 0, 0, .62);
+}

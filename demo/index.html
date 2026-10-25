@@ -1,0 +1,156 @@
+<title>Sokoyetu</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Démonstration de Sokoyetu : la boutique en ligne et son administration, reliées, dans le navigateur.">
+<style>
+/* Mise en page : un bandeau de marque, puis l'établi — la boutique dans un téléphone à gauche, l'administration à droite (ordinateur) ; deux cartes d'aperçu sur téléphone. */
+@font-face { font-family: 'Fraunces'; font-weight: 100 900; font-display: swap; src: url({{FRAUNCES}}) format('woff2-variations'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 200 800; font-display: swap; src: url({{JAKARTA}}) format('woff2-variations'); }
+:root {
+  --fond: #FBF8F4; --surface: #FFFFFF; --surface-2: #F4EDE5; --ligne: #E9DFD4;
+  --encre: #1E1611; --encre-2: #5A4B41; --encre-3: #75665B;
+  --marque: #7A4C33; --ebene: #2A1D16; --sur-ebene: #FFF8F1; --or: #C8902E; --ok: #1F6B45; --ok-doux: #E4F1E8;
+  --titre: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --texte: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ombre: 0 2px 6px rgba(42, 29, 22, .05), 0 14px 36px rgba(42, 29, 22, .09);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --fond: #15110E; --surface: #1E1814; --surface-2: #27201B; --ligne: #352C26;
+  --encre: #F6EFE8; --encre-2: #CFC1B5; --encre-3: #AE9E91;
+  --marque: #DDB08B; --ebene: #F1E4D6; --sur-ebene: #1E1611; --or: #E2B25C; --ok: #6FCB98; --ok-doux: #1C2E23;
+  --ombre: 0 2px 8px rgba(0, 0, 0, .3), 0 14px 36px rgba(0, 0, 0, .3); color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --fond: #15110E; --surface: #1E1814; --surface-2: #27201B; --ligne: #352C26;
+  --encre: #F6EFE8; --encre-2: #CFC1B5; --encre-3: #AE9E91;
+  --marque: #DDB08B; --ebene: #F1E4D6; --sur-ebene: #1E1611; --or: #E2B25C; --ok: #6FCB98; --ok-doux: #1C2E23;
+  --ombre: 0 2px 8px rgba(0, 0, 0, .3), 0 14px 36px rgba(0, 0, 0, .3); color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--fond); color: var(--encre); font: 400 16px/1.55 var(--texte); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+h1, h2, h3, p, ol { margin: 0; }
+.page { max-width: 1280px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+
+.tete { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px 32px; }
+.marque { font-family: var(--titre); font-weight: 650; font-size: clamp(40px, 9vw, 58px); letter-spacing: -.03em; line-height: 1; }
+.marque i { font-style: normal; color: var(--or); }
+.etiquette { display: inline-block; margin-bottom: 10px; font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; color: var(--encre-3); }
+.tete p { max-width: 56ch; color: var(--encre-2); margin-top: 10px; text-wrap: pretty; }
+.actions-tete { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 20px; border-radius: 999px; border: 1px solid transparent; font: 700 15px/1 var(--texte); text-decoration: none; cursor: pointer; transition: transform .14s, background-color .14s; }
+.btn:active { transform: scale(.97); }
+.btn-plein { background: var(--ebene); color: var(--sur-ebene); }
+.btn-ligne { background: var(--surface); color: var(--encre); border-color: var(--ligne); }
+.btn:focus-visible, .carte:focus-visible { outline: 2.5px solid var(--marque); outline-offset: 3px; }
+
+/* Établi (ordinateur) */
+.etabli { display: none; grid-template-columns: 392px minmax(0, 1fr); gap: 24px; align-items: start; }
+.cadre { display: grid; gap: 10px; min-width: 0; }
+.cadre-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.cadre-tete b { font-weight: 750; }
+.adresse { font: 600 12.5px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: var(--encre-3); background: var(--surface-2); border: 1px solid var(--ligne); padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+.telephone { width: 392px; height: 820px; padding: 10px; border-radius: 44px; background: #17110D; box-shadow: var(--ombre); }
+.telephone iframe { width: 372px; height: 800px; border: 0; border-radius: 35px; background: #FBF8F4; display: block; }
+.ecran { height: 820px; border-radius: 18px; overflow: hidden; border: 1px solid var(--ligne); box-shadow: var(--ombre); background: #FBF8F4; }
+.ecran iframe { width: 100%; height: 100%; border: 0; display: block; }
+@media (min-width: 1100px) { .etabli { display: grid; } .cartes { display: none; } }
+
+/* Cartes (téléphone et tablette) */
+.cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.carte { display: grid; grid-template-rows: auto 1fr; text-decoration: none; background: var(--surface); border: 1px solid var(--ligne); border-radius: 24px; overflow: hidden; box-shadow: var(--ombre); transition: transform .18s; }
+.carte:active { transform: scale(.985); }
+.carte img { width: 100%; max-width: 100%; height: auto; aspect-ratio: 780 / 900; object-fit: cover; object-position: top; display: block; background: var(--surface-2); }
+.carte div { display: grid; gap: 6px; padding: 16px 18px 20px; }
+.carte h2 { font-size: 20px; font-weight: 750; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.carte h2 span { font-size: 22px; color: var(--marque); }
+.carte p { color: var(--encre-2); font-size: 15px; }
+
+/* Parcours à essayer */
+.parcours { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.parcours h2 { grid-column: 1 / -1; font-family: var(--titre); font-weight: 620; font-size: 26px; letter-spacing: -.015em; }
+.etape { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--ligne); }
+.etape > span { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--ebene); color: var(--sur-ebene); font-weight: 800; font-size: 14px; }
+.etape b { display: block; font-weight: 750; margin-bottom: 2px; }
+.etape p { color: var(--encre-2); font-size: 14.5px; }
+code { font: 650 13.5px ui-monospace, 'SF Mono', Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--ligne); padding: 1px 6px; border-radius: 6px; color: var(--encre); white-space: nowrap; }
+
+.pied { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-top: 20px; border-top: 1px solid var(--ligne); color: var(--encre-3); font-size: 14px; }
+.pied p { max-width: 70ch; }
+.reinit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reinit[data-etat="confirmer"] .btn-ligne { border-color: var(--marque); }
+.message { font-weight: 650; color: var(--ok); }
+@media (prefers-reduced-motion: reduce) { .btn, .carte { transition: none; } }
+</style>
+
+<main class="page">
+  <header class="tete">
+    <div>
+      <span class="etiquette">Démonstration</span>
+      <h1 class="marque">Sokoyetu<i>.</i></h1>
+      <p>La boutique et son administration, reliées comme sur le vrai serveur. Tout se passe dans ce navigateur : commandez un article, puis validez le paiement Mobile Money côté gestion.</p>
+    </div>
+    <div class="actions-tete">
+      <a class="btn btn-plein" href="boutique/index.html">Ouvrir la boutique</a>
+      <a class="btn btn-ligne" href="admin/index.html">Ouvrir l’administration</a>
+    </div>
+  </header>
+
+  <section class="etabli" aria-label="La boutique et l’administration côte à côte">
+    <div class="cadre">
+      <div class="cadre-tete"><b>Boutique</b><span class="adresse">sokoyakwetu.com</span></div>
+      <div class="telephone"><iframe id="cadre-boutique" title="Boutique Sokoyetu" data-src="boutique/index.html"></iframe></div>
+    </div>
+    <div class="cadre">
+      <div class="cadre-tete"><b>Administration</b><span class="adresse">admin.sokoyakwetu.com</span></div>
+      <div class="ecran"><iframe id="cadre-admin" title="Administration Sokoyetu" data-src="admin/index.html"></iframe></div>
+    </div>
+  </section>
+
+  <section class="cartes" aria-label="Les deux applications">
+    <a class="carte" href="boutique/index.html">
+      <img src="boutique/captures/accueil.webp" alt="Accueil de la boutique : le port à conteneurs, Sokoyetu écrit au centre" width="780" height="1688" loading="lazy">
+      <div><h2>La boutique <span aria-hidden="true">→</span></h2><p>Ce que voient vos clients à Bukavu et Goma : rayons, fiches articles, panier et paiement Mobile Money.</p></div>
+    </a>
+    <a class="carte" href="admin/index.html">
+      <img src="apercu-admin.webp" alt="Tableau de bord de l’administration : ventes, commandes à traiter" width="780" height="1688" loading="lazy">
+      <div><h2>L’administration <span aria-hidden="true">→</span></h2><p>Votre côté : commandes en direct, vérification des paiements, produits, stock et réglages.</p></div>
+    </a>
+  </section>
+
+  <section class="parcours">
+    <h2>Le parcours à essayer</h2>
+    <div class="etape"><span>1</span><div><b>Commandez dans la boutique</b><p>Ajoutez un article au panier, choisissez M-Pesa et saisissez un code de transaction au choix, par exemple <code>MP2610.AB12</code>. Le code promo <code>BIENVENUE10</code> marche dès $20.</p></div></div>
+    <div class="etape"><span>2</span><div><b>Vérifiez le paiement</b><p>Dans l’administration (compte déjà rempli), la commande arrive avec une alerte. Touchez « Paiement reçu », puis préparez et expédiez.</p></div></div>
+    <div class="etape"><span>3</span><div><b>Suivez comme le client</b><p>Dans la boutique, « Suivre ma commande » se met à jour à chaque étape. Le stock baisse à la commande et revient si vous l’annulez.</p></div></div>
+  </section>
+
+  <footer class="pied">
+    <p>Données d’exemple gardées seulement dans ce navigateur. Aucun paiement réel. L’assistant IA des fiches produits ne fonctionne que sur le vrai serveur.</p>
+    <div class="reinit" id="reinit">
+      <button class="btn btn-ligne" id="btn-reinit" type="button">Réinitialiser la démo</button>
+      <span class="message" id="message-reinit" role="status"></span>
+    </div>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var large = window.matchMedia('(min-width: 1100px)');
+  function charger() { if (!large.matches) return; document.querySelectorAll('.etabli iframe').forEach(function (f) { if (!f.src) f.src = f.dataset.src; }); }
+  charger(); large.addEventListener ? large.addEventListener('change', charger) : large.addListener(charger);
+
+  var zone = document.getElementById('reinit'), btn = document.getElementById('btn-reinit'), msg = document.getElementById('message-reinit'), minuteur;
+  btn.addEventListener('click', function () {
+    if (zone.dataset.etat !== 'confirmer') {
+      zone.dataset.etat = 'confirmer'; btn.textContent = 'Confirmer : tout effacer'; msg.textContent = 'Commandes, produits et réglages reviennent à l’exemple.';
+      clearTimeout(minuteur); minuteur = setTimeout(function () { zone.dataset.etat = ''; btn.textContent = 'Réinitialiser la démo'; msg.textContent = ''; }, 6000);
+      return;
+    }
+    clearTimeout(minuteur);
+    try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('sokoyetu-demo:') === 0 || k.indexOf('sokoyetu:') === 0) localStorage.removeItem(k); }); } catch (e) { }
+    document.querySelectorAll('.etabli iframe').forEach(function (f) { if (f.src) f.src = f.dataset.src; });
+    zone.dataset.etat = ''; btn.textContent = 'Réinitialiser la démo'; msg.textContent = 'Démo remise à zéro.';
+  });
+})();
+</script>

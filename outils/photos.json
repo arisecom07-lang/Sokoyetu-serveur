@@ -1,0 +1,146 @@
+{
+ "_": "Photos du catalogue d'exemple, toutes prises sur Unsplash (licence Unsplash : usage commercial libre, sans attribution obligatoire). « choix » est la clé de la photo sur images.unsplash.com, retenue après vérification à l'œil (pas de marque visible). fx/fy : point à garder au centre du recadrage (0 à 1).",
+ "ban-port": {
+  "format": "banniere",
+  "choix": "1578575437130-527eed3abbec",
+  "alt": "Port à conteneurs : grues de chargement et porte-conteneurs à quai"
+ },
+ "ban-douane": {
+  "format": "banniere",
+  "choix": "1494412574643-ff11b0a5c1c3",
+  "alt": "Terminal à conteneurs vu du ciel, avec ses grues"
+ },
+ "ban-transit": {
+  "format": "banniere",
+  "choix": "1519003722824-194d4455a60c",
+  "alt": "Camion de marchandises sur une route de montagne"
+ },
+ "cat-femmes": {
+  "format": "rayon",
+  "choix": "1531123897727-8f129e1688ce",
+  "alt": "Portrait d’une femme élégante",
+  "fy": 0.32
+ },
+ "cat-hommes": {
+  "format": "rayon",
+  "choix": "1531384441138-2736e62e0919",
+  "alt": "Homme souriant en pull et béret",
+  "fy": 0.3
+ },
+ "cat-montres": {
+  "format": "rayon",
+  "choix": "1509048191080-d2984bad6ae5",
+  "alt": "Montre à gousset suspendue à sa chaîne",
+  "fy": 0.5
+ },
+ "cat-sacs": {
+  "format": "rayon",
+  "choix": "1598532163257-ae3c6b2524b6",
+  "alt": "Cabas en cuir tressé"
+ },
+ "cat-bijoux": {
+  "format": "rayon",
+  "choix": "1515562141207-7a88fb7ce338",
+  "alt": "Collier de perles dans son écrin"
+ },
+ "cat-electronique": {
+  "format": "rayon",
+  "choix": "1505740420928-5e560c06d30e",
+  "alt": "Casque audio sur fond jaune"
+ },
+ "p01-1": {
+  "format": "produit",
+  "choix": "1585487000160-6ebcfceb0d03",
+  "alt": "Robe midi bordeaux en velours côtelé",
+  "fy": 0.45
+ },
+ "p02-1": {
+  "format": "produit",
+  "choix": "1543163521-1bf539c55dd2",
+  "alt": "Escarpins à motif fleuri"
+ },
+ "p03-1": {
+  "format": "produit",
+  "choix": "1600857062241-98e5dba7f214",
+  "alt": "Sac bandoulière en cuir camel"
+ },
+ "p04-1": {
+  "format": "produit",
+  "choix": "1535632066927-ab7c9ab60908",
+  "alt": "Boucles d’oreilles pendantes, strass bleus"
+ },
+ "p05-1": {
+  "format": "produit",
+  "choix": "1599643478518-a784e5dc4c8f",
+  "alt": "Colliers dorés à pendentifs"
+ },
+ "p06-1": {
+  "format": "produit",
+  "choix": "1611591437281-460bfbe1220a",
+  "alt": "Bracelet or rose serti"
+ },
+ "p07-1": {
+  "format": "produit",
+  "choix": "1523275335684-37898b6baf30",
+  "alt": "Montres blanches minimalistes"
+ },
+ "p08-1": {
+  "format": "produit",
+  "choix": "1596755094514-f87e34085b2c",
+  "alt": "Chemise en chambray sur cintre"
+ },
+ "p09-1": {
+  "format": "produit",
+  "choix": "1602810318383-e386cc2a3ccf",
+  "alt": "Chemises habillées en coton pliées"
+ },
+ "p10-1": {
+  "format": "produit",
+  "choix": "1622560480605-d83c853bc5c3",
+  "alt": "Sac à dos en cuir marron"
+ },
+ "p11-1": {
+  "format": "produit",
+  "choix": "1511499767150-a48a237f0083",
+  "alt": "Lunettes de soleil rondes, monture dorée"
+ },
+ "p12-1": {
+  "format": "produit",
+  "choix": "1605733513597-a8f8341084e6",
+  "alt": "Cartable en cuir gris"
+ },
+ "p13-1": {
+  "format": "produit",
+  "choix": "1585995603413-eb35b5f4a50b",
+  "alt": "Batterie externe et ses câbles",
+  "fx": 0.3
+ },
+ "p14-1": {
+  "format": "produit",
+  "choix": "1606220588913-b3aacb4d2f46",
+  "alt": "Écouteurs sans fil noirs et leur boîtier",
+  "fx": 0.4
+ },
+ "p15-1": {
+  "format": "produit",
+  "choix": "1531104985437-603d6490e6d4",
+  "alt": "Enceinte de bureau noire",
+  "fx": 0.42
+ },
+ "p16-1": {
+  "format": "produit",
+  "choix": "1583394838336-acd977736f90",
+  "alt": "Casque audio noir"
+ },
+ "p17-1": {
+  "format": "produit",
+  "choix": "1524592094714-0f0654e20314",
+  "alt": "Montre classique à cadran blanc, bracelet en cuir"
+ },
+ "p18-1": {
+  "format": "produit",
+  "choix": "1617043786394-f977fa12eddf",
+  "alt": "Montre connectée noire",
+  "fx": 0.55
+ }
+}

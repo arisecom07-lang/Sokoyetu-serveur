@@ -1,0 +1,21 @@
+# Sokoyetu
+
+> Boutique en ligne de Bukavu (République démocratique du Congo) : mode, montres, sacs, bijoux, accessoires et électronique. Articles en stock à Bukavu (livrés en 24 à 48 h) ou importés de Chine sur commande (environ 20 jours, transport et dédouanement compris). Livraison à Bukavu et Goma, retrait en boutique possible. Prix en dollars américains (USD), équivalent indicatif en francs congolais.
+
+## Commander
+- Choisir un article, sa couleur et sa taille, puis « Ajouter au panier ».
+- Panier, puis « Commander » : 1) coordonnées et zone de livraison, 2) mode de paiement, 3) paiement et confirmation.
+- Paiement Mobile Money à la commande (M-Pesa, Airtel Money, Orange Money) : envoyer le montant exact au numéro affiché, puis saisir le code de transaction reçu par SMS. Il n'y a pas de paiement à la livraison.
+- La commande est confirmée dès que la boutique a vérifié le paiement. Suivi : « Compte », puis « Mes commandes », ou le lien de suivi reçu.
+
+## Pages
+- [Boutique](https://sokoyakwetu.com/)
+- [Nouveautés](https://sokoyakwetu.com/nouveautes)
+- [Rayons](https://sokoyakwetu.com/categories)
+- [Conditions de vente](https://sokoyakwetu.com/infos/conditions)
+- [Retours et remboursements](https://sokoyakwetu.com/infos/retours)
+- [Confidentialité](https://sokoyakwetu.com/infos/confidentialite)
+
+## Règles
+- Annulation possible tant que la commande n'est pas expédiée ; remboursement sous 72 heures sur le numéro Mobile Money qui a payé.
+- La boutique ne demande jamais le code PIN Mobile Money.
