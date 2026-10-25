@@ -48,6 +48,8 @@ p { text-wrap: pretty; }
 .pile { display: grid; gap: var(--e3); }
 .pile-l { display: grid; gap: var(--e5); }
 .rangee { display: flex; align-items: center; gap: var(--e2); }
+p.rangee { align-items: flex-start; } /* texte sur plusieurs lignes : l'icône reste sur la première */
+p.rangee > .ic { flex: none; margin-top: .2em; }
 .rangee-l { display: flex; align-items: center; gap: var(--e3); flex-wrap: wrap; }
 .entre { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); }
 .pousse { margin-left: auto; }

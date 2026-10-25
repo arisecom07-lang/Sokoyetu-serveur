@@ -102,15 +102,15 @@
 /* ---------- Indicateurs ---------- */
 .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e3); }
 .kpi {
-  display: grid; align-content: start; gap: 6px; min-width: 0; padding: var(--e4);
+  display: grid; grid-template-rows: auto 1fr auto; gap: 6px; min-width: 0; padding: var(--e4);
   background: var(--surface); border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-1);
   transition: transform var(--rapide) var(--sortie), box-shadow var(--rapide), border-color var(--rapide);
 }
 a.kpi:hover { border-color: var(--ligne-2); box-shadow: var(--ombre-2); }
 a.kpi:active { transform: scale(.985); }
-.kpi-lib { display: flex; align-items: center; gap: 7px; font-size: var(--t-s); font-weight: 650; color: var(--encre-2); min-width: 0; }
-.kpi-lib .ic { --ic: 17px; color: var(--marque-texte); }
-.kpi-val { font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpi-lib { display: flex; align-items: flex-start; gap: 7px; font-size: var(--t-s); font-weight: 650; color: var(--encre-2); min-width: 0; }
+.kpi-lib .ic { --ic: 17px; flex: none; margin-top: 1px; color: var(--marque-texte); }
+.kpi-val { align-self: end; font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kpi-sous { font-size: var(--t-xs); font-weight: 600; color: var(--encre-3); line-height: 1.35; }
 .ton-texte-ok { color: var(--ok); }
 .ton-texte-danger { color: var(--danger); }
