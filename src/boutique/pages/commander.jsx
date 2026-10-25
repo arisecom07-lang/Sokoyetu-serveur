@@ -10,7 +10,7 @@ import { requete } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { dollars, francs, telephone, secret, pluriel, classes } from '../../commun/js/outils.js';
 import { lien, naviguer } from '../routeur.js';
-import { cfg, lignesPanier, panier, moyensPaiement, profil, enregistrerProfil, viderPanier, suivreCommande, recevoirCommande, comptesOuverts, connecte, sansCompte, continuerSansCompte, client } from '../etat.js';
+import { cfg, lignesACommander, aCommander, moyensPaiement, profil, enregistrerProfil, retirerCommandes, suivreCommande, recevoirCommande, comptesOuverts, connecte, sansCompte, continuerSansCompte, client } from '../etat.js';
 import { InvitationCompte } from './connexion.jsx';
 import { EntetePage, BarreAction } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
@@ -72,7 +72,7 @@ export function NoteModeTest() {
 }
 
 export function Commander() {
-  const c = cfg.value; const ms = moyensPaiement.value; const lignes = lignesPanier.value;
+  const c = cfg.value; const ms = moyensPaiement.value; const lignes = lignesACommander.value;
   const [f, setF] = useState(brouillonInitial);
   const maj = (p) => setF((x) => ({ ...x, ...p }));
   const champ = (k) => (e) => maj({ [k]: e.currentTarget.value, erreurs: { ...f.erreurs, [k]: '' } });
@@ -87,7 +87,7 @@ export function Commander() {
   useEffect(() => { if (!ms.some((m) => m.k === f.methode) && ms[0]) maj({ methode: ms[0].k }); }, [ms.length]);
 
   if (!lignes.length) {
-    return <><EntetePage titre="Commande" repli="/panier" /><main id="contenu" class="page conteneur"><Vide icone="sac" titre="Votre panier est vide" texte="Ajoutez des articles avant de commander."><a class="btn btn-primaire" href={lien('/')}>Retour à la boutique</a></Vide></main></>;
+    return <><EntetePage titre="Commande" repli="/panier" /><main id="contenu" class="page conteneur"><Vide icone="sac" titre="Aucun article à commander" texte="Cochez dans votre panier les articles que vous voulez commander maintenant."><a class="btn btn-primaire" href={lien('/panier')}>Voir mon panier</a></Vide></main></>;
   }
 
   // Avant la commande, la création d'un compte est proposée ; « Continuer sans compte » reste toujours possible.
@@ -144,7 +144,7 @@ export function Commander() {
 
   /* Le serveur confirme prix, stock, remise, livraison et frais. Renvoie le devis, ou null si le client doit d'abord revoir le montant. */
   async function confirmerMontant() {
-    const r = await requete('sokoyetu/devis', { method: 'POST', corps: { items: panier.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })), zoneId: f.zoneId, discountCode: f.remise ? f.remise.code : '' } });
+    const r = await requete('sokoyetu/devis', { method: 'POST', corps: { items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })), zoneId: f.zoneId, discountCode: f.remise ? f.remise.code : '' } });
     const bloquants = (r.problemes || []).filter((p) => p.code !== 'remise');
     if (bloquants.length) { panierChange(bloquants.map((p) => p.message)); return null; }
     const remiseRefusee = (r.problemes || []).find((p) => p.code === 'remise');
@@ -177,7 +177,7 @@ export function Commander() {
     const corps = {
       token: f.jeton, termsAccepted: true, website: document.getElementById('site-web')?.value || '',
       customer: { name: f.nom, phone: f.tel }, shipping: { zoneId: f.zoneId, address: f.adresse, landmark: f.repere }, note: f.note,
-      items: panier.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })),
+      items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })),
       discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: telDebite }, total: devis.total
     };
     mesurerEvenement('add_payment_info', { value: devis.total, currency: 'USD', payment_type: moyen.label });
@@ -185,7 +185,7 @@ export function Commander() {
       const r = await requete('sokoyetu/commander', { method: 'POST', corps, delai: 45000 });
       suivreCommande(r.id, f.jeton); recevoirCommande(r.id, r.order);
       enregistrerProfil({ name: R.valider.nom(f.nom), phone: R.valider.telephone(f.tel), zoneId: f.zoneId, address: f.adresse, landmark: f.repere, payMethod: f.methode, payPhone: R.valider.mobileMoney(telDebite) });
-      viderPanier(); Local.retirer('commandeEnCours');
+      retirerCommandes(corps.items); Local.retirer('commandeEnCours');
       naviguer('/paiement/' + r.id, { remplacer: true });
     } catch (err) {
       maj({ envoi: false });

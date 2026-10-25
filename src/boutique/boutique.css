@@ -270,6 +270,18 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .pl-delai .ic { --ic: 14px; }
 .pl-bas { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
 .pl-bas .prix { font-size: 16px; }
+/* Cases à cocher : choisir les articles commandés maintenant, les autres restent dans le panier. */
+.panier-ligne { grid-template-columns: auto 96px minmax(0, 1fr); }
+.pl-case { align-self: center; }
+.panier-ligne[data-coche="non"] { background: var(--surface-2); box-shadow: none; }
+.panier-ligne[data-coche="non"] .pl-photo { opacity: .55; }
+.panier-ligne[data-coche="non"] .pl-titre, .panier-ligne[data-coche="non"] .pl-bas .prix { color: var(--encre-3); }
+.pl-plus-tard { font-size: 12.5px; font-weight: 650; color: var(--encre-3); }
+.case[data-coche="partiel"] .case-boite { background: var(--ebene); border-color: var(--ebene); }
+.case[data-coche="partiel"] .case-boite .ic { opacity: 1; transform: none; }
+.panier-choix { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e3); padding: 4px 12px; }
+.panier-choix .case { align-items: center; font-weight: 650; }
+.panier-filtres { display: flex; flex-wrap: wrap; gap: 8px; }
 .livraison-offerte { margin-top: var(--e4); display: grid; gap: 8px; }
 .livraison-offerte p { display: flex; gap: 6px; align-items: center; color: var(--encre-2); }
 .livraison-offerte .ic { --ic: 16px; color: var(--ok); }
@@ -501,7 +513,8 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 
   .panier-grille, .commande-grille { grid-template-columns: minmax(0, 1fr) 380px; gap: var(--e8); align-items: start; }
   .panier-resume, .commande-resume { position: sticky; top: calc(var(--h-entete) + 20px); }
-  .panier-ligne { grid-template-columns: 120px minmax(0, 1fr); padding: 14px; }
+  .panier-ligne { grid-template-columns: auto 120px minmax(0, 1fr); padding: 14px; }
+  .panier-choix { padding: 4px 14px; }
   .pl-photo { width: 120px; height: 150px; }
   .commande-tete { grid-template-columns: 1fr auto; align-items: center; padding: var(--e8) 0 var(--e6); }
   .commande-tete h1 { font-size: 34px; }

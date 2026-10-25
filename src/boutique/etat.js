@@ -94,14 +94,36 @@ function lirePanier() {
     .map((l) => ({ cle: cleLigne(l.productId, l.color, l.size), productId: l.productId, color: l.color || '', size: l.size || '', qty: Math.min(R.MAX_QTE, R.int(l.qty)) }));
 }
 export const panier = signal(lirePanier());
-const sauverPanier = () => Local.ecrire('panier', panier.value);
 export const nbArticles = computed(() => panier.value.reduce((a, l) => a + l.qty, 0));
+
+/* Choix des articles à commander maintenant (cases à cocher du panier). On garde les lignes décochées :
+   un article qui arrive dans le panier est donc coché d'office, et les autres attendent la prochaine commande.
+   Ce choix reste sur l'appareil (le compte ne garde que le contenu du panier). */
+export const decoches = signal(new Set(Local.lire('panierDecoches', []) || []));
+function sauverDecoches() { Local.ecrire('panierDecoches', [...decoches.value]); }
+function sauverPanier() {
+  Local.ecrire('panier', panier.value);
+  const cles = new Set(panier.value.map((l) => l.cle));
+  if ([...decoches.value].some((k) => !cles.has(k))) { decoches.value = new Set([...decoches.value].filter((k) => cles.has(k))); sauverDecoches(); }
+}
+export const aCommander = computed(() => panier.value.filter((l) => !decoches.value.has(l.cle)));
+export const nbACommander = computed(() => aCommander.value.reduce((a, l) => a + l.qty, 0));
+export function cocherLigne(cle, coche) {
+  const s = new Set(decoches.value);
+  if (coche) s.delete(cle); else s.add(cle);
+  decoches.value = s; sauverDecoches();
+}
+/* Coche exactement les lignes retenues par « garder » (toutes, seulement Bukavu, seulement l'import…). */
+export function cocherSeulement(garder) {
+  decoches.value = new Set(panier.value.filter((l) => !garder(l)).map((l) => l.cle)); sauverDecoches();
+}
 
 /* Lignes du panier avec leur article ; les articles retirés de la vente sont écartés une fois le catalogue à jour. */
 export const lignesPanier = computed(() => {
-  const m = produitsParId.value;
-  return panier.value.map((l) => ({ ...l, p: m.get(l.productId) || null })).filter((l) => l.p || !catalogueAJour.value);
+  const m = produitsParId.value; const d = decoches.value;
+  return panier.value.map((l) => ({ ...l, p: m.get(l.productId) || null, coche: !d.has(l.cle) })).filter((l) => l.p || !catalogueAJour.value);
 });
+export const lignesACommander = computed(() => lignesPanier.value.filter((l) => l.coche));
 export function nettoyerPanier() {
   if (!catalogueAJour.value) return;
   const m = produitsParId.value;
@@ -119,12 +141,19 @@ export function ajouterAuPanier(p, color, size, qty) {
   panier.value = ex ? panier.value.map((l) => (l.cle === cle ? { ...l, qty: Math.min(R.MAX_QTE, l.qty + qty) } : l))
     : [...panier.value, { cle, productId: p.id, color: color || '', size: size || '', qty: Math.min(R.MAX_QTE, qty) }];
   sauverPanier();
+  if (decoches.value.has(cle)) cocherLigne(cle, true); // remis ou ajouté de nouveau : on le veut
 }
 export function changerQuantite(cle, qty) {
   panier.value = qty <= 0 ? panier.value.filter((l) => l.cle !== cle) : panier.value.map((l) => (l.cle === cle ? { ...l, qty: Math.min(R.MAX_QTE, qty) } : l));
   sauverPanier();
 }
 export function viderPanier() { panier.value = []; sauverPanier(); }
+/* Commande passée : seuls les articles cochés quittent le panier, les autres y restent, cochés pour la prochaine commande. */
+export function retirerCommandes(items) {
+  const parties = new Set(items.map((l) => cleLigne(l.productId, l.color, l.size)));
+  batch(() => { panier.value = panier.value.filter((l) => !parties.has(l.cle)); decoches.value = new Set(); });
+  sauverPanier(); sauverDecoches();
+}
 
 /* ---------- Favoris, coordonnées, recherches ---------- */
 
@@ -201,9 +230,9 @@ export function remettreAuPanier(o) {
 
 export function effacerAppareil() {
   Auth.effacer(); Local.retirer('compteModifie');
-  ['panier', 'favoris', 'profil', 'recherches', 'mesCommandes', 'consentement', 'installMasque', 'commandeEnCours', 'visiteur'].forEach((k) => Local.retirer(k));
+  ['panier', 'panierDecoches', 'favoris', 'profil', 'recherches', 'mesCommandes', 'consentement', 'installMasque', 'commandeEnCours', 'visiteur'].forEach((k) => Local.retirer(k));
   desabonnements.forEach((f) => f()); desabonnements.clear();
-  batch(() => { client.value = null; panier.value = []; favoris.value = new Set(); profil.value = {}; recherches.value = []; suivis.value = []; commandes.value = new Map(); });
+  batch(() => { client.value = null; panier.value = []; decoches.value = new Set(); favoris.value = new Set(); profil.value = {}; recherches.value = []; suivis.value = []; commandes.value = new Map(); });
 }
 
 /* ---------- Compte client (facultatif) : connexion par code (WhatsApp ou SMS), panier, favoris et commandes sur tous les appareils ---------- */
@@ -283,9 +312,9 @@ export async function nommerCompte(nom) {
 export function seDeconnecterCompte() {
   // Appareil prêté ou partagé : le panier, les favoris et les commandes du compte n'y restent pas (ils sont dans le compte).
   deconnecteLocalement();
-  ['panier', 'favoris', 'profil', 'mesCommandes', 'commandeEnCours'].forEach((k) => Local.retirer(k));
+  ['panier', 'panierDecoches', 'favoris', 'profil', 'mesCommandes', 'commandeEnCours'].forEach((k) => Local.retirer(k));
   desabonnements.forEach((f) => f()); desabonnements.clear();
-  batch(() => { panier.value = []; favoris.value = new Set(); profil.value = {}; suivis.value = []; commandes.value = new Map(); });
+  batch(() => { decoches.value = new Set(); panier.value = []; favoris.value = new Set(); profil.value = {}; suivis.value = []; commandes.value = new Map(); });
 }
 export async function supprimerCompte() {
   await appelCompte('sokoyetu/compte/supprimer', { method: 'POST', corps: {} });

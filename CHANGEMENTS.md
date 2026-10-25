@@ -1,3 +1,20 @@
+# Sokoyetu — panier : choisir les articles à commander (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Une case à cocher à gauche de chaque article du panier.** Le client coche ce qu'il commande maintenant : le sous-total, les frais de service, le total et la commande ne portent que sur les articles cochés. Les articles décochés **restent dans le panier** (grisés, « Reste dans le panier pour plus tard »).
+- **Tout sélectionner** en haut de la liste, et quand le panier mélange les deux provenances, deux boutons : **En stock à Bukavu** (24–48 h) et **Import Chine** — pour payer tout de suite ce qui est sur place et commander l'import plus tard, ou l'inverse.
+- Le bouton indique combien d'articles partent : « Commander 3 articles », « Commander (3) » sur téléphone. Rien de coché : le bouton est désactivé avec un rappel.
+- Après le paiement, seuls les articles commandés quittent le panier ; ceux qui restent sont cochés de nouveau pour la prochaine commande. Un article ajouté au panier est toujours coché d'office.
+
+## Détails techniques
+
+- `etat.js` : signal `decoches` (lignes décochées, gardées sur l'appareil dans `panierDecoches`, pas dans le compte), `aCommander`, `lignesACommander`, `nbACommander`, `cocherLigne`, `cocherSeulement`, `retirerCommandes` (remplace `viderPanier` après une commande). Le compte client continue de synchroniser le panier entier.
+- `devisLocal`, le devis serveur et l'envoi de la commande ne prennent que les lignes cochées ; les problèmes du devis sont rattachés à la ligne par sa clé.
+- Couleurs (thème clair) dans `couleurs.css` : cases et bouton de provenance en vert forêt (`--c3`).
+
+---
+
 # Sokoyetu — comptes clients facultatifs (octobre 2026)
 
 ## Ce qui change pour vous

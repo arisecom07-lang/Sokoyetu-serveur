@@ -97,3 +97,9 @@
 :root:not([data-theme="dark"]) .avantages-compte li:nth-child(3n+3) { --c: var(--c3); --c-doux: var(--c3-doux); }
 :root:not([data-theme="dark"]) .avantages-compte .menu-icone { background: var(--c-doux); color: var(--c); }
 :root:not([data-theme="dark"]) .invitation-compte, :root:not([data-theme="dark"]) .page-connexion > .carte { border-top: 3px solid var(--c1); }
+
+/* ---- Panier : les cases cochées (articles commandés maintenant) en vert forêt ---- */
+:root:not([data-theme="dark"]) .page-panier .panier-choix, :root:not([data-theme="dark"]) .page-panier .panier-lignes { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .page-panier .case[data-coche="oui"] .case-boite, :root:not([data-theme="dark"]) .page-panier .case[data-coche="partiel"] .case-boite { background: var(--c); border-color: var(--c); color: #fff; }
+:root:not([data-theme="dark"]) .page-panier .panier-ligne[data-coche="oui"] { border-color: color-mix(in srgb, var(--c) 35%, var(--ligne)); }
+:root:not([data-theme="dark"]) .page-panier .panier-filtres .puce[aria-pressed="true"] { background: var(--c-doux); border-color: var(--c); color: var(--c); }
