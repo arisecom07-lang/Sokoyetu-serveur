@@ -396,3 +396,10 @@ code.commande, .aide-mdp code {
 .demarrage img { width: 64px; height: 64px; border-radius: 18px; animation: respire 1.6s ease-in-out infinite; }
 @keyframes respire { 50% { transform: scale(.94); opacity: .8; } }
 .connexion .note { text-align: left; }
+
+/* ---- Historique des commandes confirmées : un bloc par mois ---- */
+.historique-mois { display: grid; gap: var(--e2); }
+.historique-mois-tete { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e3); flex-wrap: wrap; padding: 0 var(--e1); font-family: var(--police-titre); font-size: var(--t-l); font-weight: 600; text-transform: capitalize; }
+.historique-mois-tete small { font-family: var(--police); font-size: var(--t-s); font-weight: 600; color: var(--encre-3); text-transform: none; }
+.historique-mois-tete small b { color: var(--encre); font-weight: 750; }
+.montant-annule { text-decoration: line-through; color: var(--encre-3); }

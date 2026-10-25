@@ -45,7 +45,8 @@ export function Commandes() {
   const aTraiter = os.filter(R.aTraiter).length;
   return (
     <>
-      <TetePage titre="Commandes" sous={`${pluriel(os.length, 'commande')}${aTraiter ? ` · ${aTraiter} à traiter` : ''}`} />
+      <TetePage titre="Commandes" sous={`${pluriel(os.length, 'commande')}${aTraiter ? ` · ${aTraiter} à traiter` : ''}`}
+        actions={<a class="btn btn-secondaire btn-s" href={lien('/historique')}><Icone n="horloge" />Historique</a>} />
       <div class="outils-liste">
         <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, téléphone, n° ou transaction" aria-label="Rechercher une commande" /></label>
         <div class="puces" role="group" aria-label="Filtrer les commandes">

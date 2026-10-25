@@ -210,10 +210,33 @@ export function Compte() {
   );
 }
 
+/* Une commande est « en cours » tant qu'elle n'est ni remise au client ni annulée. */
+const estEnCours = (o) => o.status !== 'cancelled' && o.fulfillment !== 'delivered';
+
+function CarteCommande({ o }) {
+  const s = R.statutClient(o);
+  return (
+    <li>
+      <a class="carte carte-commande" href={lien((ouvrirPaiement(o) ? '/paiement/' : '/suivi/') + o.id)}>
+        <div class="entre"><b class="code">#{o.number}</b><Pastille ton={s.ton} point>{s.label}</Pastille></div>
+        <p class="discret petit">{dateHeure(o.createdAt)} · {pluriel((o.items || []).reduce((a, i) => a + i.qty, 0), 'article')}</p>
+        <div class="cc-bas">
+          <div class="cc-photos">{(o.items || []).slice(0, 4).map((i, k) => <span key={k}><Photo m={imageLigne(i)} alt="" tailles="48px" /></span>)}</div>
+          <span class="prix">{dollars(o.total)}</span>
+        </div>
+      </a>
+    </li>
+  );
+}
+
 export function Commandes() {
   useEffect(() => { actualiserMesCommandes(); }, []);
   useSeo(() => ({ titre: 'Mes commandes', noindex: true }), []);
   const liste = [...commandes.value.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const enCours = liste.filter(estEnCours); const passees = liste.filter((o) => !estEnCours(o));
+  // Ce que le client a réellement payé pour les commandes reçues (les annulées et remboursées ne comptent pas).
+  const recues = passees.filter((o) => o.status !== 'cancelled' && R.estPayee(o));
+  const depense = recues.reduce((a, o) => a + R.num(o.total), 0);
   return (
     <>
       <EntetePage titre="Mes commandes" sous={liste.length ? 'Passées ou retrouvées sur ce téléphone' : ''} repli="/compte" />
@@ -225,26 +248,21 @@ export function Commandes() {
               <a class="btn btn-fantome" href={lien('/')}>Commencer mes achats</a>
             </Vide>
           ) : (
-            <>
-              <ul class="pile commandes-liste">
-                {liste.map((o) => {
-                  const s = R.statutClient(o);
-                  return (
-                    <li key={o.id}>
-                      <a class="carte carte-commande" href={lien((ouvrirPaiement(o) ? '/paiement/' : '/suivi/') + o.id)}>
-                        <div class="entre"><b class="code">#{o.number}</b><Pastille ton={s.ton} point>{s.label}</Pastille></div>
-                        <p class="discret petit">{dateHeure(o.createdAt)} · {pluriel((o.items || []).reduce((a, i) => a + i.qty, 0), 'article')}</p>
-                        <div class="cc-bas">
-                          <div class="cc-photos">{(o.items || []).slice(0, 4).map((i, k) => <span key={k}><Photo m={imageLigne(i)} alt="" tailles="48px" /></span>)}</div>
-                          <span class="prix">{dollars(o.total)}</span>
-                        </div>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p class="centre espace-haut"><a class="lien" href={lien('/compte/retrouver')}>Une commande manque ? Retrouvez-la avec son numéro</a></p>
-            </>
+            <div class="pile-l">
+              {enCours.length ? (
+                <section class="pile" aria-labelledby="cmd-en-cours">
+                  <h2 id="cmd-en-cours" class="historique-tete"><span>En cours</span><small>{pluriel(enCours.length, 'commande')}</small></h2>
+                  <ul class="pile commandes-liste">{enCours.map((o) => <CarteCommande key={o.id} o={o} />)}</ul>
+                </section>
+              ) : null}
+              {passees.length ? (
+                <section class="pile" aria-labelledby="cmd-historique">
+                  <h2 id="cmd-historique" class="historique-tete"><span>Historique</span><small>{recues.length ? <>{pluriel(recues.length, 'commande reçue', 'commandes reçues')} · <b class="num">{dollars(depense)}</b></> : pluriel(passees.length, 'commande')}</small></h2>
+                  <ul class="pile commandes-liste">{passees.map((o) => <CarteCommande key={o.id} o={o} />)}</ul>
+                </section>
+              ) : null}
+              <p class="centre"><a class="lien" href={lien('/compte/retrouver')}>Une commande manque ? Retrouvez-la avec son numéro</a></p>
+            </div>
           )}
       </main>
       <Pied />
@@ -354,7 +372,9 @@ export function Suivi() {
               )}
               {o.review && s.etape >= 0 ? <Note ton="alerte" icone="info" classe="espace-haut">Un point de votre commande est à vérifier : la boutique vous appelle.</Note> : null}
             </section>
-            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} /></section>
+            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} />
+              {o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <button class="btn btn-secondaire btn-bloc espace-haut" onClick={() => { const n = remettreAuPanier(o); toast(n ? 'Articles ajoutés à votre panier' : 'Ces articles ne sont plus en vente', { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />Commander à nouveau</button> : null}
+            </section>
           </div>
           <div class="pile-l">
             <section class="carte">
