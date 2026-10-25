@@ -73,11 +73,11 @@
   /* Typographie */
   --police: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --police-titre: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
-  --t-xs: 12.5px;
-  --t-s: 13.5px;
-  --t-m: 15px;
-  --t-base: 16px;
-  --t-l: 18px;
+  --t-xs: 12px;
+  --t-s: 13px;
+  --t-m: 14px;
+  --t-base: 15px;
+  --t-l: 17px;
   --t-xl: 21px;
   --t-2xl: 26px;
   --t-3xl: 32px;

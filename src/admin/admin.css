@@ -369,7 +369,7 @@ a.kpi:active { transform: scale(.985); }
 .zone-carte { padding: var(--e4); border-radius: var(--r-m); border: 1px solid var(--ligne); background: var(--fond); }
 .saisie-groupe.suffixe .saisie { padding-left: 14px; padding-right: 52px; }
 .suffixe-texte { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--encre-3); font-weight: 650; pointer-events: none; }
-.texte-long { min-height: 260px; font-size: 14.5px; line-height: 1.6; }
+.texte-long { min-height: 260px; font-size: 16px; line-height: 1.6; }
 .voir-mdp { position: absolute; right: 3px; top: 3px; color: var(--encre-3); }
 code.commande, .aide-mdp code {
   display: block; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--ligne);
