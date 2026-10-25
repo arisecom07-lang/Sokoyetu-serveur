@@ -49,7 +49,7 @@
 
 /* ---------- Champs de formulaire ---------- */
 .champ { display: grid; gap: 6px; min-width: 0; }
-.champ-libelle { font-weight: 650; font-size: 14.5px; color: var(--encre); }
+.champ-libelle { font-weight: 650; font-size: 14px; color: var(--encre); }
 .champ-libelle .facultatif { font-weight: 500; color: var(--encre-3); }
 .champ-aide { font-size: var(--t-s); color: var(--encre-3); line-height: 1.4; }
 .champ-erreur { display: flex; gap: 6px; align-items: flex-start; font-size: var(--t-s); font-weight: 650; color: var(--danger); line-height: 1.4; }
@@ -128,7 +128,7 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 /* ---------- Cartes, listes, sections ---------- */
 .carte { background: var(--surface); border-radius: var(--r-l); border: 1px solid var(--ligne); padding: var(--e5); box-shadow: var(--ombre-1); min-width: 0; }
 .carte-s { padding: var(--e4); }
-.carte-titre { display: flex; align-items: center; gap: 10px; font-size: var(--t-base); font-weight: 750; margin-bottom: var(--e3); }
+.carte-titre { display: flex; align-items: center; gap: 10px; font-size: var(--t-base); font-weight: 720; margin-bottom: var(--e3); }
 .carte-titre .ic { --ic: 19px; color: var(--marque-texte); }
 .carte-titre .fin { margin-left: auto; font-size: var(--t-s); font-weight: 600; color: var(--encre-3); }
 .titre-section { font-family: var(--police-titre); font-weight: 620; font-size: 23px; letter-spacing: -.015em; }

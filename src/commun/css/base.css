@@ -13,6 +13,7 @@ body {
 img, svg, video { display: block; max-width: 100%; }
 img { height: auto; }
 button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+input, select, textarea { font-size: 16px; } /* 16 px minimum : iOS ne zoome pas sur le champ */
 button { cursor: pointer; background: none; border: 0; padding: 0; text-align: inherit; }
 button:disabled { cursor: default; }
 a { color: inherit; text-decoration: none; }
