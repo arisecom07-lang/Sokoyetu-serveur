@@ -25,6 +25,7 @@ export function sectionActive() {
   const s = route.value.segs[0] || '';
   if (!s) return 'tableau';
   if (s === 'plus' || s === 'compte') return 'plus';
+  if (s === 'historique') return 'commandes';
   return s;
 }
 

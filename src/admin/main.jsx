@@ -10,6 +10,7 @@ import { compte, charger, suivreEnDirect, verifierSession, quandNouvelleCommande
 import { BarreLaterale, NavBasAdmin } from './composants/cadre.jsx';
 import { Connexion, Tableau } from './pages/accueil.jsx';
 import { Commandes, Commande } from './pages/commandes.jsx';
+import { Historique } from './pages/historique.jsx';
 import { Produits, FicheProduit } from './pages/produits.jsx';
 import { Rayons, Bannieres, Remises, FicheCatalogue } from './pages/catalogue.jsx';
 import { Clients, Client, Plus, Compte } from './pages/clients.jsx';
@@ -19,6 +20,7 @@ function page(segs) {
   const [a, b] = segs;
   if (!a) return Tableau;
   if (a === 'commandes') return b ? Commande : Commandes;
+  if (a === 'historique') return Historique;
   if (a === 'produits') return b ? FicheProduit : Produits;
   if (a === 'clients') return b ? Client : Clients;
   if (a === 'rayons') return b ? () => <FicheCatalogue type="rayons" /> : Rayons;
