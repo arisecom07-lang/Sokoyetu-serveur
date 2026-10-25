@@ -17,7 +17,7 @@ html:not(.vt) .sens-avant .page { animation: glisse-g var(--moyen) var(--sortie)
 html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sortie) both; }
 @media (max-width: 899.98px) { .seulement-ordi { display: none !important; } }
 .section { margin-top: var(--e8); }
-.section-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); margin-bottom: var(--e4); }
+.section-tete { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e3); margin-bottom: var(--e4); }
 .section-sous { display: flex; align-items: center; gap: 6px; color: var(--encre-3); font-size: var(--t-s); font-weight: 600; margin-top: 3px; }
 .section-sous .ic { --ic: 15px; color: var(--marque-texte); }
 .lien-tout { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; font-weight: 700; color: var(--marque-texte); white-space: nowrap; min-height: var(--cible); }
@@ -83,7 +83,7 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .heros-contenu { position: relative; z-index: 3; align-self: center; display: grid; justify-items: center; text-align: center; gap: 6px; padding: var(--e8) var(--gouttiere) 84px; max-width: 760px; margin: 0 auto; width: 100%; }
 .heros-kicker { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: var(--r-rond); background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .22); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-size: 12.5px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
 .heros-kicker .ic { --ic: 15px; color: var(--or); }
-.heros-marque { margin: 8px 0 0; }
+.heros-marque { margin: 8px 0 6px; }
 .heros-marque .marque { color: #fff; font-size: clamp(58px, 17vw, 124px); font-weight: 640; letter-spacing: -.035em; text-shadow: 0 2px 30px rgba(0, 0, 0, .35); }
 .heros-marque .marque i { color: var(--or); }
 .heros-slogan { font-size: clamp(16px, 4.3vw, 21px); font-weight: 550; color: rgba(255, 255, 255, .92); text-shadow: 0 1px 12px rgba(0, 0, 0, .4); }
@@ -161,7 +161,7 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .cp-favori .ic { --ic: 18px; position: relative; transition: transform var(--moyen) var(--ressort); }
 .cp-favori.actif .ic { animation: pulse 380ms var(--ressort); }
 .cp-corps { padding: 10px 2px 0; display: grid; gap: 3px; }
-.cp-titre { font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--encre); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; letter-spacing: 0; }
+.cp-titre { font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--encre); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; letter-spacing: 0; min-height: 2.7em; }
 .cp-prix { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
 .cp-prix .prix { font-size: 16px; }
 .cp-prix .prix-barre { font-size: 13px; }
@@ -203,7 +203,7 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .produit-prix .prix { font-size: 30px; letter-spacing: -.02em; }
 .produit-prix .prix-barre { font-size: 16px; }
 .produit-fc { color: var(--encre-3); font-size: 14px; font-weight: 600; margin-top: -4px; }
-.produit-titre { font-size: 22px; font-weight: 720; line-height: 1.28; letter-spacing: -.01em; }
+.produit-titre { font-family: var(--police-titre); font-optical-sizing: auto; font-size: 24px; font-weight: 620; line-height: 1.2; letter-spacing: -.015em; }
 .produit-options { display: grid; gap: var(--e4); padding: var(--e5) 0; border-top: 1px solid var(--ligne); border-bottom: 1px solid var(--ligne); }
 .variantes { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 10px; }
 .variantes legend { font-weight: 700; font-size: 15px; padding: 0; margin-bottom: 10px; }
@@ -467,7 +467,7 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
   .produit-galerie { margin: 0; position: sticky; top: calc(var(--h-entete) + 20px); }
   .galerie-piste { border-radius: var(--r-xl); }
   .galerie-image { max-height: none; }
-  .produit-titre { font-size: 30px; }
+  .produit-titre { font-size: 34px; }
   .produit-prix .prix { font-size: 34px; }
 
   .panier-grille, .commande-grille { grid-template-columns: minmax(0, 1fr) 380px; gap: var(--e8); align-items: start; }

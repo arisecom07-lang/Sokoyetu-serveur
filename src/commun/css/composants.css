@@ -27,6 +27,7 @@
 :root[data-theme="dark"] .btn-ok { color: #0F1C15; }
 .btn-s { --h: 40px; padding: 0 var(--e4); font-size: 14px; }
 .btn-s .ic { --ic: 17px; }
+.entre > .btn-fantome:last-child { margin-right: calc(-1 * var(--e4)); } /* le texte du bouton s'aligne sur le bord droit */
 .btn-l { --h: 54px; padding: 0 var(--e6); font-size: var(--t-base); }
 .btn-bloc { display: flex; width: 100%; }
 .btn.charge { color: transparent !important; pointer-events: none; }
@@ -108,7 +109,7 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 /* Contrôle segmenté */
 .segment { display: inline-flex; padding: 4px; gap: 2px; border-radius: var(--r-rond); background: var(--surface-3); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .segment::-webkit-scrollbar { display: none; }
-.segment button { height: 36px; padding: 0 var(--e4); border-radius: var(--r-rond); font-weight: 650; font-size: 14px; color: var(--encre-2); white-space: nowrap; transition: background-color var(--rapide), color var(--rapide), box-shadow var(--rapide); }
+.segment button { height: 36px; text-align: center; padding: 0 var(--e4); border-radius: var(--r-rond); font-weight: 650; font-size: 14px; color: var(--encre-2); white-space: nowrap; transition: background-color var(--rapide), color var(--rapide), box-shadow var(--rapide); }
 .segment button[aria-pressed="true"] { background: var(--surface); color: var(--encre); box-shadow: var(--ombre-1); }
 .segment.plein { display: flex; }
 .segment.plein button { flex: 1; }
@@ -156,10 +157,10 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 /* Paires libellé / valeur */
 .infos { display: grid; grid-template-columns: auto 1fr; gap: 8px var(--e4); font-size: var(--t-m); }
 .infos dt { color: var(--encre-3); }
-.infos dd { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.infos dd { font-weight: 600; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 
 /* Récapitulatif de montants */
-.montants { display: grid; gap: 9px; font-size: var(--t-m); }
+.montants { display: grid; gap: 9px; font-size: var(--t-m); font-variant-numeric: tabular-nums; }
 .montants > div { display: flex; justify-content: space-between; gap: var(--e3); }
 .montants dt, .montants .lib { color: var(--encre-2); }
 .montants .moins { color: var(--ok); font-weight: 650; }
@@ -186,8 +187,8 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 .puce:hover { border-color: var(--ligne-saisie); color: var(--encre); }
 .puce[aria-pressed="true"] { background: var(--ebene); border-color: var(--ebene); color: var(--sur-ebene); }
 .puce .ic { --ic: 16px; }
-.puce .n { font-size: 12px; font-weight: 750; color: var(--encre-3); }
-.puce[aria-pressed="true"] .n { color: inherit; opacity: .8; }
+.puce .n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-rond); background: var(--surface-3); font-size: 12px; font-weight: 750; line-height: 1; color: var(--encre-2); font-variant-numeric: tabular-nums; }
+.puce[aria-pressed="true"] .n { background: color-mix(in srgb, currentColor 18%, transparent); color: inherit; }
 
 /* ---------- Notes ---------- */
 .note { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); color: var(--encre-2); font-size: var(--t-m); line-height: 1.45; }
@@ -199,8 +200,8 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 .note.ton-danger { background: var(--danger-doux); color: var(--encre); } .note.ton-danger > .ic { color: var(--danger); }
 
 /* ---------- Prix ---------- */
-.prix { font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
-.prix-barre { color: var(--encre-3); text-decoration: line-through; font-weight: 500; white-space: nowrap; }
+.prix { font-weight: 800; letter-spacing: -.01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.prix-barre { color: var(--encre-3); text-decoration: line-through; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .prix-promo { color: var(--promo); }
 .remise-badge { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 6px; background: var(--promo); color: #fff; font-size: 12px; font-weight: 800; }
 :root[data-theme="dark"] .remise-badge { color: #1E1611; }
