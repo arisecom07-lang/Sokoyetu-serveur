@@ -72,8 +72,8 @@ export function Panier() {
               </div>
               {melange ? (
                 <div class="panier-filtres" role="group" aria-label="Choisir selon la provenance">
-                  <button type="button" class="puce" aria-pressed={seulBukavu ? 'true' : 'false'} onClick={() => cocherSeulement((l) => !estImp(l))}><Icone n="camion" />En stock à Bukavu</button>
-                  <button type="button" class="puce" aria-pressed={seulImport ? 'true' : 'false'} onClick={() => cocherSeulement(estImp)}><Icone n="avion" />Import Chine</button>
+                  <button type="button" class="puce" data-source="local" aria-pressed={seulBukavu ? 'true' : 'false'} onClick={() => cocherSeulement((l) => !estImp(l))}><Icone n="camion" />En stock à Bukavu</button>
+                  <button type="button" class="puce" data-source="import" aria-pressed={seulImport ? 'true' : 'false'} onClick={() => cocherSeulement(estImp)}><Icone n="avion" />Import Chine</button>
                 </div>
               ) : null}
             </div>

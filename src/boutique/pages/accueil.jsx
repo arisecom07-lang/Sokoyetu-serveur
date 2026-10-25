@@ -13,13 +13,17 @@ import { CarteProduit, GrilleProduits, SqueletteGrille, trier, lienRayon, photoR
 import { CarteInstallation } from '../installation.jsx';
 import { useSeo } from './commun.jsx';
 
-function Rangee({ titre, sous, icone, liste, lienTout }) {
+/* Rangée « En stock » ou « Importés de Chine » : le titre est un lien vers la liste complète. */
+function Rangee({ titre, sous, icone, liste, lienTout, source }) {
   if (liste.length < 3) return null;
   return (
-    <section class="conteneur section">
+    <section class={source ? 'conteneur section rangee-source' : 'conteneur section'} data-source={source}>
       <div class="section-tete">
-        <div><h2 class="titre-section">{titre}</h2>{sous ? <p class="section-sous"><Icone n={icone} />{sous}</p> : null}</div>
-        {lienTout ? <a class="lien-tout" href={lienTout}>Tout voir<Icone n="droite" /></a> : null}
+        <div>
+          <h2 class="titre-section">{lienTout ? <a class="titre-lien" href={lienTout}>{titre.replace(/\S+$/, '')}<span class="insecable">{titre.split(' ').pop()}<Icone n="droite" /></span></a> : titre}</h2>
+          {sous ? <p class="section-sous"><Icone n={icone} />{sous}</p> : null}
+        </div>
+        {lienTout && !source ? <a class="lien-tout" href={lienTout}>Tout voir<Icone n="droite" /></a> : null}
       </div>
       <div class="rangee-produits defile-h">{liste.slice(0, 10).map((p, i) => <CarteProduit key={p.id} p={p} rang={i} />)}</div>
     </section>
@@ -73,8 +77,8 @@ export function Accueil() {
 
         <CarteInstallation />
 
-        <Rangee titre={`En stock à ${c.city}`} sous="Livré en 24 à 48 h" icone="camion" liste={locaux} />
-        <Rangee titre="Importés de Chine pour vous" sous={`Livrés en ≈ ${c.importDays} jours, douane comprise`} icone="avion" liste={imports} />
+        <Rangee titre={`En stock à ${c.city}`} sous="Livré en 24 à 48 h" icone="camion" liste={locaux} source="local" lienTout={lien('/en-stock')} />
+        <Rangee titre="Importés de Chine pour vous" sous={`Livrés en ≈ ${c.importDays} jours, douane comprise`} icone="avion" liste={imports} source="import" lienTout={lien('/import-chine')} />
 
         <section class="conteneur section" id="selection">
           <div class="section-tete"><h2 class="titre-section">Toute la boutique</h2></div>
