@@ -218,16 +218,16 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 :root[data-theme="dark"] .remise-badge { color: #1E1611; }
 
 /* ---------- Feuilles (bas d'écran sur téléphone, fenêtre au centre sur ordinateur) ---------- */
-.voile { position: fixed; inset: 0; z-index: 60; background: var(--voile); opacity: 0; transition: opacity var(--moyen) ease; }
-.voile.ouverte { opacity: 1; }
+.voile { position: fixed; inset: 0; z-index: 60; background: var(--voile); opacity: 0; transition: opacity 200ms var(--part); }
+.voile.ouverte { opacity: 1; transition: opacity var(--moyen) ease; }
 .feuille {
   position: fixed; z-index: 61; left: 50%; bottom: 0; width: min(100%, 560px); max-height: min(92vh, 92dvh);
   display: flex; flex-direction: column;
   background: var(--surface); border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: var(--ombre-3);
-  transform: translate(-50%, 104%); transition: transform var(--lent) var(--sortie);
+  transform: translate(-50%, 104%); transition: transform 240ms var(--part);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-.feuille.ouverte { transform: translate(-50%, 0); }
+.feuille.ouverte { transform: translate(-50%, 0); transition: transform var(--lent) var(--sortie); }
 .feuille.glisse { transition: none; }
 .feuille-poignee { flex: none; height: 26px; display: grid; place-items: center; cursor: grab; touch-action: none; }
 .feuille-poignee::before { content: ''; width: 42px; height: 5px; border-radius: 3px; background: var(--ligne-2); }
@@ -236,23 +236,25 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 .feuille-corps { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: var(--e1) var(--e5) var(--e5); }
 .feuille-pied { flex: none; padding: var(--e3) var(--e5) var(--e4); border-top: 1px solid var(--ligne); display: grid; gap: var(--e2); }
 @media (min-width: 720px) {
-  .feuille { top: 50%; bottom: auto; border-radius: var(--r-xl); max-height: 86vh; transform: translate(-50%, -46%) scale(.97); opacity: 0; transition: transform var(--moyen) var(--sortie), opacity var(--moyen) ease; padding-bottom: 0; }
-  .feuille.ouverte { transform: translate(-50%, -50%); opacity: 1; }
+  .feuille { top: 50%; bottom: auto; border-radius: var(--r-xl); max-height: 86vh; transform: translate(-50%, -48%) scale(.96); opacity: 0; transition: transform 180ms var(--part), opacity 180ms var(--part); padding-bottom: 0; }
+  .feuille.ouverte { transform: translate(-50%, -50%); opacity: 1; transition: transform var(--moyen) var(--ressort-doux), opacity 160ms ease; }
   .feuille-poignee { height: 14px; }
   .feuille-poignee::before { display: none; }
 }
 
 /* ---------- Messages éphémères ---------- */
-.toasts { position: fixed; z-index: 80; left: 50%; transform: translateX(-50%); bottom: calc(var(--bas-toasts, 24px) + env(safe-area-inset-bottom, 0px)); width: max-content; max-width: calc(100% - 32px); pointer-events: none; }
-.toast { display: flex; align-items: center; gap: 10px; padding: 12px 18px 12px 14px; border-radius: var(--r-rond); background: var(--ebene); color: var(--sur-ebene); font-weight: 650; font-size: var(--t-m); box-shadow: var(--ombre-3); animation: toast-in var(--lent) var(--ressort) both; pointer-events: auto; }
+.toasts { position: fixed; z-index: 80; left: 50%; transform: translateX(-50%); bottom: calc(var(--bas-toasts, 24px) + env(safe-area-inset-bottom, 0px)); width: max-content; max-width: calc(100% - 32px); pointer-events: none; display: grid; justify-items: center; gap: 8px; }
+.toast { display: flex; align-items: center; gap: 10px; padding: 12px 18px 12px 14px; border-radius: var(--r-rond); background: var(--ebene); color: var(--sur-ebene); font-weight: 650; font-size: var(--t-m); box-shadow: var(--ombre-3); animation: toast-in var(--lent) var(--ressort-doux) both; pointer-events: auto; cursor: pointer; }
 .toast .ic { --ic: 19px; color: var(--or); }
-.toast.sort { animation: toast-out 220ms ease both; }
+.toast.sort { animation: toast-out 220ms var(--part) both; pointer-events: none; }
 .toast.ton-danger .ic { color: #F2927F; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes toast-out { to { opacity: 0; transform: translateY(8px) scale(.97); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(18px) scale(.94); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(10px) scale(.96); } }
 
 /* ---------- Chargement ---------- */
-.squelette { background: linear-gradient(100deg, var(--surface-2) 30%, var(--surface-3) 50%, var(--surface-2) 70%); background-size: 300% 100%; animation: reflet 1.3s ease-in-out infinite; border-radius: var(--r-m); }
+.squelette { position: relative; overflow: hidden; background: var(--surface-2); border-radius: var(--r-m); }
+.squelette::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, var(--surface-3) 50%, transparent 80%); transform: translateX(-100%); animation: reflet-glisse 1.3s ease-in-out infinite; }
+@keyframes reflet-glisse { to { transform: translateX(100%); } }
 .rouet { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--ligne-2); border-top-color: var(--marque); animation: tourne .75s linear infinite; flex: none; }
 
 /* ---------- État vide ---------- */

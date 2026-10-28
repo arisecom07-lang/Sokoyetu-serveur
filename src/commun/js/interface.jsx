@@ -12,15 +12,21 @@ export const Annonceur = () => <div class="sr" role="status" aria-live="polite">
 /* ---------- Messages éphémères ---------- */
 const toasts = signal([]);
 let n = 0;
+// Un message qui part glisse et s'efface (toast-out dans composants.css) avant d'être retiré.
+function retirerToast(id) {
+  if (!toasts.value.some((t) => t.id === id && !t.sort)) return;
+  toasts.value = toasts.value.map((t) => (t.id === id ? { ...t, sort: true } : t));
+  setTimeout(() => { toasts.value = toasts.value.filter((t) => t.id !== id); }, 240);
+}
 export function toast(texte, { icone = 'coche', ton = '', duree = 2600 } = {}) {
   const id = ++n;
-  toasts.value = [...toasts.value.filter((t) => !t.sort).slice(-1), { id, texte, icone, ton }];
-  setTimeout(() => { toasts.value = toasts.value.map((t) => (t.id === id ? { ...t, sort: true } : t)); }, duree);
-  setTimeout(() => { toasts.value = toasts.value.filter((t) => t.id !== id); }, duree + 240);
+  toasts.value.filter((t) => !t.sort).slice(0, -1).forEach((t) => retirerToast(t.id)); // deux messages au plus à l'écran
+  toasts.value = [...toasts.value, { id, texte, icone, ton }];
+  setTimeout(() => retirerToast(id), duree);
 }
 export const Toasts = () => (
   <div class="toasts" aria-live="polite">
-    {toasts.value.map((t) => <div key={t.id} class={classes('toast', t.sort && 'sort', t.ton && 'ton-' + t.ton)}><Icone n={t.icone} /><span>{t.texte}</span></div>)}
+    {toasts.value.map((t) => <div key={t.id} class={classes('toast', t.sort && 'sort', t.ton && 'ton-' + t.ton)} onClick={() => retirerToast(t.id)}><Icone n={t.icone} /><span>{t.texte}</span></div>)}
   </div>
 );
 
@@ -60,11 +66,16 @@ function Feuille({ f }) {
     requestAnimationFrame(() => requestAnimationFrame(() => { el && el.classList.add('ouverte'); voile.current && voile.current.classList.add('ouverte'); }));
     const premier = el && (el.querySelector('[autofocus]') || el.querySelector('.feuille-corps ' + SELECTEUR_FOCUS) || el);
     setTimeout(() => premier && premier.focus({ preventScroll: true }), 60);
-    // Glisser vers le bas pour fermer (poignée et en-tête)
+    // Glisser vers le bas pour fermer (poignée et en-tête), sur téléphone seulement : sur ordinateur, la fenêtre est centrée.
+    // Vers le haut, la feuille résiste (élastique). Lâchée assez bas ou assez vite, elle part depuis la position du doigt.
     let y0 = null, dy = 0, t0 = 0;
-    const debut = (e) => { if (e.button > 0 || !e.target.closest('.feuille-poignee, .feuille-entete') || e.target.closest('button')) return; y0 = e.clientY; dy = 0; t0 = Date.now(); el.classList.add('glisse'); };
-    const deplace = (e) => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); el.style.transform = `translate(-50%, ${dy}px)`; if (voile.current) voile.current.style.opacity = String(Math.max(0.15, 1 - dy / 420)); };
-    const fin = () => { if (y0 == null) return; const v = dy / Math.max(1, Date.now() - t0); y0 = null; el.classList.remove('glisse'); el.style.transform = ''; if (voile.current) voile.current.style.opacity = ''; if (dy > 120 || (dy > 30 && v > 0.6)) fermerFeuille(f.id); };
+    const debut = (e) => { if (e.button > 0 || matchMedia('(min-width: 720px)').matches || !e.target.closest('.feuille-poignee, .feuille-entete') || e.target.closest('button')) return; y0 = e.clientY; dy = 0; t0 = Date.now(); el.classList.add('glisse'); };
+    const deplace = (e) => { if (y0 == null) return; const d = e.clientY - y0; dy = d > 0 ? d : -Math.min(24, Math.sqrt(-d) * 2); el.style.transform = `translate(-50%, ${dy}px)`; if (voile.current) voile.current.style.opacity = String(Math.max(0.15, 1 - Math.max(0, dy) / 420)); };
+    const fin = () => {
+      if (y0 == null) return; const v = dy / Math.max(1, Date.now() - t0); y0 = null; el.classList.remove('glisse');
+      if (dy > 120 || (dy > 30 && v > 0.6)) { el.style.transform = 'translate(-50%, 104%)'; if (voile.current) voile.current.style.opacity = '0'; fermerFeuille(f.id); return; }
+      el.style.transform = ''; if (voile.current) voile.current.style.opacity = '';
+    };
     el.addEventListener('pointerdown', debut); window.addEventListener('pointermove', deplace); window.addEventListener('pointerup', fin); window.addEventListener('pointercancel', fin);
     return () => { el.removeEventListener('pointerdown', debut); window.removeEventListener('pointermove', deplace); window.removeEventListener('pointerup', fin); window.removeEventListener('pointercancel', fin); };
   }, []);

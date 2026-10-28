@@ -410,10 +410,11 @@ code.commande, .aide-mdp code {
 .montant-annule { text-decoration: line-through; color: var(--encre-3); }
 /* Audience : pastille « en direct » (verte et qui respire quand quelqu'un est en ligne) et raccourci du tableau de bord. */
 .en-direct { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-xs); font-weight: 650; color: var(--encre-3); }
-.en-direct i { width: 8px; height: 8px; border-radius: 50%; background: var(--encre-3); flex: none; }
-.en-direct.actif i { background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent); animation: direct 2s ease-out infinite; }
-@keyframes direct { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-@media (prefers-reduced-motion: reduce) { .en-direct.actif i { animation: none; } }
+.en-direct i { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--encre-3); flex: none; }
+.en-direct.actif i { background: var(--ok); }
+.en-direct.actif i::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--ok); opacity: .45; animation: direct 2s ease-out infinite; }
+@keyframes direct { 70%, 100% { transform: scale(2.75); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .en-direct.actif i::after { animation: none; opacity: 0; } }
 .en-direct-carte { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--e3); align-items: center; color: inherit; text-decoration: none; }
 .en-direct-carte > .en-direct, .en-direct-carte > b, .en-direct-carte > small { grid-column: 1; }
 .en-direct-carte > b { font-size: var(--t-l, 18px); }
