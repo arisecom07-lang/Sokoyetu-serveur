@@ -118,6 +118,8 @@ function copierPhoto(app, url) {
   const rec = new Record(app.findCollectionByNameOrId('media'));
   rec.set('file', fichier);
   try { app.save(rec); } catch (err) { throw { code: 'not_image', status: 400 }; }
+  // La médiathèque accepte aussi les vidéos : une « photo » qui n'en est pas une est retirée.
+  if (!/\.(jpe?g|png|webp|gif)$/i.test(rec.getString('file'))) { try { app.delete(rec); } catch (err) { } throw { code: 'not_image', status: 400 }; }
   return { type: 'pb', id: rec.id, f: rec.getString('file') };
 }
 

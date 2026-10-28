@@ -38,7 +38,10 @@ export function Produits() {
       <TetePage titre="Produits" sous={`${pluriel(ps.length, 'produit')} · ${ps.filter(R.estEnVente).length} en vente`}
         actions={<div class="rangee seulement-ordi"><a class="btn btn-secondaire" href={lien('/produits/importer')}><Icone n="telecharger" />Importer</a>{ia ? <a class="btn btn-doux" href={lien('/produits/nouveau?ia=1')}><Icone n="ia" />Ajouter avec l’IA</a> : null}<a class="btn btn-primaire" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter un produit</a></div>} />
       <div class="outils-liste">
-        <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, référence, mot-clé" aria-label="Rechercher un produit" /></label>
+        <div class="recherche-rangee">
+          <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, référence, mot-clé" aria-label="Rechercher un produit" /></label>
+          <a class="btn btn-secondaire seulement-mobile" href={lien('/produits/importer')}><Icone n="telecharger" />Importer</a>
+        </div>
         <div class="puces" role="group" aria-label="Filtrer les produits">{FILTRES.map(([k, t, f]) => <button key={k} class="puce" aria-pressed={filtre === k ? 'true' : 'false'} onClick={() => setFiltre(k)}>{t}<span class="n">{ps.filter(f).length}</span></button>)}</div>
       </div>
       {!pret.value ? <Chargement /> : liste.length ? (
@@ -51,14 +54,13 @@ export function Produits() {
                 <span class="ligne-vignette grande"><Photo m={R.imagePrincipale(p)} alt="" tailles="64px" /></span>
                 <span class="ligne-texte"><b>{p.title}</b><small class={faible ? 'texte-danger' : ''}>{libelleStock(p)}{p.demo ? ' · exemple' : ''}</small>
                   <span class="ligne-pastilles">{R.estEnVente(p) ? <Pastille ton="ok" point>En vente</Pastille> : <Pastille ton="neutre" point>Brouillon</Pastille>}{R.estImport(p) ? <Pastille ton="info" icone="avion">Import</Pastille> : null}{R.venteFlash(p) ? <Pastille ton="warn" icone="horloge">Flash −{R.venteFlash(p).pct} %</Pastille> : null}</span></span>
-                <span class="ligne-fin"><b>{dollars(p.price)}</b>{marge !== null ? <small>marge {marge} %</small> : null}</span>
+                <span class="ligne-fin">{R.num(p.price) > 0 ? <b>{dollars(p.price)}</b> : <small class="discret">Sans prix</small>}{marge !== null ? <small>marge {marge} %</small> : null}</span>
               </a>
             );
           })}
         </div>
       ) : <div class="carte"><Vide icone="etiquette" titre={ps.length ? 'Aucun produit ici' : 'Ajoutez votre premier produit'} texte={ps.length ? 'Changez de filtre ou de recherche.' : 'Photo, prix, couleurs, tailles et stock : il apparaît aussitôt dans la boutique.'}>{ps.length ? null : <a class="btn btn-primaire" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter un produit</a>}</Vide></div>}
       <div class="fab seulement-mobile">
-        <a class="btn btn-secondaire btn-l" href={lien('/produits/importer')} aria-label="Importer des produits"><Icone n="telecharger" /></a>
         {ia ? <a class="btn btn-doux btn-l" href={lien('/produits/nouveau?ia=1')} aria-label="Ajouter avec l’IA"><Icone n="ia" />IA</a> : null}
         <a class="btn btn-primaire btn-l" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter</a>
       </div>
@@ -290,8 +292,6 @@ function FormulaireProduit() {
             </div>
           </section>
 
-          <CarteGuide f={f} maj={maj} />
-
           {f.source !== 'import' ? (
             <section class="carte">
               <h2 class="carte-titre"><Icone n="colis" />{cles.length ? 'Stock et prix par variante' : 'Stock'}<span class="fin">{cles.length ? `${cles.reduce((a, k) => a + R.int(f.variants[k]), 0)} au total` : ''}</span></h2>
@@ -305,6 +305,8 @@ function FormulaireProduit() {
               <TableauVariantes f={f} maj={maj} cles={cles} />
             </section>
           ) : null}
+
+          <CarteGuide f={f} maj={maj} />
         </div>
 
         <div class="pile-l colonne-cote">

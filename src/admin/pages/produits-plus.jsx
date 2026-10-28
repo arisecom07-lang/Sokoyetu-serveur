@@ -124,7 +124,7 @@ export function PrixGros({ f, maj }) {
   return (
     <div class="pile espace-haut">
       <span class="champ-libelle">Prix de gros<span class="facultatif"> (facultatif)</span></span>
-      <p class="champ-aide">Moins cher à la pièce quand le client en prend plusieurs (toutes couleurs et tailles confondues).</p>
+      <p class="champ-aide">Moins cher à la pièce quand le client en prend plusieurs (toutes couleurs et tailles confondues). {R.MAX_QTE} pièces au plus par article dans une commande, 50 % de réduction au plus.</p>
       {l.map((x, i) => (
         <div key={i} class="palier">
           <span>Dès</span>

@@ -238,7 +238,7 @@ export function ImportProduits() {
         {mode === 'tableau' ? (
           <section class="carte">
             <h2 class="carte-titre"><Icone n="telecharger" />Tableau de produits</h2>
-            <ol class="etapes-import">
+            <ol class="import-etapes">
               <li>Téléchargez le modèle et ouvrez-le dans Excel, Google Sheets ou WPS : une ligne par produit.</li>
               <li>Photos : collez leurs liens (séparés par un espace). Couleurs et tailles : séparées par des virgules. Stock : quantité pour chaque couleur et taille.</li>
               <li>Choisissez le fichier (.xlsx ou .csv), ou copiez les cellules et collez-les ci-dessous.</li>
