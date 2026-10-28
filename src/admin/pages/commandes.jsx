@@ -17,7 +17,7 @@ export function statutPaiement(o) {
   if (o.payment && o.payment.status === 'failed') return { label: 'Paiement refusé', ton: 'danger' };
   return { label: 'Paiement en cours', ton: 'alerte' };
 }
-const FOURNISSEURS = { flexpay: 'FlexPay', simulation: 'Mode test (aucun argent)' };
+const FOURNISSEURS = { flexpay: 'FlexPay', nyole: 'nyole', simulation: 'Mode test (aucun argent)' };
 const heure = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 export function statutPreparation(o) {
   if (o.status === 'cancelled') return null;

@@ -81,7 +81,7 @@ function etapesDemarrage(c) {
   const ps = produits.value;
   return [
     { texte: 'Ajouter vos propres produits', fait: ps.some((p) => !p.demo), href: '/produits/nouveau' },
-    { texte: 'Brancher le paiement Mobile Money (FlexPay)', fait: paiementServeur.value.pret && paiementServeur.value.fournisseur === 'flexpay', href: '/reglages/paiements' },
+    { texte: 'Brancher le paiement Mobile Money (nyole ou FlexPay)', fait: paiementServeur.value.pret && !paiementServeur.value.test && ['flexpay', 'nyole'].includes(paiementServeur.value.fournisseur), href: '/reglages/paiements' },
     { texte: 'Vérifier les zones et frais de livraison', fait: !!(c.setup && c.setup.livraison), href: '/reglages/livraison' },
     { texte: 'Ajouter le numéro WhatsApp de la boutique', fait: !!R.chiffres(c.whatsapp), href: '/reglages/general' },
     { texte: 'Compléter les informations légales (RCCM, adresse)', fait: !!(c.legal && c.legal.company && c.legal.address && (c.legal.rccm || c.legal.idnat)), href: '/reglages/legal' },
@@ -118,7 +118,7 @@ export function Tableau() {
         actions={<Segment libelle="Période" options={[[1, 'Aujourd’hui'], [7, '7 jours'], [30, '30 jours']]} valeur={periode} onChange={(v) => changer(Number(v))} />} />
       <div class="pile-l">
         {!p.pret ? <Note ton="danger" icone="portefeuille">La boutique n’encaisse pas encore : le paiement Mobile Money n’est pas branché sur le serveur. <a class="lien" href={lien('/reglages/paiements')}>Voir comment l’activer</a></Note>
-          : p.test ? <Note ton="alerte" icone="portefeuille">Paiement en <b>mode test</b> : les commandes sont confirmées sans argent. <a class="lien" href={lien('/reglages/paiements')}>Brancher FlexPay</a></Note> : null}
+          : p.test ? <Note ton="alerte" icone="portefeuille">Paiement en <b>mode test</b> : les commandes sont confirmées sans argent. <a class="lien" href={lien('/reglages/paiements')}>Brancher le paiement réel</a></Note> : null}
         {nbExemples.value ? <Note ton="info" icone="info">Le catalogue d’exemple est affiché dans la boutique ({pluriel(nbExemples.value, 'élément')}). Remplacez-le par vos articles, ou retirez-le dans <a class="lien" href={lien('/reglages/general')}>Réglages → Général</a>.</Note> : null}
         <div class="kpis">
           <Kpi grand libelle={`Ventes ${lib}`} icone="graphique" valeur={dollars(st.ventes)} sous={evV ? evV.texte : 'Commandes payées'} ton={evV && evV.ton} />

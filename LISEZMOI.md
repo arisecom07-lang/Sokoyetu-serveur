@@ -109,6 +109,8 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 | Mettre à jour | `sudo /opt/sokoyetu/mise-a-jour.sh` |
 | Mettre à jour depuis un fichier déjà sur le serveur | `sudo /opt/sokoyetu/mise-a-jour.sh /root/sokoyetu-serveur.zip` |
 | Mot de passe oublié | `sudo /opt/sokoyetu/mot-de-passe.sh vous@exemple.com 'NouveauMotDePasse'` |
+| Brancher le paiement nyole (la clé secrète est demandée) | `sudo /opt/sokoyetu/paiement.sh nyole` |
+| Essayer nyole avec une clé d'essai `af_test_sec_…` | `sudo /opt/sokoyetu/paiement.sh nyole-essai` |
 | Brancher le paiement FlexPay | `sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'` |
 | Essayer FlexPay sur son environnement de test | `sudo /opt/sokoyetu/paiement.sh flexpay-essai CODE_MARCHAND 'JETON'` |
 | Paiement en mode test (aucun argent) | `sudo /opt/sokoyetu/paiement.sh test` |
@@ -133,14 +135,27 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 ### Comment ça se passe
 
 1. Le client choisit son opérateur (M-Pesa, Airtel Money, Orange Money, Afrimoney) et le numéro à débiter, puis touche **Payer**.
-2. Une demande de paiement s'affiche sur son téléphone ; il la valide avec son **code PIN**. Il ne quitte pas la boutique et n'écrit à personne : pas de code à recopier, pas de WhatsApp.
+2. Une demande de paiement s'affiche sur son téléphone ; il la valide avec son **code PIN** (avec nyole, il passe d'abord par la page sécurisée de nyole, puis revient sur la boutique). Il ne quitte pas la boutique et n'écrit à personne : pas de code à recopier, pas de WhatsApp.
 3. Dès que l'opérateur confirme, la commande est **validée** et le client reçoit son **reçu** : numéro de commande unique (6 caractères, ex. `K7M2QX`), articles, frais, total payé, référence de la transaction et date de livraison prévue. Il peut le partager ou l'enregistrer en PDF.
 4. Avec ce numéro et son téléphone, il **retrouve sa commande** depuis n'importe quel appareil (**Mon compte → Retrouver une commande**).
 
-- **Frais de service** : 2 % du panier (après réduction, hors livraison) sont ajoutés au total avant le paiement. Ils vous reviennent (ce ne sont pas les frais de FlexPay). Le pourcentage se règle dans **Réglages → Paiements Mobile Money** (0 à 20 %).
+- **Frais de service** : 2 % du panier (après réduction, hors livraison) sont ajoutés au total avant le paiement. Ils vous reviennent (ce ne sont pas les frais de nyole ou de FlexPay). Le pourcentage se règle dans **Réglages → Paiements Mobile Money** (0 à 20 %).
 - **Stock réservé** pendant le paiement (30 minutes par défaut, réglable de 5 à 120). Sans paiement dans ce délai, la commande s'annule toute seule et les articles reviennent en vente. Paiement refusé (solde insuffisant, PIN annulé…) : le client réessaie sur la même commande, avec le même ou un autre numéro.
 - **Administration** : la commande apparaît « Paiement en cours » pendant que le client valide, puis l'alerte **Commande payée** sonne (écran, son, notification) dès la confirmation. Vous n'avez rien à vérifier : **Commencer la préparation → Expédier → Livrée**. Les tableaux de bord ne comptent que les commandes payées.
-- Le serveur ne croit jamais une notification sur parole : il revérifie chaque paiement auprès de FlexPay, et revérifie aussi chaque minute les paiements en cours.
+- Le serveur ne croit jamais une notification sur parole : il revérifie chaque paiement auprès du service de paiement (nyole ou FlexPay), et revérifie aussi chaque minute les paiements en cours.
+
+### Brancher nyole (une fois)
+
+Avec nyole, le client choisit son opérateur dans la boutique, puis termine le paiement sur la **page sécurisée de nyole** (M-Pesa, Airtel Money, Orange Money ; Afrimoney n'y est pas proposé) et revient tout seul sur la boutique, où son reçu s'affiche dès la confirmation.
+
+1. Connectez-vous sur **app.nyole.com**, ouvrez **API et journaux**. Vous y voyez une clé publique (`af_live_pub_…`, inutile ici) et une **clé secrète** (`af_live_sec_…`), plus des clés d'essai (`af_test_…`). Attention : nyole indique que l'API est réservée aux comptes ouverts avant le 17 octobre 2026 ; si la page n'affiche aucune clé, demandez l'accès API au support nyole.
+2. Dans la même page, indiquez l'adresse du **webhook** : `https://sokoyakwetu.com/api/sokoyetu/notification/nyole` (aussi affichée, avec un bouton Copier, dans **Réglages → Paiements Mobile Money**).
+3. Essai sans argent : `sudo /opt/sokoyetu/paiement.sh nyole-essai`, collez la clé `af_test_sec_…` quand elle est demandée (rien ne s'affiche en la collant, c'est normal), puis passez une commande.
+4. Pour encaisser pour de vrai : `sudo /opt/sokoyetu/paiement.sh nyole` avec la clé `af_live_sec_…`, puis passez une vraie commande d'un dollar pour vérifier.
+
+Ne collez jamais la clé secrète dans une discussion, un e-mail ou l'administration : elle ne va que dans la console du serveur. L'argent s'accumule sur votre solde nyole ; le reversement vers votre Mobile Money se demande dans nyole (vérification d'identité requise une fois). nyole prend 5 % par paiement réussi.
+
+À vérifier au premier essai : nyole attend le montant dans la plus petite unité de la devise (centimes de dollar : 22,40 $ → 2240). Si le montant affiché sur la page nyole n'est pas le bon, le paiement n'est pas validé par la boutique : signalez-le pour corriger l'adaptateur.
 
 ### Brancher FlexPay (une fois)
 

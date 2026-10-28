@@ -12,7 +12,7 @@ import { Chargement } from './accueil.jsx';
 import { useFormulaire } from './catalogue.jsx';
 
 const OUTILS = { ga4: ['Google Analytics 4', /^G-[A-Z0-9]{4,12}$/, 'Identifiant de mesure, ex. G-ABC123XYZ'], plausible: ['Plausible (sans cookie)', /^[a-z0-9.-]+\.[a-z]{2,}$/, 'Votre domaine, ex. sokoyakwetu.com'], goatcounter: ['GoatCounter (sans cookie)', /^[a-z0-9-]{2,40}$/, 'Votre code, ex. sokoyetu'] };
-const NOM_FOURNISSEUR = { flexpay: 'FlexPay', simulation: 'le mode test' };
+const NOM_FOURNISSEUR = { flexpay: 'FlexPay', nyole: 'nyole', simulation: 'le mode test' };
 const TITRES = { boutique: ['Identité de la boutique', 'boutique'], paiements: ['Paiements Mobile Money', 'portefeuille'], livraison: ['Livraison', 'camion'], general: ['Général', 'reglages'], legal: ['Informations légales', 'recu'] };
 
 /* Remet les textes légaux d'origine sous leurs nouvelles clés. */
@@ -83,26 +83,29 @@ function Formulaire({ section }) {
 
         {section === 'paiements' ? (() => {
           const ps = paiementServeur.value;
-          const fournisseur = R.FOURNISSEURS[ps.fournisseur] ? ps.fournisseur : 'flexpay';
+          const fournisseur = R.FOURNISSEURS[ps.fournisseur] ? ps.fournisseur : 'nyole';
           const proposes = R.FOURNISSEURS[fournisseur].operateurs;
-          const reel = ps.pret && ps.fournisseur === 'flexpay';
-          const notification = adresseBoutique('/api/sokoyetu/notification/flexpay');
+          const reel = ps.pret && !ps.test && (ps.fournisseur === 'flexpay' || ps.fournisseur === 'nyole');
+          const nomService = NOM_FOURNISSEUR[fournisseur === 'simulation' ? 'nyole' : fournisseur];
+          const notification = adresseBoutique('/api/sokoyetu/notification/' + (fournisseur === 'simulation' ? 'nyole' : fournisseur));
           return (
             <>
               <section class="carte">
                 <h2 class="carte-titre"><Icone n="portefeuille" />Encaissement</h2>
-                {reel ? <Note ton="ok" icone="coche"><b>Paiement automatique actif (FlexPay).</b> Le client valide sur son téléphone ; la commande se confirme toute seule et l’argent arrive sur votre compte marchand FlexPay.</Note>
+                {reel ? <Note ton="ok" icone="coche"><b>Paiement automatique actif ({nomService}).</b> {fournisseur === 'nyole' ? 'Le client paie sur la page sécurisée de nyole ; la commande se confirme toute seule et l’argent arrive sur votre solde nyole.' : 'Le client valide sur son téléphone ; la commande se confirme toute seule et l’argent arrive sur votre compte marchand FlexPay.'}</Note>
+                  : ps.pret && ps.test && fournisseur === 'nyole' ? <Note ton="alerte" icone="info"><b>nyole en mode essai</b> (clé af_test_…). Les paiements sont simulés sur la page de nyole, aucun argent n’est encaissé. N’annoncez pas la boutique dans ce mode.</Note>
                   : ps.pret && ps.test ? <Note ton="alerte" icone="info"><b>Mode test.</b> Les commandes sont confirmées sans argent (refusées si le numéro finit par 0000). N’annoncez pas la boutique dans ce mode.</Note>
                     : <Note ton="danger" icone="alerte"><b>Paiement fermé.</b> La boutique affiche « Le paiement en ligne ouvre très bientôt » et ne prend aucune commande.</Note>}
                 {!reel ? (
                   <div class="pile espace-haut">
-                    <p class="attenue petit">Pour encaisser : ouvrez un compte marchand FlexPay (vous recevez un code marchand et un jeton d’accès), puis tapez sur le serveur (DigitalOcean → votre Droplet → Console) :</p>
-                    <code class="commande-serveur">sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'</code>
-                    <p class="attenue petit">Essai sans argent : <code>sudo /opt/sokoyetu/paiement.sh test</code>. Le jeton reste sur le serveur : il n’est jamais enregistré ici ni envoyé aux navigateurs.</p>
+                    <p class="attenue petit">Pour encaisser avec nyole : copiez votre clé secrète (app.nyole.com → API et journaux), puis tapez sur le serveur (DigitalOcean → votre Droplet → Console) et collez la clé quand elle est demandée :</p>
+                    <code class="commande-serveur">sudo /opt/sokoyetu/paiement.sh nyole</code>
+                    <p class="attenue petit">Avec FlexPay (code marchand et jeton d’accès) : <code>sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'</code>.</p>
+                    <p class="attenue petit">Essai sans argent : <code>sudo /opt/sokoyetu/paiement.sh test</code>, ou une clé nyole d’essai (af_test_…). La clé reste sur le serveur : elle n’est jamais enregistrée ici ni envoyée aux navigateurs.</p>
                   </div>
                 ) : null}
                 <div class="a-copier-admin espace-haut">
-                  <div><small>Adresse de notification à donner à FlexPay</small><span class="code">{notification}</span></div>
+                  <div><small>{fournisseur === 'flexpay' ? 'Adresse de notification à donner à FlexPay' : 'Adresse du webhook à donner à nyole (API et journaux)'}</small><span class="code">{notification}</span></div>
                   <button class="btn btn-secondaire btn-s" onClick={async () => { if (await copier(notification)) toast('Adresse copiée'); }}><Icone n="copier" />Copier</button>
                 </div>
               </section>

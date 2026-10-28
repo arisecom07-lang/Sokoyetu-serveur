@@ -107,7 +107,7 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     id = rec.id;
   });
   if (erreur) return e.json(400, erreur);
-  const doc = C.demander(e.app, e.app.findRecordById('orders', id), { callbackUrl: C.adresseNotification(e) });
+  const doc = C.demander(e.app, e.app.findRecordById('orders', id), { callbackUrl: C.adresseNotification(e), retourUrl: C.adresseRetour(e, id) });
   return e.json(200, C.reponseClient(id, doc));
 });
 
@@ -132,7 +132,7 @@ routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
   if (!moyen) return e.json(400, { message: 'Ce mode de paiement n’est pas disponible.', champ: 'method' });
   const tel = R.valider.mobileMoney(b.phone || d.payment.phone);
   if (!tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
-  const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel });
+  const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), retourUrl: C.adresseRetour(e, rec.id), methode: moyen.k, label: moyen.label, telephone: tel });
   return e.json(200, C.reponseClient(rec.id, doc));
 });
 

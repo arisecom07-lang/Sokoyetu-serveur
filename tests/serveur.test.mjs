@@ -47,7 +47,7 @@ test('catalogue public : brouillons et coûts cachés, cache validé, paiement e
   const ids = r.json.products.map((p) => p.id);
   assert.ok(ids.includes('t-robe') && !ids.includes('t-cache'));
   assert.equal(r.json.products.find((p) => p.id === 't-robe').cost, undefined);
-  assert.deepEqual(r.json.config.payment, { provider: 'simulation', holdMinutes: 30, test: true });
+  assert.deepEqual(r.json.config.payment, { provider: 'simulation', holdMinutes: 30, test: true, redirection: false });
   const etag = r.headers.get('etag');
   const r2 = await api('/api/sokoyetu/catalogue', { headers: { 'If-None-Match': etag } });
   assert.equal(r2.status, 304);

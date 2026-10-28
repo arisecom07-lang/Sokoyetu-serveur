@@ -53,18 +53,18 @@ function suivre(app, rec, opts) {
   return appliquer(app, rec.id, Object.assign({ id: d.payment.providerId }, P.verifier(d)));
 }
 
-/* Envoie une (nouvelle) demande de paiement au fournisseur. opts = { callbackUrl, methode, label, telephone } */
+/* Envoie une (nouvelle) demande de paiement au fournisseur. opts = { callbackUrl, retourUrl, methode, label, telephone } */
 function demander(app, rec, opts) {
   const d0 = S.lire(rec);
   const essai = R.copie(d0);
   if (opts.methode) { essai.payment.method = opts.methode; essai.payment.label = opts.label; }
   if (opts.telephone) essai.payment.phone = opts.telephone;
-  const r = P.demarrer(essai, { callbackUrl: opts.callbackUrl });
+  const r = P.demarrer(essai, { callbackUrl: opts.callbackUrl, retourUrl: opts.retourUrl });
   let doc = null;
   app.runInTransaction((tx) => {
     const frais = tx.findRecordById('orders', rec.id);
     const now = Date.now();
-    let d = R.paiementEnvoye(S.lire(frais), { maintenant: now, providerId: r.id || '', methode: opts.methode, label: opts.label, telephone: opts.telephone });
+    let d = R.paiementEnvoye(S.lire(frais), { maintenant: now, providerId: r.id || '', url: r.url || '', methode: opts.methode, label: opts.label, telephone: opts.telephone });
     if (r.etat === 'echec') d = R.paiementEchoue(d, { maintenant: now, raison: r.message });
     if (r.etat === 'paye') d = R.paiementConfirme(d, { maintenant: now, reference: r.reference }).commande;
     S.enregistrerCommande(tx, frais, d);
@@ -78,7 +78,8 @@ function reponseClient(id, d) {
   const p = d.payment || {};
   return {
     id, order: S.commandePublique(d),
-    paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: Number(p.attempts) || 0, relance: R.relancePossible(d) === '', test: !!p.test }
+    paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: Number(p.attempts) || 0, relance: R.relancePossible(d) === '', test: !!p.test,
+      url: p.status === 'pending' && d.status === 'open' ? String(p.url || '') : '' }
   };
 }
 
@@ -91,10 +92,15 @@ function commandeDuClient(e) {
   return rec;
 }
 
+const hoteBoutique = (e) => String($os.getenv('SOKOYETU_DOMAINE') || e.request.host || '').replace(/^(www|admin)\./, '').split(':')[0];
 /* Adresse à laquelle le fournisseur annonce le résultat d'un paiement. */
 function adresseNotification(e) {
-  const hote = String($os.getenv('SOKOYETU_DOMAINE') || e.request.host || '').replace(/^(www|admin)\./, '').split(':')[0];
-  return `https://${hote}/api/sokoyetu/notification/${P.fournisseur()}`;
+  return `https://${hoteBoutique(e)}/api/sokoyetu/notification/${P.fournisseur()}`;
+}
+/* Page de la boutique où le client revient après avoir payé sur la page du fournisseur (nyole). */
+function adresseRetour(e, id) {
+  const h = String($os.getenv('SOKOYETU_RETOUR') || `https://${hoteBoutique(e)}`).replace(/\/+$/, '');
+  return `${h}/paiement/${encodeURIComponent(id)}`;
 }
 
 /* Chaque minute : paiements en cours revérifiés, commandes échues annulées. */
@@ -120,4 +126,4 @@ function notification(app, nom, corps) {
   return true;
 }
 
-module.exports = { suivre, demander, appliquer, reponseClient, commandeDuClient, adresseNotification, surveiller, notification };
+module.exports = { suivre, demander, appliquer, reponseClient, commandeDuClient, adresseNotification, adresseRetour, surveiller, notification };

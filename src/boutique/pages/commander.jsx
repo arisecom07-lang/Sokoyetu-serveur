@@ -69,6 +69,8 @@ export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, tel
 }
 
 export function NoteModeTest() {
+  const p = cfg.value.payment || {};
+  if (p.redirection) return <Note ton="info" icone="info"><b>Mode test.</b> Aucun argent n’est débité : le paiement est simulé sur la page du service de paiement.</Note>;
   return <Note ton="info" icone="info"><b>Mode test.</b> Aucun argent n’est débité : le paiement est confirmé tout seul après quelques secondes (refusé si le numéro se termine par 0000).</Note>;
 }
 

@@ -107,7 +107,7 @@ function catalogue(e) {
   // Comptes clients : proposés seulement si l'envoi des codes (WhatsApp ou SMS) est prêt ; sinon, commande sans compte.
   const codes = require(`${__hooks}/lib/envoi.js`).etat();
   config = Object.assign({ id: 'store' }, config || {}, {
-    payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.provider === 'simulation' },
+    payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.test === true, redirection: !!(R.FOURNISSEURS[cfg.payment.provider] || {}).redirection },
     accounts: { open: codes.pret, test: codes.test, channels: codes.canaux }
   });
   const donnees = {

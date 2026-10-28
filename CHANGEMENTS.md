@@ -1,3 +1,18 @@
+# Sokoyetu — paiement par nyole (octobre 2026)
+
+## Ce qui change pour vous
+
+- **nyole branché à côté de FlexPay.** Une commande sur le serveur : `sudo /opt/sokoyetu/paiement.sh nyole` (réel, clé `af_live_sec_…`) ou `sudo /opt/sokoyetu/paiement.sh nyole-essai` (clé `af_test_sec_…`, aucun argent). La clé secrète est demandée sans s'afficher : elle ne passe ni par l'administration, ni par une discussion.
+- **Parcours du client** : il choisit son opérateur dans la boutique, part sur la page sécurisée de nyole pour payer (M-Pesa, Airtel Money, Orange Money), puis revient sur la boutique ; le reçu s'affiche dès que nyole confirme. S'il revient sans payer, un bouton « Payer » le renvoie sur la page nyole ; si le paiement est refusé ou annulé, il réessaie sur la même commande.
+- **Administration** : Réglages → Paiements explique comment brancher nyole et donne l'adresse du webhook à copier dans nyole (API et journaux). Une clé d'essai nyole affiche le bandeau « Mode test ».
+
+## Détails techniques
+
+- `lib/paiement.js` : fournisseur `nyole` (`POST /checkout/sessions`, montant en centimes USD, `Idempotency-Key` ; `GET /checkout/sessions/{id}/status` ; SUCCESS validé seulement si le montant concorde). Webhook `notification/nyole` : sert seulement à savoir quelle commande revérifier.
+- `regles.js` : `FOURNISSEURS.nyole` (`redirection: true`, sans Afrimoney), `payment.url` gardé par `paiementEnvoye`, `payment.test` vrai aussi pour une clé d'essai nyole. La configuration publique expose `payment.redirection`.
+- `paiement.jsx` : page « Terminez le paiement sur la page sécurisée », départ automatique une fois par page de paiement.
+- Tests : `tests/nyole-simule.mjs` (faux nyole) et `tests/nyole.test.mjs`.
+
 # Sokoyetu — panier : choisir les articles à commander (octobre 2026)
 
 ## Ce qui change pour vous

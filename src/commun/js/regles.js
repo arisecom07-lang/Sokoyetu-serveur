@@ -28,7 +28,9 @@ const OPERATEURS = {
  */
 const FOURNISSEURS = {
   simulation: { label: 'Mode test (simulation)', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'illico'] },
-  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney'] }
+  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney'] },
+  // nyole : le client termine le paiement sur la page sécurisée de nyole (redirection), puis revient sur la boutique.
+  nyole: { label: 'nyole', operateurs: ['mpesa', 'airtel', 'orange'], redirection: true }
 };
 
 const ZONES_DEFAUT = [
@@ -362,7 +364,7 @@ function preparerCommande(opts) {
     items: dv.lignes.map((l) => { const o = Object.assign({}, l); delete o.available; return o; }),
     subtotal: dv.sousTotal, discount: dv.remise ? { code: dv.remise.code, amount: dv.remise.amount } : null,
     shippingFee: dv.livraison, serviceFee: dv.frais, serviceFeePct: dv.fraisPct, total: dv.total,
-    payment: { method: moyen.k, label: moyen.label, phone: payeur, provider: fournisseur, test: fournisseur === 'simulation', status: 'pending', attempts: 0, startedAt: now, providerId: '', reference: '', error: '' },
+    payment: { method: moyen.k, label: moyen.label, phone: payeur, provider: fournisseur, test: fournisseur === 'simulation' || cfg.payment.test === true, status: 'pending', attempts: 0, startedAt: now, providerId: '', reference: '', error: '' },
     expiresAt: now + cfg.payment.holdMinutes * 60000,
     delivery: livraisonEstimee(cfg, dv.lignes, zone, now),
     fulfillment: 'unfulfilled', status: 'open', issues: [],
@@ -428,7 +430,7 @@ function relancePossible(o, maintenant) {
   if (int(o.payment && o.payment.attempts) >= MAX_TENTATIVES) return 'Trop de tentatives de paiement pour cette commande. Repassez votre commande.';
   return '';
 }
-/* Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, methode, label, telephone } */
+/* Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, url, methode, label, telephone } */
 function paiementEnvoye(o, opts) {
   const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
   const relance = int(c.payment.attempts) > 0;
@@ -436,8 +438,9 @@ function paiementEnvoye(o, opts) {
   if (opts.telephone) c.payment.phone = opts.telephone;
   if (c.payment.providerId) c.payment.previous = (Array.isArray(c.payment.previous) ? c.payment.previous : []).concat([c.payment.providerId]).slice(-MAX_TENTATIVES);
   c.payment.status = 'pending'; c.payment.providerId = String(opts.providerId || ''); c.payment.attempts = int(c.payment.attempts) + 1;
+  if (opts.url) c.payment.url = String(opts.url); else delete c.payment.url;
   c.payment.startedAt = now; c.payment.error = ''; c.payment.checkedAt = 0;
-  c.timeline.push({ at: now, text: `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
+  c.timeline.push({ at: now, text: opts.url ? `${relance ? 'Nouvelle page' : 'Page'} de paiement ${c.payment.label} ouverte pour le ${c.payment.phone}` : `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
   return c;
 }
 /* Le fournisseur confirme le paiement. Renvoie { commande, stock, entrees } : un paiement arrivé après l'annulation automatique rouvre la commande. */

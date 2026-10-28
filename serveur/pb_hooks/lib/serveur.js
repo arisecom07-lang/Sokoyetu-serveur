@@ -15,6 +15,7 @@ function configuration(app) {
   const c = R.config(brut);
   const P = require(`${__hooks}/lib/paiement.js`);
   c.payment.provider = P.pret() ? P.fournisseur() : '';
+  c.payment.test = !!c.payment.provider && P.etat().test;
   return c;
 }
 

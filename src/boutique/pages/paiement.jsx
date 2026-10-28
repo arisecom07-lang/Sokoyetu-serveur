@@ -1,5 +1,6 @@
 // Sokoyetu (boutique) — paiement en cours : le client valide la demande sur son téléphone, la page suit l'état auprès du serveur.
 // Payée → reçu. Refusée → nouvelle tentative (même commande). Délai dépassé → commande annulée, articles remis en vente.
+// Fournisseur à redirection (nyole) : le client part une fois sur la page sécurisée du fournisseur, puis revient ici.
 import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
@@ -14,6 +15,13 @@ import { NOMS_ETAPES, ChoixPaiement, NoteModeTest } from './commander.jsx';
 import { useSeo } from './commun.jsx';
 
 const RELANCE_APRES = 35000; // le serveur accepte une nouvelle demande 30 s après la précédente
+
+// Page du fournisseur déjà ouverte depuis cet onglet : au retour, on ne repart pas toute seule (le client garde la main).
+const dejaOuverte = (url) => { try { return sessionStorage.getItem('paiement-ouvert') === url; } catch (e) { return false; } };
+function ouvrirPagePaiement(url) {
+  try { sessionStorage.setItem('paiement-ouvert', url); } catch (e) { /* navigation privée */ }
+  window.location.assign(url);
+}
 
 const minutes = (ms) => { const m = Math.max(0, Math.ceil(ms / 60000)); return m <= 1 ? 'moins d’une minute' : `${m} min`; };
 
@@ -46,6 +54,7 @@ export function Paiement() {
           return;
         }
         if (!R.enAttentePaiement(r.order)) return; // annulée : plus rien à attendre
+        if (r.paiement.url && r.paiement.etat === 'pending' && !dejaOuverte(r.paiement.url)) { ouvrirPagePaiement(r.paiement.url); return; }
         minuteur = setTimeout(suivre, document.hidden ? 10000 : r.paiement.etat === 'failed' ? 8000 : 3000);
       } catch (e) {
         if (fini) return;
@@ -85,6 +94,7 @@ export function Paiement() {
       setEtat(r); recevoirCommande(id, r.order); setAutre(false);
       if (avecChoix && moyen) enregistrerProfil({ payMethod: moyen.k, payPhone: R.valider.mobileMoney(tel) });
       setRelance((x) => ({ ...x, envoi: false, tel: '' }));
+      if (r.paiement.url && r.paiement.etat === 'pending') { ouvrirPagePaiement(r.paiement.url); return; }
       toast(r.paiement.etat === 'failed' ? 'La demande n’a pas pu partir' : 'Nouvelle demande envoyée : regardez votre téléphone', { icone: r.paiement.etat === 'failed' ? 'alerte' : 'mobile', ton: r.paiement.etat === 'failed' ? 'danger' : '' });
       setTour((n) => n + 1);
     } catch (e) {
@@ -114,6 +124,7 @@ export function Paiement() {
   const depuis = maintenant - Number(o.payment.startedAt || 0);
   const peutRelancer = enCours && (!p || p.relance) && (echec || depuis > RELANCE_APRES);
   const test = (p && p.test) || o.payment.test;
+  const pageFournisseur = enCours && !echec && p && p.url ? p.url : '';
 
   return (
     <>
@@ -141,6 +152,14 @@ export function Paiement() {
                   <h1 class="titre-serif">Paiement non abouti</h1>
                   <p class="attenue">{o.payment.error || 'Le paiement a été refusé ou annulé.'} Rien n’a été débité : vous pouvez réessayer.</p>
                 </>
+              ) : pageFournisseur ? (
+                <>
+                  <span class="attente-onde" aria-hidden="true"><Icone n="cadenas" /><LogoOperateur k={o.payment.method} m={moyen} taille={30} classe="attente-logo" /></span>
+                  <h1 class="titre-serif">Terminez le paiement sur la page sécurisée</h1>
+                  <p class="attenue">Payez <b>{dollars(o.total)}</b>{francs(o.total, c) ? ` (${francs(o.total, c)})` : ''} avec {o.payment.label} sur la page de notre service de paiement, puis revenez ici.</p>
+                  <a class="btn btn-primaire btn-l btn-bloc espace-haut" href={pageFournisseur} onClick={(ev) => { ev.preventDefault(); ouvrirPagePaiement(pageFournisseur); }}><Icone n="cadenas" />Payer {dollars(o.total)}</a>
+                  <p class="discret petit centre"><span class="point-vivant" aria-hidden="true" />Déjà payé ? Cette page se met à jour toute seule dès que le paiement est confirmé.</p>
+                </>
               ) : (
                 <>
                   <span class="attente-onde" aria-hidden="true"><Icone n="mobile" /><LogoOperateur k={o.payment.method} m={moyen} taille={30} classe="attente-logo" /></span>
@@ -157,7 +176,7 @@ export function Paiement() {
               {reste > 0 ? <p class="discret petit centre">Vos articles restent réservés encore {minutes(reste)}.</p> : null}
               {probleme ? <Note ton="alerte" icone="info" classe="espace-haut">{probleme} Nouvelle vérification dans un instant…</Note> : null}
 
-              {peutRelancer && !autre ? (
+              {peutRelancer && !autre && !pageFournisseur ? (
                 <div class="pile espace-haut">
                   {!echec ? <p class="petit centre"><b>Rien reçu ?</b> Vérifiez que le téléphone est allumé et a du réseau, puis renvoyez la demande.</p> : null}
                   <button class={classes('btn btn-primaire btn-l btn-bloc', relance.envoi && 'charge')} onClick={() => relancer(false)}><Icone n="actualiser" />{echec ? `Réessayer : ${dollars(o.total)}` : 'Renvoyer la demande'}</button>
