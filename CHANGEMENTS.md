@@ -1,3 +1,26 @@
+# Sokoyetu — ajout des produits comme sur Shein et Temu (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Importer depuis un lien** (fiche « Nouveau produit ») : collez le lien d'un article sur 1688, Alibaba, AliExpress, Taobao, Tmall, Temu, Shein, Made-in-China ou DHgate. Les photos sont copiées sur votre serveur, le prix d'usine est noté (jamais visible des clients) et, si l'assistant IA est activé, la fiche est rédigée en français. Ces sites demandent parfois une connexion : la page ne peut alors pas être lue, et le message propose la photo + l'assistant.
+- **Importer en masse** (Produits → Importer) : un tableau Excel (.xlsx) ou CSV, ou des cellules copiées depuis Google Sheets (modèle à télécharger), jusqu'à 300 produits ; ou jusqu'à 30 liens fournisseurs d'un coup, avec le prix de vente proposé (prix d'usine ÷ taux du yuan × coefficient), en brouillon par défaut.
+- **Prix par variante** : une colonne Prix à côté du stock (ex. XL plus cher). Vide = prix de l'article. La boutique affiche « dès $… ».
+- **Prix de gros** : jusqu'à 4 paliers (« dès 3 pièces −5 % »), toutes couleurs et tailles confondues, affichés sur la fiche.
+- **Vente flash** : réduction en %, début et fin ; compte à rebours sur la fiche et la carte, retour au prix normal tout seul.
+- **Guide des tailles** en centimètres (Poitrine, Longueur, Pointure…), ouvert depuis « Guide des tailles » sur la fiche.
+- **Vidéo** : une courte vidéo MP4 (30 Mo, 1 min 30 au plus) placée juste après la photo principale.
+- **Poids et dimensions** : affichés dans les caractéristiques ; chaque zone de livraison peut ajouter un **supplément par kilo** (Réglages → Livraison).
+
+## Détails techniques
+
+- `regles.js` : `prixVariante`, `venteFlash`, `paliersGros`, `prixUnitaire`, `prixAffiche`, `poidsDe` ; `devis` calcule le prix de chaque ligne (palier sur toutes les pièces de l'article), `basePrice`/`flash`/`wholesale` sur la ligne, `poids` et `zone.perKg`. Le serveur reste seul juge du prix.
+- Champs produit : `variantPrices`, `wholesale`, `flash`, `sizeGuide`, `weight`, `dims`, `video`, `supplier` (retiré pour les visiteurs par `produitPublic`).
+- `pb_hooks/lib/import.js` + routes `POST /api/sokoyetu/import/lien` et `/import/photo` (administration seulement ; adresses du réseau local refusées). `ia.js` accepte une photo par adresse et le texte de la page.
+- Migration `1793400000_sokoyetu_produits.js` : vidéos MP4/WebM/MOV dans `media` (30 Mo), limites anti-abus des routes d'import. CSP de l'admin : `media-src 'self' blob:`.
+- Admin : `pages/produits-plus.jsx`, `pages/importer.jsx` (lecture .xlsx dans le navigateur via `DecompressionStream`). Tests : `tests/import.test.js`, nouveaux cas dans `tests/regles.test.js`.
+
+---
+
 # Sokoyetu — panier : choisir les articles à commander (octobre 2026)
 
 ## Ce qui change pour vous

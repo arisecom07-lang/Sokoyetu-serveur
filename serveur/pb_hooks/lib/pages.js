@@ -52,14 +52,15 @@ function pageArticle(e) {
   if (!doc || !R.estEnVente(doc)) {
     return e.html(200, avecSeo(indexHtml(), { titre: `Article introuvable · ${cfg.name}`, description: cfg.tagline, url: racine + '/', image: racine + '/og-image.png', boutique: cfg.name, noindex: true }));
   }
-  const prix = R.dollars(doc.price);
+  const pa = R.prixAffiche(doc, '', '', Date.now());
+  const prix = (pa.des ? 'dès ' : '') + R.dollars(pa.prix);
   const imp = R.estImport(doc);
   const description = `${prix}${imp ? ` · Import Chine, livré en ~${cfg.importDays} jours` : ` · En stock à ${cfg.city}`} · Paiement Mobile Money. ${String(doc.description || '').replace(/\s+/g, ' ').slice(0, 110)}`.trim();
   const img = R.imagePrincipale(doc);
   return e.html(200, avecSeo(indexHtml(), {
     titre: `${doc.title} · ${prix} · ${cfg.name}`, titreCourt: `${doc.title} · ${prix}`, description: description.slice(0, 200),
     url: `${racine}/p/${encodeURIComponent(id)}/${R.slug(doc.title)}`, image: urlImage(img, racine, true) || racine + '/og-image.png',
-    imageAlt: (img && img.alt) || doc.title, boutique: cfg.name, type: 'product', prix: R.arrondi(doc.price).toFixed(2)
+    imageAlt: (img && img.alt) || doc.title, boutique: cfg.name, type: 'product', prix: pa.prix.toFixed(2)
   }));
 }
 

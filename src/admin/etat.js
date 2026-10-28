@@ -171,6 +171,13 @@ export async function ficheIA(image, mediaType, hint) {
   return requete('sokoyetu/ia/produit', { method: 'POST', delai: 100000, corps: { image, mediaType, hint, shop: c.name, city: c.city, collections: rayons.value.map((x) => ({ id: x.id, name: x.name })) } });
 }
 
+/* Import depuis un fournisseur : lecture de la page (et fiche rédigée par l'assistant si ia), copie d'une photo par son adresse. */
+export async function lireFournisseur(url, ia, hint) {
+  const c = cfg.value;
+  return requete('sokoyetu/import/lien', { method: 'POST', delai: 120000, corps: { url, ia: !!ia, hint, shop: c.name, city: c.city, collections: rayons.value.map((x) => ({ id: x.id, name: x.name })) } });
+}
+export const copierPhoto = (url) => requete('sokoyetu/import/photo', { method: 'POST', delai: 60000, corps: { url } });
+
 /* Catalogue d'exemple : pour découvrir la boutique avant d'ajouter ses propres articles. */
 export async function chargerExemple() {
   const r = await fetch((typeof __DEMO__ !== 'undefined' && __DEMO__ ? '' : '/') + 'exemple-catalogue.json', { cache: 'no-store' });

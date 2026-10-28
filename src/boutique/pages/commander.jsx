@@ -14,7 +14,7 @@ import { cfg, lignesACommander, aCommander, moyensPaiement, profil, enregistrerP
 import { InvitationCompte } from './connexion.jsx';
 import { EntetePage, BarreAction } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
-import { devisLocal } from './panier.jsx';
+import { devisLocal, prixPieces } from './panier.jsx';
 import { useSeo } from './commun.jsx';
 
 export const NOMS_ETAPES = ['Livraison', 'Paiement', 'Reçu'];
@@ -149,7 +149,7 @@ export function Commander() {
     const bloquants = (r.problemes || []).filter((p) => p.code !== 'remise');
     if (bloquants.length) { panierChange(bloquants.map((p) => p.message)); return null; }
     const remiseRefusee = (r.problemes || []).find((p) => p.code === 'remise');
-    const devis = { lignes: r.lignes, sousTotal: r.sousTotal, remise: r.remise, livraison: r.livraison, frais: r.frais, fraisPct: r.fraisPct, total: r.total, problemes: [] };
+    const devis = { lignes: r.lignes, sousTotal: r.sousTotal, remise: r.remise, livraison: r.livraison, frais: r.frais, fraisPct: r.fraisPct, total: r.total, poids: r.poids, problemes: [] };
     if (remiseRefusee) {
       maj({ devis, remise: null, erreurs: { code: remiseRefusee.message } });
       toast('Le code promo ne s’applique plus : vérifiez le nouveau montant', { icone: 'alerte', ton: 'danger', duree: 4500 });
@@ -215,12 +215,13 @@ export function Commander() {
     else payer();
   };
 
+  const pieces = prixPieces(lignes);
   const recap = (
     <div class="carte">
       <h2 class="carte-titre"><Icone n="recu" />Récapitulatif<span class="fin">{pluriel(lignes.reduce((a, l) => a + l.qty, 0), 'article')}</span></h2>
       <ul class="recap-articles">
         {lignes.map((l) => l.p ? (
-          <li key={l.cle}><span class="ra-photo"><Photo m={R.imagePrincipale(l.p)} alt="" tailles="56px" />{l.qty > 1 ? <i>{l.qty}</i> : null}</span><span class="ra-texte"><b>{l.p.title}</b><small>{[l.color, l.size].filter(Boolean).join(' · ')}</small></span><span class="num">{dollars(R.num(l.p.price) * l.qty)}</span></li>
+          <li key={l.cle}><span class="ra-photo"><Photo m={R.imagePrincipale(l.p)} alt="" tailles="56px" />{l.qty > 1 ? <i>{l.qty}</i> : null}</span><span class="ra-texte"><b>{l.p.title}</b><small>{[l.color, l.size].filter(Boolean).join(' · ')}</small></span><span class="num">{dollars(pieces.get(l.cle).prix * l.qty)}</span></li>
         ) : null)}
       </ul>
       <Montants m={dv} zone={zone && zone.name} libelleTotal={f.etape === 2 ? 'À payer' : 'Total'} />
@@ -250,7 +251,7 @@ export function Commander() {
                   <h2 class="carte-titre"><Icone n="camion" />Livraison</h2>
                   <div class="choix-liste" role="radiogroup" aria-label="Zone de livraison">
                     {c.zones.map((z) => <Choix key={z.id} actif={f.zoneId === z.id} onClick={() => maj({ zoneId: z.id, devis: null, erreurs: { ...f.erreurs, zone: '' } })} icone={z.pickup ? 'boutique' : 'camion'} titre={z.name}
-                      sous={`${R.num(z.fee) ? dollars(z.fee) : 'Gratuit'}${z.pickup ? ' · à retirer en boutique' : z.days > 1 ? ` · sous ${z.days} jours` : ' · sous 24 h'}`} />)}
+                      sous={`${(() => { const v = R.arrondi(R.num(z.fee) + (z.pickup ? 0 : R.num(z.perKg) * R.num(dv.poids))); return v ? dollars(v) : 'Gratuit'; })()}${z.pickup ? ' · à retirer en boutique' : z.days > 1 ? ` · sous ${z.days} jours` : ' · sous 24 h'}`} />)}
                   </div>
                   {f.erreurs.zone ? <p class="champ-erreur"><Icone n="alerte" />{f.erreurs.zone}</p> : null}
                   {retrait ? <Note ton="info" icone="boutique" classe="espace-haut">Vous récupérez votre commande à la boutique de {c.city}. Nous vous appelons dès qu’elle est prête.</Note> : (

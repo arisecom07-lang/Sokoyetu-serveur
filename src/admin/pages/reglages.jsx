@@ -48,7 +48,7 @@ function Formulaire({ section }) {
     d.serviceFeePct = R.num(d.serviceFeePct); if ((d.serviceFeePct < 0 || d.serviceFeePct > 20) && stop('Frais de service : entre 0 et 20 %')) return;
     const delai = R.int(d.payment && d.payment.holdMinutes); if ((delai < 5 || delai > 120) && stop('Délai pour payer : entre 5 et 120 minutes')) return;
     d.payment = { holdMinutes: delai };
-    d.zones = (d.zones || []).filter((z) => String(z.name || '').trim()).map((z) => ({ id: z.id || uid(), name: R.nettoyer(z.name, 40), fee: Math.max(0, R.num(z.fee)), days: R.int(z.days), pickup: !!z.pickup }));
+    d.zones = (d.zones || []).filter((z) => String(z.name || '').trim()).map((z) => ({ id: z.id || uid(), name: R.nettoyer(z.name, 40), fee: Math.max(0, R.num(z.fee)), days: R.int(z.days), pickup: !!z.pickup, perKg: Math.max(0, R.arrondi(z.perKg)) }));
     if (!d.zones.length && stop('Gardez au moins une zone de livraison')) return;
     for (const k of ['company', 'address', 'rccm', 'idnat', 'nif']) d.legal[k] = R.nettoyer(d.legal[k], k === 'address' ? 140 : 80);
     const em = R.valider.email(d.legal.email); if (em === null && stop('E-mail de contact invalide')) return; d.legal.email = em;
@@ -139,6 +139,7 @@ function Formulaire({ section }) {
                         <Champ libelle="Frais ($)">{(a) => <input class="saisie" {...a} inputmode="decimal" value={z.fee} onInput={(e) => zone(i, { fee: e.currentTarget.value })} />}</Champ>
                         <Champ libelle="Délai (jours)">{(a) => <input class="saisie" {...a} inputmode="numeric" value={z.days} onInput={(e) => zone(i, { days: e.currentTarget.value.replace(/\D/g, '') })} />}</Champ>
                       </div>
+                      {!z.pickup ? <Champ libelle="Supplément par kilo ($)" facultatif aide="Ajouté selon le poids des articles (champ « Poids » de chaque produit). 0 : frais fixes.">{(a) => <input class="saisie" {...a} inputmode="decimal" value={z.perKg || ''} placeholder="0" onInput={(e) => zone(i, { perKg: e.currentTarget.value })} />}</Champ> : null}
                       <Bascule actif={!!z.pickup} onClick={() => zone(i, { pickup: !z.pickup })} libelle="Retrait en boutique" sous="Le client vient chercher sa commande : pas d’adresse demandée" />
                       <button class="btn btn-fantome btn-s" style={{ justifySelf: 'start' }} onClick={() => maj({ zones: f.zones.filter((_, j) => j !== i) })}><Icone n="poubelle" />Retirer la zone</button>
                     </div>

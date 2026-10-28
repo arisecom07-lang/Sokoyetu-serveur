@@ -163,7 +163,7 @@ export function ouvrirLivraisonPaiement() {
                 <div class="ligne" key={z.id}>
                   <span class="ligne-vignette"><Icone n={z.pickup ? 'boutique' : 'camion'} /></span>
                   <span class="ligne-texte"><b>{z.name}</b><small>{z.pickup ? 'À retirer en boutique' : z.days > 1 ? `Sous ${z.days} jours` : 'Sous 24 h'}</small></span>
-                  <span class="ligne-fin"><b>{R.num(z.fee) ? dollars(z.fee) : 'Gratuit'}</b></span>
+                  <span class="ligne-fin"><b>{R.num(z.fee) ? dollars(z.fee) : R.num(z.perKg) ? '' : 'Gratuit'}{R.num(z.perKg) && !z.pickup ? `${R.num(z.fee) ? ' + ' : ''}${dollars(z.perKg)}/kg` : ''}</b></span>
                 </div>
               ))}
             </div>
