@@ -1,99 +1,56 @@
 /*
- * Sokoyetu — retouches choisies par messir dans l'Atelier (plan de travail du design), 2026-10-28.
- * Chaque règle reprend exactement le réglage vu dans l'aperçu ; !important car ces règles passent avant celles de boutique.css.
- * Les couleurs choisies en thème clair ne s'appliquent qu'au thème clair ; le thème sombre garde les siennes.
+ * Sokoyetu — retouches du design choisies par messir dans l'Atelier (plan de travail), 2026-10-28, puis ajustées pour la lisibilité.
+ * Idée : pages plus compactes, cases teintées, titres de cartes en pastilles, reçu plus sobre. Les coins plus ronds sont dans jetons.css.
+ * Toutes les couleurs passent par les jetons : le thème sombre suit tout seul.
+ * Ce fichier est importé avant les règles de boutique.css, d'où les !important.
  */
 
-/* Case « Vous choisissezArticles en stock à Bukav » (accueil) */
-section.conteneur.section.confiance ol.etapes-import li { zoom: 0.55 !important; }
+/* ---------- Accueil ---------- */
+/* Cases « Vous choisissez / Vous payez… » plus compactes */
+.etapes-import { grid-template-columns: repeat(4, minmax(190px, 1fr)) !important; gap: var(--e2) !important; }
+.etapes-import li { padding: 11px 12px !important; gap: 10px !important; }
+.etapes-import b { font-size: 13px !important; }
+.etapes-import p { font-size: 12.5px !important; line-height: 1.35 !important; }
 
-/* Texte « Montres » (accueil) */
-div.rayons-rangee.defile-h a.rayon-rond b { font-size: 12.82px !important; }
+/* Rayons : photos rondes plus petites, noms un peu plus fins */
+.rr-photo { width: 70px !important; height: 70px !important; }
+.rayon-rond { width: 82px !important; }
+.rayon-rond b { font-size: 13px !important; }
+@media (min-width: 900px) {
+  .rr-photo { width: 96px !important; height: 96px !important; }
+  .rayon-rond { width: 110px !important; }
+}
 
-/* Image « Montre à gousset suspendue à sa chaîne » (accueil) */
-span.rr-photo img.media { zoom: 0.7 !important; }
+/* Bannière : slogan un cran plus petit */
+.heros-slogan { font-size: clamp(15px, 4.1vw, 20px) !important; }
 
-/* Titre ou prix « Sokoyetu » (accueil) */
-span.marque-texte span.marque-nom { translate: 0px 4px !important; border-radius: 50px !important; overflow: hidden !important; }
+/* ---------- Choix du compte (avant la commande) ---------- */
+.invitation-compte { background: var(--marque-doux) !important; border-color: var(--marque-doux-2) !important; }
+.invitation-compte h2.titre-serif { font-size: 22px !important; text-align: center; }
+.invitation-compte p.attenue { text-align: center; max-width: 36ch; margin-left: auto !important; margin-right: auto !important; }
+.invitation-compte .btn-secondaire { background: var(--marque) !important; color: var(--sur-ebene) !important; border-color: var(--marque) !important; }
 
-/* Texte « Commandez et recevez chez vous » (accueil) */
-div.heros-contenu p.heros-slogan { font-size: 15.94px !important; }
+/* ---------- Commande ---------- */
+.page-commande .commande-tete { padding-bottom: var(--e3) !important; gap: var(--e3) !important; }
+.page-commande .pile-l > section.carte { background: var(--surface-2) !important; }
+/* Titres des cartes en pastille claire sur la case teintée */
+.page-commande .carte-titre { background: var(--surface); border-radius: var(--r-rond); padding: 6px 14px 6px 6px; font-weight: 750 !important; width: fit-content; max-width: 100%; box-shadow: var(--ombre-1); }
+.page-commande .carte-titre .fin { margin-left: var(--e3) !important; }
+.page-commande .champ-libelle { font-weight: 720 !important; }
+/* Note « Mode test » retirée de la commande (le paiement de test reste expliqué sur l'écran d'attente) */
+.page-commande .pile-l > .note.ton-info { display: none !important; }
 
-/* Titre « Créez votre compte et commencez à comman » (commande) */
-div.pile h2.titre-serif { font-size: 16.9px !important; text-align: center !important; justify-content: center !important; align-items: center !important; justify-self: center !important; margin-left: auto !important; margin-right: auto !important; }
+/* ---------- Reçu (après le paiement) ---------- */
+.merci-tete { padding-top: var(--e6) !important; }
+.merci-tete h1.titre-serif { font-size: 24px !important; }
+.merci-tete p.attenue { font-size: 14px !important; }
+.merci-coche { background: var(--ebene) !important; color: var(--sur-ebene) !important; box-shadow: 0 0 0 10px var(--marque-doux) !important; }
+.merci-coche .ic { --ic: 48px; }
 
-/* Texte « En 30 secondes, avec votre numéro de tél » (commande) */
-div.pile p.attenue { text-align: center !important; justify-content: center !important; align-items: center !important; justify-self: center !important; margin-left: auto !important; margin-right: auto !important; padding: 1px 1px 1px 1px !important; }
-
-/* Bouton « J’ai déjà un compte : me connecter » (commande) */
-:root:not([data-theme="dark"]) div.pile a.btn.btn-secondaire.btn-bloc { color: #ffffff !important; background: #4d3e3e !important; }
-
-/* Case « Créez votre compte et commencez à comman » (commande) */
-:root:not([data-theme="dark"]) main.page.conteneur.page-choix-compte section.carte.invitation-compte { background: #e0c8c8 !important; }
-
-/* Case « Vos coordonnéesNom completTéléphoneLe li » (commande) */
-:root:not([data-theme="dark"]) div.pile-l section.carte.entree-avant { background: #dbd9d9 !important; }
-
-/* Titre « Vos coordonnées » (commande) */
-section.carte.entree-avant h2.carte-titre { border-radius: 60px !important; overflow: hidden !important; }
-:root:not([data-theme="dark"]) section.carte.entree-avant h2.carte-titre { background: #ffffff !important; }
-
-/* Texte « Téléphone » (commande) */
-div.champ label.champ-libelle { border-radius: 59px !important; overflow: hidden !important; font-weight: 800 !important; }
-:root:not([data-theme="dark"]) div.champ label.champ-libelle { background: #ffffff !important; }
-
-/* Case « Étape 1 sur 3 » (commande) */
-div.commande-tete ol.etapes { translate: 0px -12px !important; border-radius: 60px !important; overflow: hidden !important; font-weight: 400 !important; }
-
-/* Case « Vos coordonnéesNom completTéléphoneLe li » (commande) */
-div.commande-grille div.pile-l { translate: 0px -8px !important; }
-
-/* Case « Mode test. Aucun argent n’est débité : l » (commande) */
-div.pile-l div.note.ton-info { display: none !important; }
-
-/* Titre « Payer par Mobile Money » (commande) */
-section.carte.carte-paiement.entree-avant h2.carte-titre { border-radius: 59px !important; overflow: hidden !important; }
-
-/* Titre « Récapitulatif1 article » (commande) */
-div.carte h2.carte-titre { border-radius: 56px !important; overflow: hidden !important; font-weight: 800 !important; }
-
-/* Titre « Livraison » (commande) */
-div.entre h2.carte-titre { border-radius: 35px !important; overflow: hidden !important; }
-
-/* Case « Paiement reçu, merci Hjdkddoyouu !Votre  » (reçu) */
-main.page.conteneur.page-merci section.merci-tete.entree.non-imprime { translate: 0px -4px !important; border-radius: 60px !important; overflow: hidden !important; font-weight: 650 !important; }
-
-/* Titre « Paiement reçu, merci Hjdkddoyouu ! » (reçu) */
-section.merci-tete.entree.non-imprime h1.titre-serif { font-size: 18px !important; font-weight: 600 !important; }
-
-/* Icône «  » (reçu) */
-div.merci-coche svg.ic { width: calc(var(--ic, 22px) * 1.1) !important; height: calc(var(--ic, 22px) * 1.1) !important; translate: 0px -6px !important; text-align: center !important; justify-content: center !important; align-items: center !important; justify-self: center !important; margin-left: auto !important; margin-right: auto !important; border-radius: 42px !important; overflow: hidden !important; }
-
-/* Texte « Commandez et recevez chez vous » (reçu) */
-span.marque-texte small.marque-slogan { font-size: 7.8px !important; border-radius: 52px !important; overflow: hidden !important; font-weight: 300 !important; }
-
-/* Titre « Reçu de commande » (reçu) */
-article.recu header.recu-tete h2 { translate: 0px -4px !important; }
-
-/* Texte « HPPUEQ » (reçu) */
-div.recu-numero b.code { font-size: 19.6px !important; border-radius: 54px !important; overflow: hidden !important; font-weight: 800 !important; }
-
-/* Texte « Votre commande est confirmée. Voici votr » (reçu) */
-section.merci-tete.entree.non-imprime p.attenue { font-size: 9.75px !important; }
-
-/* Case «  » (reçu) */
-section.merci-tete.entree.non-imprime div.merci-coche { padding: 25px 25px 25px 25px !important; }
-:root:not([data-theme="dark"]) section.merci-tete.entree.non-imprime div.merci-coche { background: #6e5151 !important; }
-
-/* Case « SokoyetuCommandez et recevez chez vousRe » (reçu) */
-div.pile-l.merci-corps article.recu { padding: 45px 45px 45px 45px !important; }
-:root:not([data-theme="dark"]) div.pile-l.merci-corps article.recu { background: #9e9696 !important; }
-
-/* Texte « Chemise en chambray » (reçu) */
-:root:not([data-theme="dark"]) ul.recap-articles span.ra-texte b { background: #ffffff !important; }
-
-/* Texte « Payée et confirmée » (reçu) */
-:root:not([data-theme="dark"]) article.recu div.recu-cachet b { color: #000000 !important; }
-
-/* Texte « Commande de test : » (reçu) */
-:root:not([data-theme="dark"]) article.recu footer.recu-pied b { color: #000000 !important; }
+.recu { background: var(--surface-2) !important; padding: var(--e6) !important; }
+.recu .marque-slogan { font-size: max(9.5px, .32em) !important; font-weight: 600 !important; }
+.recu .recu-numero { background: var(--surface) !important; }
+.recu .recu-numero b { font-size: 23px !important; font-weight: 800 !important; }
+.recu .recap-articles { background: var(--surface); border-radius: var(--r-m); padding: 10px 12px; }
+.recu .recu-cachet b { color: var(--encre) !important; }
+.recu .recu-pied b { color: var(--encre) !important; }
