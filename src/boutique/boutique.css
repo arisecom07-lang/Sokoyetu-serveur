@@ -3,6 +3,7 @@
 @import '../commun/css/base.css';
 @import '../commun/css/composants.css';
 @import '../commun/css/couleurs.css';
+@import './retouches.css';
 
 /* ---------- Mise en page ---------- */
 .conteneur { width: 100%; max-width: var(--contenu); margin: 0 auto; padding-left: var(--gouttiere); padding-right: var(--gouttiere-d); }
