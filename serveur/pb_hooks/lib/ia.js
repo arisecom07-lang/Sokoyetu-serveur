@@ -1,6 +1,7 @@
 /*
  * Sokoyetu — assistant IA des fiches produits (administration).
  * Une photo d'article → titre, description, caractéristiques, couleurs, tailles, rayon.
+ * Import depuis un fournisseur : la photo est donnée par son adresse, avec le texte de la page (souvent en chinois) à traduire.
  * Appel direct à l'API Claude (pas de SDK dans PocketBase). Clé : variable ANTHROPIC_API_KEY,
  * enregistrée sur le serveur avec « sudo /opt/sokoyetu/ia.sh VOTRE_CLE ».
  */
@@ -41,7 +42,7 @@ Règles :
 - alt : une courte description de la photo (120 caractères au plus).
 
 Rayons existants (identifiant : nom) :
-${rayons}${ctx.hint ? `\n\nIndication du vendeur : ${ctx.hint}` : ''}`;
+${rayons}${ctx.hint ? `\n\nIndication du vendeur : ${ctx.hint}` : ''}${ctx.texte ? `\n\nTexte de la page du fournisseur (souvent en chinois ou en anglais, parfois mal encodé) : sers-t’en pour la matière, les couleurs et les tailles proposées, traduis-le, ne le recopie pas, et ignore les prix, quantités minimales, noms d’usine et promesses publicitaires :\n${ctx.texte}` : ''}`;
 }
 
 function nettoyerReponse(r, ctx) {
@@ -68,12 +69,14 @@ function nettoyerReponse(r, ctx) {
 function fiche(entree) {
   const cle = String($os.getenv('ANTHROPIC_API_KEY') || '').trim();
   if (!cle) throw { code: 'no_key', status: 503 };
+  const adresse = /^https:\/\/[^\s"'<>]{8,1000}$/.test(String(entree.imageUrl || '')) ? String(entree.imageUrl) : '';
   const type = TYPES_IMAGE.indexOf(entree.mediaType) >= 0 ? entree.mediaType : '';
   const image = String(entree.image || '');
-  if (!type || !image || image.length > 7000000 || !/^[A-Za-z0-9+/=]+$/.test(image)) throw { code: 'image_rejected', status: 400 };
+  if (!adresse && (!type || !image || image.length > 7000000 || !/^[A-Za-z0-9+/=]+$/.test(image))) throw { code: 'image_rejected', status: 400 };
   const ctx = {
     shop: String(entree.shop || 'Sokoyetu').slice(0, 40), city: String(entree.city || 'Bukavu').slice(0, 40),
     hint: String(entree.hint || '').replace(/\s+/g, ' ').trim().slice(0, 200),
+    texte: String(entree.texte || '').replace(/[ \t]+/g, ' ').trim().slice(0, 2500),
     collections: (Array.isArray(entree.collections) ? entree.collections : []).slice(0, 80)
       .map((c) => ({ id: String((c && c.id) || '').slice(0, 40), name: String((c && c.name) || '').slice(0, 40) })).filter((c) => c.id && c.name)
   };
@@ -97,7 +100,7 @@ function fiche(entree) {
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: type, data: image } },
+            { type: 'image', source: adresse ? { type: 'url', url: adresse } : { type: 'base64', media_type: type, data: image } },
             { type: 'text', text: consigne(ctx) }
           ]
         }]

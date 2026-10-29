@@ -104,6 +104,13 @@ export async function envoyerPhoto(blob) {
   const r = await requete(cheminRecords('media'), { method: 'POST', corps: fd, delai: 90000 });
   return { type: 'pb', id: r.id, f: r.file };
 }
+/* Courte vidéo d'un article (MP4 ou WebM, envoyée telle quelle) → { type: 'pb', id, f, video: true }. */
+export async function envoyerVideo(fichier) {
+  const fd = new FormData();
+  fd.append('file', fichier, 'video.' + (fichier.type === 'video/webm' ? 'webm' : fichier.type === 'video/quicktime' ? 'mov' : 'mp4'));
+  const r = await requete(cheminRecords('media'), { method: 'POST', corps: fd, delai: 300000 });
+  return { type: 'pb', id: r.id, f: r.file, video: true };
+}
 export const urlFichierServeur = (m, miniature) => `/api/files/media/${encodeURIComponent(m.id)}/${encodeURIComponent(m.f)}${miniature ? '?thumb=' + miniature : ''}`;
 
 /* ---------- Temps réel (une seule connexion pour tous les abonnements) ---------- */

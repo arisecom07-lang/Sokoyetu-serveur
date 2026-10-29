@@ -1,5 +1,5 @@
 // Sokoyetu (boutique) — présentation des articles : carte, grille, liens, informations de livraison.
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
@@ -15,10 +15,22 @@ export const lienRayon = (c) => lien(`/c/${encodeURIComponent(c.id)}/${slug(c.na
 export function trier(liste, ordre) {
   const l = [...liste];
   if (ordre === 'nouveautes') return l.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  if (ordre === 'prix-croissant') return l.sort((a, b) => R.num(a.price) - R.num(b.price));
-  if (ordre === 'prix-decroissant') return l.sort((a, b) => R.num(b.price) - R.num(a.price));
+  const prix = (p) => R.prixAffiche(p).prix;
+  if (ordre === 'prix-croissant') return l.sort((a, b) => prix(a) - prix(b));
+  if (ordre === 'prix-decroissant') return l.sort((a, b) => prix(b) - prix(a));
   if (ordre === 'promos') return l.filter((p) => R.pourcentRemise(p) > 0).sort((a, b) => R.pourcentRemise(b) - R.pourcentRemise(a));
   return l.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || R.int(b.sold) - R.int(a.sold) || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* « 2 j 05 h 12 min » ou « 05 : 12 : 30 » : temps restant d'une vente flash, mis à jour chaque seconde. */
+export function CompteARebours({ fin, court }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const s = Math.max(0, Math.floor((fin - now) / 1000));
+  const j = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  const d2 = (n) => String(n).padStart(2, '0');
+  if (court) return <span class="rebours num">{j ? `${j} j ${d2(h)} h` : `${d2(h)}:${d2(m)}:${d2(x)}`}</span>;
+  return <span class="rebours num" role="timer">{j ? `${j} j ` : ''}{d2(h)} h {d2(m)} min {j ? '' : `${d2(x)} s`}</span>;
 }
 
 export const epuise = (p) => !R.estImport(p) && R.stockTotal(p) <= 0;
@@ -43,7 +55,7 @@ export function BoutonFavori({ p, classe = 'cp-favori' }) {
 }
 
 export function CarteProduit({ p, prioritaire, rang = 0 }) {
-  const c = cfg.value; const remise = R.pourcentRemise(p); const fini = epuise(p);
+  const c = cfg.value; const pa = R.prixAffiche(p); const remise = pa.pct; const fini = epuise(p);
   const [survol, setSurvol] = useState(false);
   const images = (p.images || []).filter(Boolean);
   const d = delai(p, c);
@@ -55,13 +67,14 @@ export function CarteProduit({ p, prioritaire, rang = 0 }) {
           <Photo m={images[0]} alt={p.title} prioritaire={prioritaire} />
           {images[1] && survol ? <Photo m={images[1]} alt="" classe="cp-media-2" /> : null}
           <div class="cp-badges">
-            {fini ? <span class="cp-badge epuise">Épuisé</span> : remise ? <span class="cp-badge promo">−{remise} %</span> : null}
+            {fini ? <span class="cp-badge epuise">Épuisé</span> : pa.flash ? <span class="cp-badge flash"><Icone n="horloge" />−{remise} %</span> : remise ? <span class="cp-badge promo">−{remise} %</span> : null}
             {R.estImport(p) && !fini ? <span class="cp-badge import"><Icone n="avion" />Chine</span> : null}
           </div>
         </div>
         <div class="cp-corps">
           <h3 class="cp-titre">{p.title}</h3>
-          <div class="cp-prix"><span class={'prix' + (remise ? ' prix-promo' : '')}>{dollars(p.price)}</span>{remise ? <span class="prix-barre">{dollars(p.compareAt)}</span> : null}</div>
+          <div class="cp-prix">{pa.des ? <small class="prix-des">dès</small> : null}<span class={'prix' + (remise ? ' prix-promo' : '')}>{dollars(pa.prix)}</span>{remise ? <span class="prix-barre">{dollars(pa.barre)}</span> : null}</div>
+          {pa.flash && !fini ? <p class="cp-flash"><Icone n="horloge" />Fin dans <CompteARebours fin={pa.flash.fin} court /></p> : null}
           <p class="cp-delai"><Icone n={d.icone} />{d.court}</p>
         </div>
       </a>

@@ -27,7 +27,7 @@ routerUse((e) => {
   h.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=()');
   if (e.request.tls) h.set('Strict-Transport-Security', 'max-age=31536000');
   h.set('Content-Security-Policy', admin
-    ? "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    ? "default-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     : "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.googletagmanager.com https://plausible.io https://gc.zgo.at; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://plausible.io https://*.goatcounter.com; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   if (/^\/assets\//.test(chemin)) h.set('Cache-Control', 'public, max-age=31536000, immutable');
   else if (/^\/(photos|icones)\//.test(chemin) || /\.(png|webp|jpg|svg|ico|woff2)$/.test(chemin)) h.set('Cache-Control', 'public, max-age=604800');
@@ -64,7 +64,7 @@ routerAdd('POST', '/api/sokoyetu/devis', (e) => {
   const code = R.valider.codePromo(b.discountCode);
   const d = R.devis({ cfg: S.configuration(e.app), produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null, maintenant: Date.now() });
   d.lignes.forEach((l) => { delete l.cost; });
-  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, zoneId: d.zone ? d.zone.id : '' });
+  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' });
 });
 
 /*
@@ -275,6 +275,36 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
   try { return e.json(200, IA.fiche(S.corps(e))); }
   catch (err) {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: 'Assistant indisponible (' + err.code + ').' });
+    throw err;
+  }
+});
+
+// Import depuis un fournisseur (1688, Alibaba…) : titre, photos et prix d'usine ; avec ia=true, l'assistant rédige la fiche en français.
+routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  const I = require(`${__hooks}/lib/import.js`); const IA = require(`${__hooks}/lib/ia.js`);
+  const b = S.corps(e);
+  try {
+    const r = I.lirePage(b.url);
+    const out = { url: r.url, title: r.lu.title, description: r.lu.description, images: r.lu.images, price: r.lu.price, currency: r.lu.currency, fiche: null, ia: '' };
+    if (b.ia && IA.active() && r.lu.images.length) {
+      try { out.fiche = IA.fiche({ imageUrl: r.lu.images[0], texte: r.texte, hint: b.hint, shop: b.shop, city: b.city, collections: b.collections }); }
+      catch (err) { out.ia = (err && err.code) || 'upstream_error'; }
+    }
+    return e.json(200, out);
+  } catch (err) {
+    if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'bad_url' ? 'Collez le lien d’une page produit (1688, Alibaba, AliExpress, Taobao…).' : 'Le site du fournisseur n’a pas laissé lire cette page.' });
+    throw err;
+  }
+});
+// Copie une photo (adresse publique) dans la médiathèque : import en masse, photos d'un fournisseur.
+routerAdd('POST', '/api/sokoyetu/import/photo', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  try { return e.json(200, require(`${__hooks}/lib/import.js`).copierPhoto(e.app, S.corps(e).url)); }
+  catch (err) {
+    if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'not_image' ? 'Ce lien ne mène pas à une photo (JPEG, PNG ou WebP).' : err.code === 'bad_url' ? 'Adresse de photo invalide.' : 'Photo introuvable à cette adresse.' });
     throw err;
   }
 });

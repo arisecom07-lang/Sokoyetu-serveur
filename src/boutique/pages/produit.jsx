@@ -6,9 +6,9 @@ import { Photo, urlMedia } from '../../commun/js/medias.jsx';
 import { toast, Quantite, Note, ouvrirFeuille } from '../../commun/js/interface.jsx';
 import { dollars, francs, pluriel, copier, classes, date, JOUR } from '../../commun/js/outils.js';
 import { lien, route, retour, naviguer } from '../routeur.js';
-import { cfg, produitsParId, produits, catalogueAJour, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement } from '../etat.js';
+import { cfg, produitsParId, produits, catalogueAJour, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement, panier } from '../etat.js';
 import { EnteteBoutique, BarreAction, Pied, ouvrirLivraisonPaiement } from '../composants/cadre.jsx';
-import { BoutonFavori, GrilleProduits, delai, epuise, lienProduit, lienRayon, nomRayon, PuceOperateur, trier } from '../composants/produits.jsx';
+import { BoutonFavori, CompteARebours, GrilleProduits, delai, epuise, lienProduit, lienRayon, nomRayon, PuceOperateur, trier } from '../composants/produits.jsx';
 import { mesurerEvenement } from '../mesure.js';
 import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
@@ -33,19 +33,30 @@ function voler(depuis) {
   an.onfinish = an.oncancel = () => n.remove();
 }
 
+/* La vidéo de l'article passe juste après la photo principale. */
+const avecVideo = (p) => !!(p.video && urlMedia(p.video));
+const rangGalerie = (p, i) => (avecVideo(p) && i >= 1 ? i + 1 : i);
+
 function Galerie({ p, idx, setIdx }) {
-  const images = (p.images || []).filter(Boolean); const liste = images.length ? images : [null];
+  const images = (p.images || []).filter(Boolean);
+  const liste = images.length ? images.slice() : [null];
+  if (avecVideo(p)) liste.splice(1, 0, { video: true });
   const piste = useRef(null);
   useEffect(() => { const el = piste.current; if (!el) return; const w = el.clientWidth; if (Math.round(el.scrollLeft / Math.max(1, w)) !== idx) el.scrollTo({ left: idx * w, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }, [idx]);
   const surDefilement = () => { const el = piste.current; const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (i !== idx) setIdx(i); };
   const ouvrirVisionneuse = (i) => {
     if (!images.length) return;
+    i = images.indexOf(liste[i]); if (i < 0) i = 0;
     ouvrirFeuille({ titre: p.title, large: true, contenu: () => <div class="visionneuse">{images.map((m, j) => <img key={j} src={urlMedia(m, 1200)} alt={m.alt || `${p.title}, photo ${j + 1}`} loading={j === i ? 'eager' : 'lazy'} />)}</div> });
   };
   return (
     <div class="galerie">
       <div class="galerie-piste" ref={piste} onScroll={surDefilement} tabIndex={0} aria-label={`Photos de ${p.title}`}>
-        {liste.map((m, i) => (
+        {liste.map((m, i) => m && m.video ? (
+          <div key="video" class="galerie-image galerie-video">
+            <video src={urlMedia(p.video)} controls playsInline preload="metadata" poster={images[0] ? urlMedia(images[0], 800) : undefined} aria-label={`Vidéo de ${p.title}`} />
+          </div>
+        ) : (
           <button type="button" key={i} class="galerie-image" onClick={() => ouvrirVisionneuse(i)} aria-label={images.length ? `Agrandir la photo ${i + 1}` : undefined} style={i === 0 ? { viewTransitionName: 'photo-produit' } : undefined}>
             <Photo m={m} alt={`${p.title}${liste.length > 1 ? `, photo ${i + 1}` : ''}`} prioritaire={i === 0} tailles="(min-width: 900px) 600px, 100vw" />
           </button>
@@ -56,7 +67,7 @@ function Galerie({ p, idx, setIdx }) {
           <div class="galerie-points" aria-hidden="true">{liste.map((_, i) => <i key={i} class={i === idx ? 'actif' : ''} />)}</div>
           <span class="galerie-compteur" aria-hidden="true">{idx + 1}/{liste.length}</span>
           <div class="galerie-vignettes seulement-ordi">
-            {liste.map((m, i) => <button key={i} type="button" class={i === idx ? 'actif' : ''} onClick={() => setIdx(i)} aria-label={`Voir la photo ${i + 1}`}><Photo m={m} alt="" tailles="80px" /></button>)}
+            {liste.map((m, i) => <button key={i} type="button" class={i === idx ? 'actif' : ''} onClick={() => setIdx(i)} aria-label={m && m.video ? 'Voir la vidéo' : `Voir la photo ${i + 1}`}>{m && m.video ? <span class="vignette-video"><Icone n="lecture" /></span> : <Photo m={m} alt="" tailles="80px" />}</button>)}
           </div>
         </>
       ) : null}
@@ -71,7 +82,7 @@ function Variantes({ p, sel, setSel, erreur, setIdx }) {
     if (size && !imp && R.stockDe(p, nom, size) <= 0) size = '';
     setSel({ ...sel, color: nom, size, qty: 1 });
     const i = (p.images || []).findIndex((m) => m && m.color === nom);
-    if (i >= 0) setIdx(i);
+    if (i >= 0) setIdx(rangGalerie(p, i));
   };
   return (
     <>
@@ -89,6 +100,7 @@ function Variantes({ p, sel, setSel, erreur, setIdx }) {
       {ts.length ? (
         <fieldset class={classes('variantes', erreur === 'size' && 'en-erreur')}>
           <legend>Taille : <span>{sel.size || 'à choisir'}</span></legend>
+          {p.sizeGuide && (p.sizeGuide.cols || []).length ? <button type="button" class="lien petit lien-guide" onClick={() => ouvrirGuide(p, sel.size)}><Icone n="repere" />Guide des tailles</button> : null}
           <div class="tailles">
             {ts.map((t) => {
               const vide = !imp && (!cs.length || sel.color) && R.stockDe(p, cs.length ? sel.color : '', t) <= 0;
@@ -100,6 +112,23 @@ function Variantes({ p, sel, setSel, erreur, setIdx }) {
       ) : null}
     </>
   );
+}
+
+function ouvrirGuide(p, choisie) {
+  const g = p.sizeGuide;
+  ouvrirFeuille({
+    titre: 'Guide des tailles',
+    contenu: () => (
+      <div class="pile">
+        <p class="attenue petit">Mesures de l’article en centimètres.</p>
+        <div class="guide-tailles-boite"><table class="guide-tailles">
+          <thead><tr><th scope="col">Taille</th>{g.cols.map((c) => <th key={c} scope="col">{c}</th>)}</tr></thead>
+          <tbody>{R.taillesDe(p).map((t) => <tr key={t} class={t === choisie ? 'choisie' : ''}><th scope="row">{t}</th>{g.cols.map((c, i) => <td key={c} class="num">{((g.rows || {})[t] || [])[i] || '–'}</td>)}</tr>)}</tbody>
+        </table></div>
+        {g.note ? <Note icone="info">{g.note}</Note> : null}
+      </div>
+    )
+  });
 }
 
 function LigneStock({ p, sel }) {
@@ -124,7 +153,7 @@ function Livraison({ p }) {
           ))}
         </ol>
       ) : (
-        <div class="zones-mini">{c.zones.map((z) => <span key={z.id}><b>{z.name}</b>{R.num(z.fee) ? dollars(z.fee) : 'gratuit'}</span>)}</div>
+        <div class="zones-mini">{c.zones.map((z) => { const v = R.num(z.fee) + (z.pickup ? 0 : R.num(z.perKg) * R.poidsDe(p)); return <span key={z.id}><b>{z.name}</b>{v ? dollars(v) : 'gratuit'}</span>; })}</div>
       )}
       <div class="info-ligne"><span class="info-icone"><Icone n="bouclier" /></span><div><b>Paiement Mobile Money sécurisé</b><p>Payé à la commande, vérifié par la boutique. Nous ne demandons jamais votre code PIN.</p></div></div>
       {moyensPaiement.value.length ? <div class="operateurs">{moyensPaiement.value.map((m) => <PuceOperateur key={m.k} m={m} />)}</div> : null}
@@ -153,11 +182,12 @@ export function Produit() {
   useSeo(() => {
     if (!p) return { titre: 'Article', noindex: !!catalogueAJour.value };
     const img = (p.images || []).filter(Boolean).map((m) => new URL(urlMedia(m, 1200), location.href).href);
+    const prix = R.prixAffiche(p).prix;
     return {
-      titre: `${p.title} · ${dollars(p.price)}`, image: img[0],
-      description: `${p.title} à ${dollars(p.price)}${R.estImport(p) ? ` · import Chine, livré en ~${c.importDays} jours` : ` · en stock à ${c.city}`}. ${String(p.description || '').slice(0, 120)}`,
+      titre: `${p.title} · ${dollars(prix)}`, image: img[0],
+      description: `${p.title} à ${dollars(prix)}${R.estImport(p) ? ` · import Chine, livré en ~${c.importDays} jours` : ` · en stock à ${c.city}`}. ${String(p.description || '').slice(0, 120)}`,
       ld: { '@context': 'https://schema.org', '@type': 'Product', name: p.title, description: p.description || p.title, image: img, ...(p.sku ? { sku: p.sku } : {}), category: (p.collectionIds || []).map(nomRayon).filter(Boolean).join(', '),
-        offers: { '@type': 'Offer', price: R.arrondi(p.price).toFixed(2), priceCurrency: 'USD', url: location.href, availability: 'https://schema.org/' + (R.estImport(p) ? 'PreOrder' : R.stockTotal(p) > 0 ? 'InStock' : 'OutOfStock'), seller: { '@type': 'Organization', name: (c.legal && c.legal.company) || c.name } } }
+        offers: { '@type': 'Offer', price: prix.toFixed(2), priceCurrency: 'USD', url: location.href, availability: 'https://schema.org/' + (R.estImport(p) ? 'PreOrder' : R.stockTotal(p) > 0 ? 'InStock' : 'OutOfStock'), seller: { '@type': 'Organization', name: (c.legal && c.legal.company) || c.name } } }
     };
   }, [id, !!p, p && p.price]);
 
@@ -166,11 +196,18 @@ export function Produit() {
     return <><EnteteBoutique classe="seulement-ordi" /><main id="contenu" class="page conteneur"><div class="produit-grille"><div class="squelette" style={{ aspectRatio: '4 / 5' }} /><div class="pile"><div class="squelette" style={{ height: 34, width: '40%' }} /><div class="squelette" style={{ height: 22, width: '80%' }} /></div></div></main></>;
   }
 
-  const remise = R.pourcentRemise(p); const fini = epuise(p); const imp = R.estImport(p);
+  const pa = R.prixAffiche(p, sel.color, sel.size); const remise = pa.pct; const fini = epuise(p); const imp = R.estImport(p);
+  // Prix de gros : toutes les pièces de l'article (déjà au panier + celles-ci), quelles que soient couleur et taille.
+  const memeArticle = panier.value.filter((l) => l.productId === p.id).reduce((a, l) => a + R.int(l.qty), 0);
+  const unitaire = R.prixUnitaire(p, sel.color, sel.size, memeArticle + sel.qty);
+  const paliers = R.paliersGros(p);
   const dansPanier = quantiteDansPanier(p.id, sel.color, sel.size);
   const stock = imp ? R.MAX_QTE : R.stockDe(p, sel.color, sel.size);
   const max = Math.max(1, Math.min(R.MAX_QTE, (imp ? R.MAX_QTE : stock) - dansPanier));
   const details = caracteristiques(p.details);
+  const virgule = (v) => String(R.arrondi(v)).replace('.', ',');
+  if (R.poidsDe(p) && !details.some(([k]) => /^poids$/i.test(k))) details.push(['Poids', `${virgule(R.poidsDe(p))} kg`]);
+  if (p.dims && (p.dims.l || p.dims.w || p.dims.h) && !details.some(([k]) => /^dimensions?$/i.test(k))) details.push(['Dimensions', `${[p.dims.l, p.dims.w, p.dims.h].filter(Boolean).map(virgule).join(' × ')} cm`]);
   const similaires = (() => {
     const meme = produits.value.filter((x) => x.id !== p.id && (x.collectionIds || []).some((k) => (p.collectionIds || []).includes(k)));
     const reste = produits.value.filter((x) => x.id !== p.id && !meme.includes(x));
@@ -184,13 +221,13 @@ export function Produit() {
     if (!imp && dansPanier + sel.qty > stock) { toast(stock - dansPanier > 0 ? `Plus que ${stock - dansPanier} disponible${stock - dansPanier > 1 ? 's' : ''}` : 'Tout le stock est déjà dans votre panier', { icone: 'alerte', ton: 'danger' }); return; }
     voler(document.querySelector('.galerie-piste .galerie-image:nth-child(' + (idx + 1) + ') img') || document.querySelector('.galerie-piste img'));
     ajouterAuPanier(p, sel.color, sel.size, sel.qty);
-    mesurerEvenement('add_to_cart', { currency: 'USD', value: R.num(p.price) * sel.qty, items: [{ item_id: p.id, item_name: p.title, quantity: sel.qty, price: R.num(p.price) }] });
+    mesurerEvenement('add_to_cart', { currency: 'USD', value: R.arrondi(unitaire * sel.qty), items: [{ item_id: p.id, item_name: p.title, quantity: sel.qty, price: unitaire }] });
     setErreur(''); setAjoute(true); setSel({ ...sel, qty: 1 });
     toast(`Ajouté au panier · ${pluriel(nbArticles.value, 'article')}`, { icone: 'sac' });
   };
   const partager = async () => {
     const url = location.origin + lienProduit(p).replace(/^#/, '');
-    const texte = `${p.title} à ${dollars(p.price)} chez ${c.name}`;
+    const texte = `${p.title} à ${dollars(pa.prix)} chez ${c.name}`;
     if (navigator.share) { try { await navigator.share({ title: p.title, text: texte, url }); } catch (e) { } }
     else if (await copier(url)) toast('Lien copié');
   };
@@ -213,10 +250,12 @@ export function Produit() {
             {rayon ? <nav class="fil seulement-ordi" aria-label="Fil d’Ariane"><a href={lien('/')}>Accueil</a><Icone n="droite" /><a href={lienRayon({ id: rayon[0], name: rayon[1] })}>{rayon[1]}</a></nav> : null}
             <section class="produit-entete">
               <div class="produit-prix">
-                <span class={classes('prix', remise && 'prix-promo')}>{dollars(p.price)}</span>
-                {remise ? <><span class="remise-badge">−{remise} %</span><span class="prix-barre">{dollars(p.compareAt)}</span></> : null}
+                {pa.des ? <small class="prix-des">dès</small> : null}
+                <span class={classes('prix', remise && 'prix-promo')}>{dollars(pa.prix)}</span>
+                {remise ? <><span class="remise-badge">−{remise} %</span><span class="prix-barre">{dollars(pa.barre)}</span></> : null}
               </div>
-              {francs(p.price, c) ? <p class="produit-fc">{francs(p.price, c)}</p> : null}
+              {francs(pa.prix, c) ? <p class="produit-fc">{francs(pa.prix, c)}</p> : null}
+              {pa.flash ? <p class="bandeau-flash"><Icone n="horloge" /><b>Vente flash −{pa.flash.pct} %</b><span>Se termine dans <CompteARebours fin={pa.flash.fin} /></span></p> : null}
               <h1 class="produit-titre">{p.title}</h1>
               <div class="rangee-l">
                 {p.featured ? <span class="pastille ton-marque"><Icone n="etincelle" />Tendance</span> : null}
@@ -228,9 +267,14 @@ export function Produit() {
             <section class="produit-options">
               <Variantes p={p} sel={sel} setSel={(s) => { setSel(s); setErreur(''); }} erreur={erreur} setIdx={setIdx} />
               <LigneStock p={p} sel={sel} />
+              {paliers.length && !fini ? (
+                <div class="prix-gros" role="list" aria-label="Prix de gros">
+                  {paliers.map((x) => <span key={x.min} role="listitem" class={memeArticle + sel.qty >= x.min ? 'atteint' : ''}><b>{dollars(pa.prix * (100 - x.pct) / 100)}</b><small>dès {x.min} pièces · −{x.pct} %</small></span>)}
+                </div>
+              ) : null}
               {!fini ? <div class="entre"><span class="champ-libelle">Quantité</span><Quantite valeur={sel.qty} max={max} onChange={(q) => setSel({ ...sel, qty: Math.max(1, Math.min(max, q)) })} /></div> : null}
               <div class="seulement-ordi produit-ajout">
-                <button class="btn btn-primaire btn-l btn-bloc" onClick={ajouter} disabled={fini}>{fini ? 'Épuisé' : <><Icone n="sac" />Ajouter au panier · {dollars(R.num(p.price) * sel.qty)}</>}</button>
+                <button class="btn btn-primaire btn-l btn-bloc" onClick={ajouter} disabled={fini}>{fini ? 'Épuisé' : <><Icone n="sac" />Ajouter au panier · {dollars(unitaire * sel.qty)}</>}</button>
                 {ajoute ? <a class="btn btn-secondaire btn-l btn-bloc" href={lien('/panier')}>Voir le panier ({nbArticles.value})</a> : null}
               </div>
               {dansPanier ? <Note ton="ok" icone="sac">{pluriel(dansPanier, 'exemplaire')} de cette option dans votre panier. <a class="lien" href={lien('/panier')}>Voir le panier</a></Note> : null}

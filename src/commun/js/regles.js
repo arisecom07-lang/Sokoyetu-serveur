@@ -148,7 +148,9 @@ const valider = {
 function zoneNettoyee(z, i) {
   const fee = Math.max(0, arrondi(z && z.fee)); const days = int(z && z.days);
   const pickup = z && typeof z.pickup === 'boolean' ? z.pickup : (!fee && !days);
-  return { id: String((z && z.id) || 'zone-' + (i + 1)).slice(0, 40), name: nettoyer(z && z.name, 40) || 'Zone ' + (i + 1), fee, days, pickup };
+  /* perKg : supplément par kilo du colis (poids renseigné sur les fiches), 0 = frais fixes. */
+  const perKg = Math.max(0, arrondi(z && z.perKg));
+  return { id: String((z && z.id) || 'zone-' + (i + 1)).slice(0, 40), name: nettoyer(z && z.name, 40) || 'Zone ' + (i + 1), fee, days, pickup, perKg };
 }
 function config(brut) {
   const c = fusion(CONFIG_DEFAUT, estObjet(brut) ? brut : {});
@@ -197,9 +199,68 @@ function stockTotal(p) {
   if (!aDesOptions(p)) return int(p.stock);
   return clesVariantes(p).reduce((a, k) => a + int((p.variants || {})[k]), 0);
 }
-const prixBarre = (p) => (num(p.compareAt) > num(p.price) ? arrondi(p.compareAt) : 0);
-const pourcentRemise = (p) => (prixBarre(p) ? Math.round((1 - num(p.price) / num(p.compareAt)) * 100) : 0);
 const imagePrincipale = (p) => ((p && p.images) || []).find((m) => m && m.type !== 'data') || null;
+
+/* ---------- Prix : variantes, vente flash, prix de gros ---------- */
+
+const MAX_PALIERS = 4;
+/* Prix d'une variante : son prix propre s'il est renseigné (ex. XL plus cher), sinon le prix de l'article. */
+function prixVariante(p, couleur, taille) {
+  const propre = num(((p && p.variantPrices) || {})[cleVariante(couleursDe(p).length ? couleur : '', taillesDe(p).length ? taille : '')]);
+  return arrondi(propre > 0 ? propre : num(p && p.price));
+}
+/* Prix des variantes renseignées (pour « dès $… » sur les cartes). */
+function prixPossibles(p) {
+  const l = clesVariantes(p).map((k) => num(((p && p.variantPrices) || {})[k])).filter((v) => v > 0);
+  return clesVariantes(p).length > l.length || !l.length ? l.concat([arrondi(p && p.price)]) : l;
+}
+/* Vente flash en cours : { pct, fin } ou null. flash = { pct, startsAt?, endsAt } sur la fiche. */
+function venteFlash(p, maintenant) {
+  const f = p && p.flash; const now = maintenant || Date.now();
+  if (!estObjet(f)) return null;
+  const pct = Math.min(90, int(f.pct)); const fin = num(f.endsAt);
+  if (!pct || !fin || fin <= now || num(f.startsAt) > now) return null;
+  return { pct, fin };
+}
+/* Paliers de prix de gros, triés : [{ min: 3, pct: 5 }, { min: 6, pct: 10 }] (min : pièces de cet article dans la commande). */
+function paliersGros(p) {
+  const vus = {};
+  return (Array.isArray(p && p.wholesale) ? p.wholesale : []).map((x) => ({ min: Math.min(MAX_QTE, int(x && x.min)), pct: Math.min(50, int(x && x.pct)) }))
+    .filter((x) => x.min >= 2 && x.pct > 0 && !vus[x.min] && (vus[x.min] = true)).sort((a, b) => a.min - b.min).slice(0, MAX_PALIERS);
+}
+function remiseGros(p, qte) {
+  let pct = 0;
+  paliersGros(p).forEach((x) => { if (int(qte) >= x.min) pct = Math.max(pct, x.pct); });
+  return pct;
+}
+/* Prix unitaire payé : prix de la variante, moins la vente flash, moins le prix de gros (qte : pièces de cet article dans la commande). */
+function prixUnitaire(p, couleur, taille, qte, maintenant) {
+  let v = prixVariante(p, couleur, taille);
+  const f = venteFlash(p, maintenant); if (f) v = v * (100 - f.pct) / 100;
+  const g = remiseGros(p, qte); if (g) v = v * (100 - g) / 100;
+  return arrondi(v);
+}
+/*
+ * Prix montré au client pour une pièce : { prix, barre, pct, flash, des }.
+ * Sans couleur ni taille choisies, prend le prix le plus bas des variantes (des : « dès $… »).
+ * barre : ancien prix (prix barré de la fiche, ou prix avant la vente flash).
+ */
+function prixAffiche(p, couleur, taille, maintenant) {
+  if (!p) return { prix: 0, barre: 0, pct: 0, flash: null, des: false };
+  const choisi = (!couleursDe(p).length || couleur) && (!taillesDe(p).length || taille);
+  const possibles = prixPossibles(p);
+  const base = choisi ? prixVariante(p, couleur, taille) : Math.min.apply(null, possibles);
+  const des = !choisi && possibles.some((v) => Math.abs(v - base) > 0.009);
+  const f = venteFlash(p, maintenant);
+  const prix = arrondi(f ? base * (100 - f.pct) / 100 : base);
+  const ancien = Math.max(num(p.compareAt) > num(p.price) && Math.abs(base - num(p.price)) < 0.009 ? num(p.compareAt) : 0, f ? base : 0);
+  const barre = ancien > prix ? arrondi(ancien) : 0;
+  return { prix, barre, pct: barre ? Math.round((1 - prix / barre) * 100) : 0, flash: f, des };
+}
+const prixBarre = (p, maintenant) => prixAffiche(p, '', '', maintenant).barre;
+const pourcentRemise = (p, maintenant) => prixAffiche(p, '', '', maintenant).pct;
+/* Poids d'expédition d'une pièce, en kilos (0 si non renseigné). */
+const poidsDe = (p) => Math.min(1000, Math.max(0, num(p && p.weight)));
 
 /* Applique une réservation (sens -1 : stock retiré, vendus ajoutés) ou sa restitution (sens +1) à un produit. */
 function ajusterStock(p, entrees, sens) {
@@ -254,6 +315,11 @@ function devis(opts) {
     const q = Math.floor(num(l.qty));
     if (deja) deja.qty += q; else fusionnees.push({ productId: id, color, size, qty: q, title: nettoyer(l.title, 120) });
   }
+  const maintenant = opts.maintenant || Date.now();
+  // Prix de gros : toutes les pièces d'un même article comptent, quelles que soient la couleur et la taille.
+  const parArticle = {};
+  fusionnees.forEach((l) => { parArticle[l.productId] = (parArticle[l.productId] || 0) + Math.max(1, Math.min(MAX_QTE, l.qty || 1)); });
+  let poids = 0;
   const lignes = fusionnees.map((l, i) => {
     const qty = Math.max(1, Math.min(MAX_QTE, l.qty || 1));
     const p = l.productId ? opts.produit(l.productId) : null;
@@ -265,8 +331,17 @@ function devis(opts) {
     const ligne = {
       productId: l.productId, title: String(p.title || 'Article').slice(0, 120),
       color: cs.length ? l.color : '', size: ts.length ? l.size : '', qty,
-      price: arrondi(p.price), cost: arrondi(p.cost), source: estImport(p) ? 'import' : 'local', image: imagePrincipale(p)
+      price: 0, cost: arrondi(p.cost), source: estImport(p) ? 'import' : 'local', image: imagePrincipale(p)
     };
+    ligne.price = prixUnitaire(p, ligne.color, ligne.size, parArticle[l.productId], maintenant);
+    const base = prixVariante(p, ligne.color, ligne.size);
+    if (ligne.price < base) {
+      const f = venteFlash(p, maintenant); const g = remiseGros(p, parArticle[l.productId]);
+      ligne.basePrice = base;
+      if (f) ligne.flash = f.pct;
+      if (g) ligne.wholesale = g;
+    }
+    if (poidsDe(p)) { ligne.weight = poidsDe(p); poids += poidsDe(p) * qty; }
     if (!estEnVente(p)) { ligne.issue = 'retiré'; problemes.push({ code: 'article', ligne: i, message: `« ${ligne.title} » n’est plus en vente.` }); }
     else if (cs.length && cs.indexOf(ligne.color) < 0) { ligne.issue = 'option'; problemes.push({ code: 'option', ligne: i, message: `Choisissez une couleur disponible pour « ${ligne.title} ».` }); }
     else if (ts.length && ts.indexOf(ligne.size) < 0) { ligne.issue = 'option'; problemes.push({ code: 'option', ligne: i, message: `Choisissez une taille disponible pour « ${ligne.title} ».` }); }
@@ -290,12 +365,13 @@ function devis(opts) {
   }
   const zone = zoneDe(cfg, opts.zoneId);
   if (!zone) problemes.push({ code: 'zone', message: 'Choisissez une zone de livraison.' });
-  let livraison = zone ? arrondi(zone.fee) : 0;
+  poids = Math.round(poids * 1000) / 1000;
+  let livraison = zone ? arrondi(num(zone.fee) + (estRetrait(zone) ? 0 : num(zone.perKg) * poids)) : 0;
   const net = Math.max(0, sousTotal - (remise ? remise.amount : 0));
   if (num(cfg.freeShippingOver) > 0 && net >= num(cfg.freeShippingOver)) livraison = 0;
   const frais = fraisService(cfg, net);
   const total = arrondi(net + livraison + frais);
-  return { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, zone };
+  return { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, zone, poids };
 }
 
 /* ---------- Commande ---------- */
@@ -361,7 +437,7 @@ function preparerCommande(opts) {
     note: nettoyer(d.note, 300),
     items: dv.lignes.map((l) => { const o = Object.assign({}, l); delete o.available; return o; }),
     subtotal: dv.sousTotal, discount: dv.remise ? { code: dv.remise.code, amount: dv.remise.amount } : null,
-    shippingFee: dv.livraison, serviceFee: dv.frais, serviceFeePct: dv.fraisPct, total: dv.total,
+    shippingFee: dv.livraison, weight: dv.poids, serviceFee: dv.frais, serviceFeePct: dv.fraisPct, total: dv.total,
     payment: { method: moyen.k, label: moyen.label, phone: payeur, provider: fournisseur, test: fournisseur === 'simulation', status: 'pending', attempts: 0, startedAt: now, providerId: '', reference: '', error: '' },
     expiresAt: now + cfg.payment.holdMinutes * 60000,
     delivery: livraisonEstimee(cfg, dv.lignes, zone, now),
@@ -633,6 +709,7 @@ module.exports = {
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
   config, zoneDe, estRetrait, moyensDePaiement, fraisService,
   cleVariante, couleursDe, taillesDe, aDesOptions, estImport, estEnVente, clesVariantes, stockDe, stockTotal, prixBarre, pourcentRemise, imagePrincipale, ajusterStock,
+  MAX_PALIERS, prixVariante, prixPossibles, venteFlash, paliersGros, remiseGros, prixUnitaire, prixAffiche, poidsDe,
   montantRemise, verifierRemise, devis,
   ErreurCommande, reservations, livraisonEstimee, preparerCommande, numeroCommande, numeroValide, numeroNettoye,
   estAnnulee, estPayee, estRetraitCmd, enAttentePaiement, nonAboutie, aVerifier, aPreparer, aExpedier, aTraiter, statutClient, etapesSuivi,

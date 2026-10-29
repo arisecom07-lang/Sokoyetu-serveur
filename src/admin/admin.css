@@ -164,6 +164,8 @@ a.kpi:active { transform: scale(.985); }
 
 /* Recherche et filtres au-dessus des listes */
 .outils-liste { display: grid; gap: var(--e3); margin-bottom: var(--e4); }
+.recherche-rangee { display: flex; gap: var(--e2); align-items: center; min-width: 0; }
+.recherche-rangee > .recherche-liste { flex: 1; min-width: 0; }
 .recherche-liste {
   display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px;
   background: var(--surface); border: 1px solid var(--ligne-2); border-radius: var(--r-rond);
@@ -336,6 +338,37 @@ a.kpi:active { transform: scale(.985); }
 .ts-ligne span { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: var(--t-m); min-width: 0; }
 .ts-ligne i { flex: none; width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
 .ts-ligne .saisie { height: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Variantes : prix propre (facultatif) et stock. */
+.tableau-stock.avec-prix .ts-ligne { grid-template-columns: minmax(0, 1fr) 112px 84px; }
+.tableau-stock.avec-prix.sans-stock .ts-ligne { grid-template-columns: minmax(0, 1fr) 128px; }
+.ts-ligne.ts-tete { padding: 0 0 4px; }
+.ts-ligne.ts-tete span, .ts-ligne.ts-tete small { font-size: var(--t-xs); font-weight: 700; color: var(--encre-3); text-transform: uppercase; letter-spacing: .04em; }
+.ts-ligne.ts-tete small { text-align: right; padding-right: 4px; }
+.saisie-groupe.compacte .saisie { height: 44px; padding-left: 24px; padding-right: 10px; }
+.saisie-groupe.compacte .prefixe { left: 10px; }
+.saisie-groupe > .suffixe { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--encre-3); font-weight: 650; pointer-events: none; }
+.saisie-groupe.a-suffixe .saisie { padding-right: 36px; }
+.saisie-groupe.compacte.a-suffixe .saisie, .palier .saisie-groupe .saisie { text-align: right; }
+.saisie-groupe.sans-prefixe .saisie { padding-left: 12px; }
+.saisie-groupe.compacte.a-suffixe .saisie { padding-right: 34px; }
+
+/* Prix de gros : « Dès [3] pièces : −[5] % » */
+.palier { display: grid; grid-template-columns: auto 64px auto 92px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: var(--t-s); font-weight: 650; }
+.palier > .saisie { height: 44px; text-align: center; padding: 0 6px; }
+.palier-prix { color: var(--encre-3); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 420px) { .palier { grid-template-columns: auto 56px auto 86px auto; } .palier-prix { display: none; } }
+
+/* Guide des tailles : une ligne par taille, une colonne par mesure. */
+.guide-tableau { display: grid; gap: 6px; overflow-x: auto; }
+.gt-ligne { display: grid; grid-template-columns: 64px repeat(var(--n), minmax(72px, 1fr)); gap: 6px; align-items: center; }
+.gt-ligne .saisie { height: 40px; padding: 0 8px; text-align: center; font-variant-numeric: tabular-nums; }
+.gt-ligne b { font-weight: 750; }
+.gt-tete span { display: flex; align-items: center; justify-content: center; gap: 2px; font-size: var(--t-xs); font-weight: 700; color: var(--encre-3); text-align: center; line-height: 1.2; }
+.gt-tete span:first-child { justify-content: flex-start; }
+.gt-tete .btn-icone.mini { width: 26px; height: 26px; flex: none; }
+
+.trois-cotes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.apercu-video { width: 100%; max-height: 240px; border-radius: var(--r-m); background: #000; }
 
 /* ---------- Rayons, bannières, réductions ---------- */
 .choix-photo { display: flex; flex-wrap: wrap; gap: var(--e4); align-items: center; }
@@ -422,3 +455,15 @@ code.commande, .aide-mdp code {
 .en-direct-carte:hover { border-color: var(--marque); }
 .tri-audience { display: flex; align-items: center; gap: var(--e3); }
 .tri-audience .saisie { flex: 1; max-width: 300px; }
+
+/* ---------- Import en masse ---------- */
+.import-page { max-width: 860px; }
+.import-etapes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: etape; font-size: var(--t-s); color: var(--encre-2); line-height: 1.5; }
+.import-etapes li { counter-increment: etape; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
+.import-etapes li::before { content: counter(etape); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--marque-doux, var(--surface-2)); color: var(--marque); font-weight: 750; font-size: 13px; }
+.saisie.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
+label.import-ligne { cursor: pointer; grid-template-columns: auto auto minmax(0, 1fr) auto; }
+.import-ligne .ligne-vignette > .media { width: 100%; height: 100%; object-fit: cover; }
+.import-ligne > input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: var(--marque); }
+.import-ligne.fait { opacity: .7; cursor: default; }
+.import-ligne .ligne-vignette .ic { --ic: 20px; color: var(--encre-3); }

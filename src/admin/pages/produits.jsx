@@ -1,4 +1,4 @@
-// Sokoyetu (administration) — produits : liste et fiche (photos, assistant IA, prix et marge, variantes, stock, rayons).
+// Sokoyetu (administration) — produits : liste et fiche (photos, vidéo, assistant IA, import par lien, prix et marge, variantes, stock, rayons).
 import { useEffect, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
@@ -10,6 +10,7 @@ import { lien, route, aller, garder } from '../routeur.js';
 import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, gererErreur } from '../etat.js';
 import { TetePage, BarreEnregistrer, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement } from './accueil.jsx';
+import { CarteLien, TableauVariantes, PrixGros, CarteFlash, CarteGuide, CarteColis, CarteVideo, nettoyerComplements, prixFournisseur } from './produits-plus.jsx';
 
 const NUANCIER = ['#1F1D22', '#F5F3F0', '#8B5E3C', '#D8CFC2', '#C8344A', '#F4A7C0', '#9C8BD1', '#3F6EA8', '#8EC3E6', '#4F8A5B', '#F2B544', '#D0663D', '#9A9AA0', '#2C3E50'];
 const PRESETS = [['XS à XL', ['XS', 'S', 'M', 'L', 'XL']], ['36 à 44', ['36', '37', '38', '39', '40', '41', '42', '43', '44']], ['Enfant', ['2 ans', '4 ans', '6 ans', '8 ans', '10 ans']], ['Taille unique', ['Taille unique']]];
@@ -35,9 +36,12 @@ export function Produits() {
   return (
     <>
       <TetePage titre="Produits" sous={`${pluriel(ps.length, 'produit')} · ${ps.filter(R.estEnVente).length} en vente`}
-        actions={<div class="rangee seulement-ordi">{ia ? <a class="btn btn-doux" href={lien('/produits/nouveau?ia=1')}><Icone n="ia" />Ajouter avec l’IA</a> : null}<a class="btn btn-primaire" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter un produit</a></div>} />
+        actions={<div class="rangee seulement-ordi"><a class="btn btn-secondaire" href={lien('/produits/importer')}><Icone n="telecharger" />Importer</a>{ia ? <a class="btn btn-doux" href={lien('/produits/nouveau?ia=1')}><Icone n="ia" />Ajouter avec l’IA</a> : null}<a class="btn btn-primaire" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter un produit</a></div>} />
       <div class="outils-liste">
-        <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, référence, mot-clé" aria-label="Rechercher un produit" /></label>
+        <div class="recherche-rangee">
+          <label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom, référence, mot-clé" aria-label="Rechercher un produit" /></label>
+          <a class="btn btn-secondaire seulement-mobile" href={lien('/produits/importer')}><Icone n="telecharger" />Importer</a>
+        </div>
         <div class="puces" role="group" aria-label="Filtrer les produits">{FILTRES.map(([k, t, f]) => <button key={k} class="puce" aria-pressed={filtre === k ? 'true' : 'false'} onClick={() => setFiltre(k)}>{t}<span class="n">{ps.filter(f).length}</span></button>)}</div>
       </div>
       {!pret.value ? <Chargement /> : liste.length ? (
@@ -49,8 +53,8 @@ export function Produits() {
               <a key={p.id} class="ligne" href={lien('/produits/' + p.id)}>
                 <span class="ligne-vignette grande"><Photo m={R.imagePrincipale(p)} alt="" tailles="64px" /></span>
                 <span class="ligne-texte"><b>{p.title}</b><small class={faible ? 'texte-danger' : ''}>{libelleStock(p)}{p.demo ? ' · exemple' : ''}</small>
-                  <span class="ligne-pastilles">{R.estEnVente(p) ? <Pastille ton="ok" point>En vente</Pastille> : <Pastille ton="neutre" point>Brouillon</Pastille>}{R.estImport(p) ? <Pastille ton="info" icone="avion">Import</Pastille> : null}</span></span>
-                <span class="ligne-fin"><b>{dollars(p.price)}</b>{marge !== null ? <small>marge {marge} %</small> : null}</span>
+                  <span class="ligne-pastilles">{R.estEnVente(p) ? <Pastille ton="ok" point>En vente</Pastille> : <Pastille ton="neutre" point>Brouillon</Pastille>}{R.estImport(p) ? <Pastille ton="info" icone="avion">Import</Pastille> : null}{R.venteFlash(p) ? <Pastille ton="warn" icone="horloge">Flash −{R.venteFlash(p).pct} %</Pastille> : null}</span></span>
+                <span class="ligne-fin">{R.num(p.price) > 0 ? <b>{dollars(p.price)}</b> : <small class="discret">Sans prix</small>}{marge !== null ? <small>marge {marge} %</small> : null}</span>
               </a>
             );
           })}
@@ -64,7 +68,8 @@ export function Produits() {
   );
 }
 
-const nouveau = () => ({ title: '', description: '', details: '', price: '', compareAt: '', cost: '', source: 'local', status: 'active', collectionIds: [], tags: '', featured: false, images: [], options: { colors: [], sizes: [] }, variants: {}, stock: 0, sku: '', sold: 0 });
+const nouveau = () => ({ title: '', description: '', details: '', price: '', compareAt: '', cost: '', source: 'local', status: 'active', collectionIds: [], tags: '', featured: false, images: [], options: { colors: [], sizes: [] }, variants: {}, stock: 0, sku: '', sold: 0,
+  variantPrices: {}, wholesale: [], flash: null, sizeGuide: null, weight: '', dims: null, video: null, supplier: null });
 const lireFichier = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = ko; r.readAsDataURL(blob); });
 const MESSAGES_IA = {
   no_key: 'L’assistant n’est pas encore activé sur le serveur : console du serveur → sudo /opt/sokoyetu/ia.sh VOTRE_CLE',
@@ -90,6 +95,7 @@ function FormulaireProduit() {
   const [envois, setEnvois] = useState(0);
   const [occupe, setOccupe] = useState(false);
   const [ia, setIa] = useState({ occupe: false, message: '', erreur: false, rayon: '', indice: '' });
+  const [rayonLien, setRayonLien] = useState('');
   const [couleur, setCouleur] = useState({ nom: '', hex: NUANCIER[0] });
   const [tailleNouvelle, setTailleNouvelle] = useState('');
   const [erreurs, setErreurs] = useState({});
@@ -139,12 +145,12 @@ function FormulaireProduit() {
       setIa((s) => ({ ...s, occupe: false, erreur: true, message: MESSAGES_IA[e.code] || (e.status === 403 ? 'Session expirée : reconnectez-vous.' : 'L’assistant n’a pas répondu. Réessayez dans un instant.') }));
     }
   }
-  async function creerRayonIA() {
-    const nom = ia.rayon; if (!nom) return;
+  async function creerRayonIA(nom = ia.rayon) {
+    if (!nom) return;
     const existe = rayons.value.find((r) => r.name.trim().toLowerCase() === nom.toLowerCase());
     let rid = existe && existe.id;
     if (!rid) { rid = slug(nom) || uid(); if (rayons.value.some((r) => r.id === rid)) rid = uid(); try { await sauver('collections', rid, { name: nom, visible: true, order: rayons.value.length + 1 }); toast(`Rayon « ${nom} » créé`); } catch (e) { gererErreur(e); return; } }
-    maj({ collectionIds: [...new Set([...(f.collectionIds || []), rid])] }); setIa({ ...ia, rayon: '' });
+    maj({ collectionIds: [...new Set([...(f.collectionIds || []), rid])] }); setIa({ ...ia, rayon: '' }); setRayonLien('');
   }
 
   function ajouterCouleur() {
@@ -165,7 +171,8 @@ function FormulaireProduit() {
     if (d.title.length < 2) e.title = 'Donnez un titre au produit.';
     if (!(d.price > 0) || d.price > 100000) e.price = 'Indiquez un prix de vente (entre $0.01 et $100 000).';
     if (d.cost < 0 || d.cost > 100000) e.cost = 'Coût invalide.';
-    if (Object.keys(e).length) { setErreurs(e); toast(Object.values(e)[0], { icone: 'alerte', ton: 'danger' }); setTimeout(() => document.querySelector('.en-erreur .saisie')?.focus(), 50); return; }
+    nettoyerComplements(d, e);
+    if (Object.keys(e).length) { setErreurs(e); toast(Object.values(e)[0], { icone: 'alerte', ton: 'danger', duree: 4200 }); setTimeout(() => document.querySelector('.en-erreur .saisie')?.focus(), 50); return; }
     if (d.compareAt <= d.price) d.compareAt = 0;
     d.stock = Math.min(99999, R.int(d.stock)); d.sold = R.int(d.sold);
     d.variants = Object.fromEntries(R.clesVariantes(d).map((k) => [k, Math.min(99999, R.int((d.variants || {})[k]))]));
@@ -207,9 +214,11 @@ function FormulaireProduit() {
                 <label class={classes('btn btn-primaire', ia.occupe && 'charge')}><Icone n="envoyer" />{f.images.length ? 'Nouvelle photo' : 'Choisir une photo'}<input ref={choixIA} type="file" accept="image/*" hidden disabled={ia.occupe} onChange={(e) => { const x = e.currentTarget.files[0]; e.currentTarget.value = ''; remplirIA(x); }} /></label>
               </div>
               {ia.occupe ? <p class="ia-etat" role="status"><span class="rouet" aria-hidden="true" />L’assistant regarde la photo et rédige la fiche…</p> : ia.message ? <p class={classes('ia-etat', ia.erreur ? 'erreur' : 'ok')} role="status"><Icone n={ia.erreur ? 'alerte' : 'coche'} />{ia.message}</p> : null}
-              {ia.rayon && !ia.occupe ? <button class="btn btn-doux btn-s espace-haut" onClick={creerRayonIA}><Icone n="plus" />Créer le rayon « {ia.rayon} » et l’utiliser</button> : null}
+              {ia.rayon && !ia.occupe ? <button class="btn btn-doux btn-s espace-haut" onClick={() => creerRayonIA()}><Icone n="plus" />Créer le rayon « {ia.rayon} » et l’utiliser</button> : null}
             </section>
           ) : null}
+          {nouveauProduit || duplique || !f.images.length ? <CarteLien setF={setF} onRayon={setRayonLien} /> : null}
+          {rayonLien ? <button class="btn btn-doux btn-s" style={{ justifySelf: 'start' }} onClick={() => creerRayonIA(rayonLien)}><Icone n="plus" />Créer le rayon « {rayonLien} » et l’utiliser</button> : null}
 
           <section class="carte">
             <h2 class="carte-titre"><Icone n="image" />Photos<span class="fin">{f.images.length ? pluriel(f.images.length, 'photo') : ''}</span></h2>
@@ -235,6 +244,8 @@ function FormulaireProduit() {
             <p class="champ-aide espace-haut">Les photos sont redimensionnées et compressées automatiquement. Présentez l’article seul, sur un fond clair. Associez une photo à une couleur : elle s’affiche quand le client choisit cette couleur.</p>
           </section>
 
+          <CarteVideo f={f} maj={maj} setEnvois={setEnvois} />
+
           <section class="carte">
             <h2 class="carte-titre"><Icone n="crayon" />Informations</h2>
             <div class="formulaire">
@@ -251,10 +262,12 @@ function FormulaireProduit() {
                 <Champ libelle="Prix de vente" erreur={erreurs.price}>{(a) => <div class="saisie-groupe"><span class="prefixe">$</span><input class="saisie" {...a} inputmode="decimal" value={f.price === 0 ? '' : f.price} onInput={champ('price')} placeholder="0.00" /></div>}</Champ>
                 <Champ libelle="Prix barré" facultatif aide="Ancien prix, pour une promotion.">{(a) => <div class="saisie-groupe"><span class="prefixe">$</span><input class="saisie" {...a} inputmode="decimal" value={f.compareAt || ''} onInput={champ('compareAt')} placeholder="0.00" /></div>}</Champ>
               </div>
-              <Champ libelle="Coût par article" erreur={erreurs.cost} aide="Achat + transport + douane. Jamais visible des clients.">{(a) => <div class="saisie-groupe"><span class="prefixe">$</span><input class="saisie" {...a} inputmode="decimal" value={f.cost || ''} onInput={champ('cost')} placeholder="0.00" /></div>}</Champ>
+              <Champ libelle="Coût par article" erreur={erreurs.cost} aide={`Achat + transport + douane. Jamais visible des clients.${prixFournisseur(f.supplier) ? ` Prix chez le fournisseur : ${prixFournisseur(f.supplier)}.` : ''}`}>{(a) => <div class="saisie-groupe"><span class="prefixe">$</span><input class="saisie" {...a} inputmode="decimal" value={f.cost || ''} onInput={champ('cost')} placeholder="0.00" /></div>}</Champ>
               {marge !== null ? (
                 <div class="marge"><div><small>Marge par article</small><b style={{ color: marge >= 0 ? 'var(--ok)' : 'var(--danger)' }}>{dollars(marge)}</b></div><div><small>Taux de marge</small><b>{Math.round((marge / pr) * 100)} %</b></div>{R.num(f.compareAt) > pr ? <div><small>Remise affichée</small><b>−{Math.round((1 - pr / R.num(f.compareAt)) * 100)} %</b></div> : null}</div>
               ) : <p class="champ-aide">Indiquez le prix et le coût pour voir votre marge.</p>}
+              {f.supplier && f.supplier.url ? <p class="champ-aide">Page du fournisseur : <a class="lien" href={f.supplier.url} target="_blank" rel="noopener noreferrer">{(f.supplier.url.match(/^https?:\/\/([^/]+)/) || [])[1] || 'ouvrir'}</a></p> : null}
+              <PrixGros f={f} maj={maj} />
             </div>
           </section>
 
@@ -281,21 +294,19 @@ function FormulaireProduit() {
 
           {f.source !== 'import' ? (
             <section class="carte">
-              <h2 class="carte-titre"><Icone n="colis" />Stock<span class="fin">{cles.length ? `${cles.reduce((a, k) => a + R.int(f.variants[k]), 0)} au total` : ''}</span></h2>
-              {cles.length ? (
-                <>
-                  <div class="ajout-ligne"><input class="saisie" id="stock-partout" inputmode="numeric" placeholder="Même quantité partout" aria-label="Même quantité pour toutes les variantes" /><button class="btn btn-secondaire" onClick={() => { const v = R.int(document.getElementById('stock-partout').value); maj({ variants: Object.fromEntries(cles.map((k) => [k, v])) }); }}>Appliquer</button></div>
-                  <div class="tableau-stock">
-                    {cles.map((k) => { const [c, t] = k.split('|'); const hex = (f.options.colors.find((x) => x.name === c) || {}).hex; return (
-                      <label key={k} class="ts-ligne"><span>{hex ? <i style={{ background: hex }} /> : null}{[c, t].filter(Boolean).join(' · ')}</span><input class="saisie" inputmode="numeric" value={f.variants[k] ?? 0} onInput={(e) => maj({ variants: { ...f.variants, [k]: e.currentTarget.value.replace(/\D/g, '') } })} aria-label={`Stock ${[c, t].filter(Boolean).join(' ')}`} /></label>
-                    ); })}
-                  </div>
-                </>
-              ) : <div class="formulaire"><Champ libelle="Quantité en stock">{(a) => <input class="saisie" {...a} inputmode="numeric" value={f.stock} onInput={(e) => maj({ stock: e.currentTarget.value.replace(/\D/g, '') })} />}</Champ></div>}
+              <h2 class="carte-titre"><Icone n="colis" />{cles.length ? 'Stock et prix par variante' : 'Stock'}<span class="fin">{cles.length ? `${cles.reduce((a, k) => a + R.int(f.variants[k]), 0)} au total` : ''}</span></h2>
+              {cles.length ? <TableauVariantes f={f} maj={maj} cles={cles} avecStock /> : <div class="formulaire"><Champ libelle="Quantité en stock">{(a) => <input class="saisie" {...a} inputmode="numeric" value={f.stock} onInput={(e) => maj({ stock: e.currentTarget.value.replace(/\D/g, '') })} />}</Champ></div>}
               <p class="champ-aide espace-haut">Le stock baisse automatiquement à chaque commande et revient si la commande est annulée.</p>
               <div class="formulaire espace-haut"><Champ libelle="Référence (SKU)" facultatif>{(a) => <input class="saisie" {...a} value={f.sku} onInput={champ('sku')} maxlength="40" />}</Champ></div>
             </section>
+          ) : cles.length ? (
+            <section class="carte">
+              <h2 class="carte-titre"><Icone n="etiquette" />Prix par variante</h2>
+              <TableauVariantes f={f} maj={maj} cles={cles} />
+            </section>
           ) : null}
+
+          <CarteGuide f={f} maj={maj} />
         </div>
 
         <div class="pile-l colonne-cote">
@@ -304,11 +315,14 @@ function FormulaireProduit() {
             <Segment plein libelle="Statut" options={[['active', 'En vente'], ['draft', 'Brouillon']]} valeur={f.status === 'draft' ? 'draft' : 'active'} onChange={(v) => maj({ status: v })} />
             <p class="champ-aide espace-haut">{f.status === 'draft' ? 'Masqué dans la boutique.' : 'Visible dans la boutique dès l’enregistrement.'}</p>
           </section>
+          <CarteFlash f={f} maj={maj} />
+          {erreurs.flash ? <p class="champ-erreur" role="alert"><Icone n="alerte" />{erreurs.flash}</p> : null}
           <section class="carte">
             <h2 class="carte-titre"><Icone n="avion" />Disponibilité</h2>
             <Segment plein libelle="Disponibilité" options={[['local', 'En stock'], ['import', 'Import Chine']]} valeur={f.source === 'import' ? 'import' : 'local'} onChange={(v) => maj({ source: v })} />
             <p class="champ-aide espace-haut">{f.source === 'import' ? `Vendu sur commande, livré en ≈ ${cfg.value.importDays} jours. Pas de stock à gérer.` : `Expédié depuis ${cfg.value.city}, livré sous 24–48 h.`}</p>
           </section>
+          <CarteColis f={f} maj={maj} />
           <section class="carte">
             <h2 class="carte-titre"><Icone n="rayons" />Organisation</h2>
             <span class="champ-libelle">Rayons</span>

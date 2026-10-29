@@ -137,7 +137,7 @@ export function Commande() {
                 return (
                   <li key={k}>
                     <span class="ac-photo"><Photo m={i.image || R.imagePrincipale(p || {})} alt="" tailles="64px" /></span>
-                    <span class="ac-texte">{p ? <a class="gras" href={lien('/produits/' + p.id)}>{i.title}</a> : <b>{i.title}</b>}<small>{[i.color, i.size].filter(Boolean).join(' · ') || 'Article unique'} · {i.qty} × {dollars(i.price)}</small>
+                    <span class="ac-texte">{p ? <a class="gras" href={lien('/produits/' + p.id)}>{i.title}</a> : <b>{i.title}</b>}<small>{[i.color, i.size].filter(Boolean).join(' · ') || 'Article unique'} · {i.qty} × {dollars(i.price)}{i.flash ? ` · flash −${i.flash} %` : ''}{i.wholesale ? ` · gros −${i.wholesale} %` : ''}</small>
                       <span class="rangee-l">{i.source === 'import' ? <Pastille ton="info" icone="avion">Import Chine</Pastille> : null}{i.issue ? <Pastille ton="danger" icone="alerte">{i.issue === 'stock' ? 'Stock insuffisant' : i.issue === 'option' ? 'Option invalide' : 'Plus en vente'}</Pastille> : null}</span></span>
                     <span class="ac-prix num">{dollars(i.qty * i.price)}</span>
                   </li>
@@ -147,7 +147,7 @@ export function Commande() {
             <dl class="montants espace-haut">
               <div><dt>Sous-total</dt><dd class="num">{dollars(o.subtotal)}</dd></div>
               {o.discount ? <div><dt>Code {o.discount.code}</dt><dd class="moins num">−{dollars(o.discount.amount)}</dd></div> : null}
-              <div><dt>Livraison · {o.shipping && o.shipping.zoneName}</dt><dd class="num">{o.shippingFee ? dollars(o.shippingFee) : 'Gratuite'}</dd></div>
+              <div><dt>Livraison · {o.shipping && o.shipping.zoneName}{R.num(o.weight) ? ` · colis ${String(R.arrondi(o.weight)).replace('.', ',')} kg` : ''}</dt><dd class="num">{o.shippingFee ? dollars(o.shippingFee) : 'Gratuite'}</dd></div>
               {o.serviceFee ? <div><dt>Frais de service ({R.num(o.serviceFeePct)} %)</dt><dd class="num">{dollars(o.serviceFee)}</dd></div> : null}
               <div class="total"><dt class="lib">{R.estPayee(o) ? 'Total payé' : 'Total'}</dt><dd class="num">{dollars(o.total)}</dd></div>
               {m.couts ? <div><dt>Marge estimée (frais de service compris, hors livraison){m.connue ? '' : ' · coûts incomplets'}</dt><dd class="num" style={{ color: m.marge >= 0 ? 'var(--ok)' : 'var(--danger)', fontWeight: 750 }}>{dollars(m.marge)}</dd></div> : null}

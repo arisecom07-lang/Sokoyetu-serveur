@@ -71,6 +71,8 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 .saisie-groupe .prefixe { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--encre-3); font-weight: 650; pointer-events: none; }
 .saisie-groupe .saisie { padding-left: 30px; }
 .deux-colonnes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e3); }
+/* Deux champs côte à côte, l'un avec une aide : les cases restent alignées en haut. */
+.deux-colonnes > .champ { align-content: start; }
 .formulaire { display: grid; gap: var(--e4); }
 
 /* Case à cocher, interrupteur, options */

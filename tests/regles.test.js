@@ -245,3 +245,33 @@ test('comptes clients : code, numéro international, fusion du panier et des fav
   assert.equal(d.dates['panier:montre'], 100);
   assert.equal(R.docCompte({ favoris: Array.from({ length: 300 }, (_, i) => 'p' + i) }).favoris.length, R.MAX_FAVORIS);
 });
+
+test('prix par variante, vente flash et prix de gros', () => {
+  const now = Date.UTC(2026, 9, 28, 12);
+  const robe = { title: 'Robe', price: 20, compareAt: 25, status: 'active', source: 'import', weight: 0.5,
+    options: { colors: [{ name: 'Noir', hex: '#000' }], sizes: ['M', 'XL'] }, variantPrices: { 'Noir|XL': 24 },
+    wholesale: [{ min: 6, pct: 10 }, { min: 3, pct: 5 }, { min: 1, pct: 50 }] };
+  assert.equal(R.prixVariante(robe, 'Noir', 'M'), 20);
+  assert.equal(R.prixVariante(robe, 'Noir', 'XL'), 24);
+  assert.deepEqual(R.paliersGros(robe), [{ min: 3, pct: 5 }, { min: 6, pct: 10 }]);
+  assert.equal(R.prixUnitaire(robe, 'Noir', 'M', 2, now), 20);
+  assert.equal(R.prixUnitaire(robe, 'Noir', 'M', 3, now), 19);
+  assert.equal(R.prixUnitaire(robe, 'Noir', 'XL', 6, now), 21.6);
+  // Sans choix : le prix le plus bas, « dès », avec le prix barré de la fiche.
+  assert.deepEqual(R.prixAffiche(robe, '', '', now), { prix: 20, barre: 25, pct: 20, flash: null, des: true });
+  assert.equal(R.prixAffiche(robe, 'Noir', 'XL', now).barre, 0);
+  // Vente flash : 20 % jusqu'à demain, rien avant le début ni après la fin.
+  const flash = { ...robe, compareAt: 0, flash: { pct: 20, endsAt: now + R.JOUR } };
+  assert.equal(R.prixAffiche(flash, 'Noir', 'XL', now).prix, 19.2);
+  assert.equal(R.prixAffiche(flash, 'Noir', 'XL', now).barre, 24);
+  assert.equal(R.prixUnitaire(flash, 'Noir', 'M', 3, now), 15.2);
+  assert.equal(R.venteFlash(flash, now + 2 * R.JOUR), null);
+  assert.equal(R.venteFlash({ ...flash, flash: { pct: 20, startsAt: now + 1000, endsAt: now + R.JOUR } }, now), null);
+  // Devis : le palier compte toutes les pièces de l'article ; supplément au kilo selon la zone.
+  const c = R.config({ zones: [{ id: 'bukavu', name: 'Bukavu', fee: 2, days: 1, perKg: 3 }], payment: { provider: 'simulation' } });
+  const dv = R.devis({ cfg: c, produit: () => robe, lignes: [{ productId: 'robe', color: 'Noir', size: 'M', qty: 2 }, { productId: 'robe', color: 'Noir', size: 'XL', qty: 1 }], zoneId: 'bukavu', maintenant: now });
+  assert.deepEqual(dv.lignes.map((l) => [l.price, l.basePrice, l.wholesale]), [[19, 20, 5], [22.8, 24, 5]]);
+  assert.equal(dv.sousTotal, 60.8);
+  assert.equal(dv.poids, 1.5);
+  assert.equal(dv.livraison, 6.5);
+});

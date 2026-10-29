@@ -78,7 +78,8 @@ function commandePublique(doc) {
 
 function produitPublic(doc) {
   const d = R.copie(doc);
-  delete d.cost;
+  // Coût d'achat et fournisseur (lien 1688, prix d'usine) : réservés à la boutique.
+  delete d.cost; delete d.supplier;
   return d;
 }
 
