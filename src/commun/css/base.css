@@ -1,4 +1,5 @@
 /* Sokoyetu — base : remise à zéro, typographie, focus, accessibilité, utilitaires. */
+@import './animations.css';
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-top: calc(var(--h-entete) + env(safe-area-inset-top, 0px) + 12px); }
@@ -71,19 +72,16 @@ p.rangee > .ic { flex: none; margin-top: .2em; }
 @keyframes glisse-d { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.28); } }
 @keyframes tourne { to { transform: rotate(360deg); } }
-@keyframes reflet { from { background-position: 150% 0; } to { background-position: -50% 0; } }
 
 .entree { animation: apparait var(--lent) var(--sortie) both; }
 .entree-avant { animation: glisse-g var(--moyen) var(--sortie) both; }
 .entree-arriere { animation: glisse-d var(--moyen) var(--sortie) both; }
 .entree-fondu { animation: fondu var(--moyen) ease both; }
 
-/* Transitions de page natives (navigateurs récents) */
+/* Transitions de page natives (navigateurs récents) : voir animations.css */
 @view-transition { navigation: none; }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: 220ms; animation-timing-function: var(--sortie); }
-::view-transition-group(photo-produit) { animation-duration: 380ms; animation-timing-function: var(--sortie); }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

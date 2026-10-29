@@ -10,6 +10,7 @@ import { NavBas } from './composants/cadre.jsx';
 import { BarreMiseAJour, enregistrerServiceWorker } from './installation.jsx';
 import { consentement, consentir, mesureConfiguree, chargerMesure } from './mesure.js';
 import { suivreVisites } from './visites.js';
+import './animations.js';
 import { Accueil } from './pages/accueil.jsx';
 import { Rayons, Rayon, Nouveautes, Provenance, Recherche, Favoris } from './pages/catalogue.jsx';
 import { Produit } from './pages/produit.jsx';
