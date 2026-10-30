@@ -8,6 +8,7 @@ import { dollars, lienWhatsApp, classes } from '../../commun/js/outils.js';
 import { lien, route, retour, naviguer } from '../routeur.js';
 import { cfg, nbArticles, favoris, moyensPaiement } from '../etat.js';
 import { PuceOperateur } from './produits.jsx';
+import { RechercheOrdi } from './recherche.jsx';
 import { PAGES_LEGALES } from '../../commun/js/legal.js';
 
 /* Le logo : le cabas, le nom et, en dessous, le slogan (Réglages → Identité). */
@@ -37,16 +38,6 @@ function BoutonPanier() {
     <a href={lien('/panier')} class="btn-icone" aria-label={n ? `Panier, ${n} article${n > 1 ? 's' : ''}` : 'Panier'} data-cible-panier>
       <Icone n="sac" />{n ? <span class="pastille-compte" key={n}>{n > 99 ? '99+' : n}</span> : null}
     </a>
-  );
-}
-
-function RechercheOrdi() {
-  const [q, setQ] = useState(route.value.nom === 'recherche' ? route.value.query.get('q') || '' : '');
-  return (
-    <form class="recherche-ordi" role="search" onSubmit={(e) => { e.preventDefault(); naviguer('/recherche' + (q.trim() ? '?q=' + encodeURIComponent(q.trim()) : '')); }}>
-      <Icone n="recherche" />
-      <input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Rechercher un article, un rayon…" aria-label="Rechercher dans la boutique" enterkeyhint="search" />
-    </form>
   );
 }
 

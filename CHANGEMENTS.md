@@ -1,3 +1,35 @@
+# Sokoyetu 2.5.0 — une recherche qui comprend les fautes et propose des suggestions (octobre 2026)
+
+## Ce qui change pour vous
+
+- **La recherche comprend les fautes** : lettre oubliée, en trop, doublée ou inversée (« mntre », « monter », « lunetes »), sons proches (« chosure » → chaussures, « telefone » → téléphone), accents et majuscules. La page annonce ce qu'elle a compris : « 3 résultats pour « montre » · vous avez écrit « monter » ».
+- **Les mots d'autres langues aussi** : swahili (« saa » → montre, « viatu » → chaussures, « mkoba » → sac, « nguo », « simu », « hereni »…) et anglais (« watch », « bag », « shoes »…). « Robe rouge » trouve aussi la robe bordeaux, « or » trouve le doré.
+- **Des suggestions pendant la frappe**, tirées de ce qui est dans la boutique (rayons, mots-clés, titres) : « mon » propose « montre connectée », « montre classique »… Sur téléphone, en puces sous le champ ; sur ordinateur, une liste sous le champ du haut avec les premiers articles et leur prix, utilisable au clavier (flèches, Entrée, Échap).
+- **Les recherches populaires** : ce que les clients cherchent le plus est proposé quand le champ est vide, et quand une recherche ne trouve rien. Seulement des mots de votre catalogue, qui trouvent des articles : une recherche bizarre ou malveillante n'est jamais montrée.
+- **Dans l'administration, Audience → « Ce que vos clients cherchent »** : les recherches les plus fréquentes, et surtout celles **sans résultat** (« perruque », 3 personnes) : des articles à proposer, ou un mot à ajouter aux mots-clés d'un article.
+- Quand aucun article ne correspond à tous les mots, la boutique montre **les plus proches** au lieu d'une page vide.
+- La liste des produits de l'administration comprend aussi les fautes.
+
+## Bon à savoir
+
+- Les recherches sont comptées comme le reste de la fréquentation : par appareil, sans nom, téléphone ni adresse IP, effacées au bout de 90 jours. Rien n'est compté si le visiteur refuse la mesure d'audience. Une recherche qui contient un numéro de téléphone n'est jamais gardée. La politique de confidentialité (modèle) le dit.
+- Une recherche devient « populaire » quand au moins deux appareils l'ont faite dans les 30 derniers jours.
+- Pour qu'un article soit trouvé sous d'autres mots, ajoutez-les dans ses **mots-clés** (Produits → la fiche → Mots-clés).
+
+## Après la fusion
+
+Dans la console du Droplet : `sudo /opt/sokoyetu/mise-a-jour.sh` (la mise à jour crée la petite table des recherches).
+
+## Détails techniques
+
+- `src/commun/js/recherche.js` (CommonJS, testé avec node) : normalisation, racine (pluriels), son approximatif du français, distance de Damerau (une faute jusqu'à 6 lettres, deux au-delà, mots de 3 lettres exacts), familles de synonymes (français, swahili, anglais, couleurs). `indexer` (poids : titre 3, rayon et mots-clés 2, couleur 1,5, caractéristiques 1, description 0,5), `chercher` (tous les mots, sinon les plus proches ; correction annoncée et résultats de la recherche corrigée), `suggestions`, `populairesSures`. Un mot bien écrit ne cherche pas ses voisins (« robe » ne trouve pas « rose ») ; un mot qui n'est que dans les descriptions doit être exact.
+- Boutique : `indexRecherche` (etat.js, refait quand le catalogue change), `composants/recherche.jsx` (`RechercheOrdi` : motif combobox, `PucesSuggestions`), page `Recherche` réécrite ; `signalerRecherche` (visites.js) après 1,8 s sans frappe ou à la validation, une fois par mot et par visite ; mesure `search`.
+- Serveur : migration `1793600000_sokoyetu_recherches.js` (table `sokoyetu_recherches`, limites de `/api/sokoyetu/recherches` et `/panier/partage`), `audience.termeRecherche`, `audience.populaires`, `GET /api/sokoyetu/recherches` (mis en cache une heure), rapport `recherches` dans `/api/sokoyetu/audience`, purge à 90 jours.
+- Démo : recherches comptées dans le navigateur, populaires = celles du visiteur.
+- Essais : `tests/recherche.test.js` (nouveau, 7 tests), `tests/serveur.test.mjs` (recherches comptées, populaires, sans résultat, numéros refusés, robots ignorés), `tests/recherche.mjs` (nouveau, vrais navigateurs, accessibilité de la liste), `tests/accessibilite.mjs` (recherche corrigée).
+
+---
+
 # Sokoyetu 2.4.0 — partager un article ou tout son panier (octobre 2026)
 
 ## Ce qui change pour vous

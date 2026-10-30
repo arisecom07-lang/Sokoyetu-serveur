@@ -26,6 +26,7 @@ await controler('Boutique · accueil', BASE + '/', '.carte-produit');
 await controler('Boutique · rayons', BASE + '/categories', '.page');
 await controler('Boutique · produit', BASE + '/p/ex-p08/chemise-en-chambray', '.produit-titre');
 await controler('Boutique · recherche', BASE + '/recherche?q=sac', '.page');
+await controler('Boutique · recherche corrigée et suggestions', BASE + '/recherche?q=monter', '.recherche-correction');
 await controler('Boutique · panier', BASE + '/panier', '.page', async () => { });
 await controler('Boutique · panier partagé', BASE + '/panier/partage?a=ex-p09:2:Bleu:L&a=ex-p03&a=ex-p07&a=ex-p01:3::XL&a=article-retire', '.ligne-recue');
 await controler('Boutique · fenêtre de partage', BASE + '/p/ex-p03/sac-bandouliere-en-cuir-camel', '.produit-titre', async () => { await p.click('button[aria-label="Partager cet article"]'); await p.waitForSelector('.partage-choix'); });

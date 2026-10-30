@@ -34,6 +34,19 @@ function envoyer(a, p) {
   requete('sokoyetu/visite', { method: 'POST', corps, delai: 10000 }).then(() => { if (corps.panier) dernierEtat = sig; }).catch(() => { });
 }
 
+/*
+ * Une recherche faite (texte et nombre d'articles trouvés) : elle nourrit les recherches populaires proposées à tous,
+ * et montre à la boutique ce que ses clients cherchent sans le trouver. Une seule fois par mot et par visite.
+ */
+const recherchesEnvoyees = new Set();
+export function signalerRecherche(texte, n) {
+  const t = String(texte || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+  const cle = t.toLowerCase();
+  if (t.length < 2 || recherchesEnvoyees.has(cle) || refuse() || document.visibilityState === 'hidden') return;
+  recherchesEnvoyees.add(cle);
+  requete('sokoyetu/visite', { method: 'POST', corps: { v: identifiant(), p: '', a: 'recherche', q: t, n: Math.max(0, Math.round(n) || 0) }, delai: 10000 }).catch(() => { recherchesEnvoyees.delete(cle); });
+}
+
 export function suivreVisites() {
   if (suivreVisites.fait) return; suivreVisites.fait = true;
   // Article ouvert (y compris en arrivant directement sur sa page) ; autres pages : simple signal de présence.

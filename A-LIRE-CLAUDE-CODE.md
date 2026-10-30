@@ -16,7 +16,7 @@ Projet de Kabamba Aristote (« Messir »), Bukavu (RDC). Il travaille **depuis s
 
 ```
 src/commun/js/regles.js     règles métier PARTAGÉES (CommonJS, sans dépendance) : serveur, boutique, admin, démo
-src/commun/js/              api.js (client PocketBase + temps réel), interface.jsx, erreurs.jsx (écran d'erreur, signalement), icones.jsx, medias.jsx, outils.js, legal.js, theme.js, stockage.js, logo.jsx + cabas.js (tracés du logo)
+src/commun/js/              api.js (client PocketBase + temps réel), interface.jsx, erreurs.jsx (écran d'erreur, signalement), icones.jsx, medias.jsx, outils.js, legal.js, theme.js, stockage.js, logo.jsx + cabas.js (tracés du logo), recherche.js (recherche tolérante aux fautes, CommonJS)
 src/commun/css/             jetons.css (couleurs, typo, espacements ; thème sombre), base.css, composants.css
 src/commun/polices/         Fraunces + Plus Jakarta Sans (woff2 variables, licence OFL)
 src/boutique/               main.jsx, routeur.js (vraies adresses /p/…, /c/…), etat.js, seo.js, mesure.js, installation.jsx, partage.jsx (partager un article ou le panier), pages/, composants/, boutique.css, public/
@@ -25,12 +25,12 @@ serveur/pb_hooks/           sokoyetu.pb.js (routes, hôtes, sécurité) + lib/se
                             lib/paiement.js (fournisseurs : flexpay, simulation), lib/commandes.js (suivi des paiements, échéances, notifications),
                             lib/audience.js, lib/comptes.js (comptes clients), lib/envoi.js (codes : WhatsApp, SMS),
                             lib/import.js (import par lien fournisseur, copie de photos), lib/journal.js (journal des erreurs, santé, alerte)
-serveur/pb_migrations/      1792800000_sokoyetu_init.js (inchangée, compatibilité v1) + 1793000000_sokoyetu_v2.js + 1793100000_sokoyetu_paiement.js + 1793200000_sokoyetu_audience.js + 1793300000_sokoyetu_comptes.js + 1793400000_sokoyetu_produits.js + 1793500000_sokoyetu_robustesse.js
+serveur/pb_migrations/      1792800000_sokoyetu_init.js (inchangée, compatibilité v1) + 1793000000_sokoyetu_v2.js + 1793100000_sokoyetu_paiement.js + 1793200000_sokoyetu_audience.js + 1793300000_sokoyetu_comptes.js + 1793400000_sokoyetu_produits.js + 1793500000_sokoyetu_robustesse.js + 1793600000_sokoyetu_recherches.js
 serveur/scripts/            installer.sh, mise-a-jour.sh, service.sh, mot-de-passe.sh, ia.sh, paiement.sh, codes.sh, sauvegarde.sh, alerte.sh, android.sh
 demo/                       api-demo.js (serveur simulé dans le navigateur), index.html (page d'accueil de la démo)
 medias/photos/              photos d'exemple (ban-*, cat-*, pNN-* ; -s = petite taille), medias/marque/ (SVG des icônes), medias/marque/operateurs/ (logos d’origine des opérateurs ; versions web 144 px en WebP dans src/commun/marque/operateurs/, composant LogoOperateur)
 outils/                     construire.mjs, serveur-local.sh, charger-exemple.mjs, captures-manifeste.mjs, images-marque.mjs
-tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, comptes.mjs, partage.mjs, accessibilite.mjs, captures.mjs, demo.mjs, charge.mjs, sauvegarde.mjs,
+tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, comptes.mjs, partage.mjs, recherche.mjs, accessibilite.mjs, captures.mjs, demo.mjs, charge.mjs, sauvegarde.mjs,
                             faux services : flexpay-simule.mjs, codes-simule.mjs (WhatsApp, Twilio, Plivo), claude-simule.mjs
 ```
 
@@ -52,6 +52,7 @@ BASE=http://127.0.0.1:8091 node --test tests/serveur.test.mjs   # sur une base N
 node tests/flexpay-simule.mjs    # faux FlexPay sur :8099, puis SOKOYETU_PAIEMENT=flexpay FLEXPAY_URL=http://127.0.0.1:8099/api/rest/v1 FLEXPAY_MARCHAND=SOKOYETU FLEXPAY_JETON=jeton-de-test-flexpay-0123456789 bash outils/serveur-local.sh
 node tests/parcours.mjs          # client (téléphone) + gérante (ordinateur), temps réel, stock
 node tests/partage.mjs           # partage du panier et d'un article : message, aperçu lu sans JavaScript, page, ajout au panier
+node tests/recherche.mjs         # fautes, suggestions, populaires, liste de l'en-tête au clavier et accessible, recherche comptée
 node tests/accessibilite.mjs [clair|sombre]
 node tests/captures.mjs [boutique|admin] [clair|sombre]   # captures dans le dossier SORTIE (dossier temporaire du système par défaut)
 (cd dist/demo && python3 -m http.server 8095) ; node tests/demo.mjs
@@ -78,6 +79,8 @@ Pour arrêter un serveur local : `ps -eo pid,args | awk '$2 ~ /pocketbase$/ {pri
 **Temps réel.** Une seule connexion SSE par onglet (`TempsReel` dans `api.js`). Admin : `col/*`. Boutique : catalogue + `orders/<id>?options={"query":{"t":…}}` pour le suivi.
 
 **Admin.** Enregistrement d'une fiche produit par fusion à trois voies (stock et ventes modifiés par une commande pendant l'édition ne sont pas écrasés). Garde des modifications non enregistrées dans le routeur. Commande **payée** (passage à `payment.status = paid` reçu en direct, hors confirmation manuelle) : toast, carillon (WebAudio), notification système (permission demandée dans Mon compte), compteur dans le titre et badge. Le fournisseur affiché vient de `GET /api/sokoyetu/etat` (`paiement`).
+
+**Recherche.** `src/commun/js/recherche.js` tourne dans le navigateur sur le catalogue chargé (`indexRecherche`, etat.js) : racines, son approximatif, distance de Damerau, synonymes (français, swahili, anglais, couleurs). `chercher` exige tous les mots (sinon « articles proches ») et, quand un mot est corrigé, renvoie les résultats de la recherche corrigée. Suggestions : `suggestions` (rayons, mots-clés, débuts de titres) et `populairesSures` (recherches des clients filtrées : mots du catalogue qui trouvent des articles). Comptage : `signalerRecherche` → `POST /api/sokoyetu/visite { a: 'recherche', q, n }` → table `sokoyetu_recherches` (jour, terme normalisé, appareil, texte, résultats) ; `GET /api/sokoyetu/recherches` (≥ 2 appareils en 30 jours, avec résultats) ; rapport dans `/api/sokoyetu/audience` (`recherches.trouvees`, `recherches.sansResultat`).
 
 **Audience.** `lib/audience.js` : la boutique (`src/boutique/visites.js`) envoie `POST /api/sokoyetu/visite` `{ v, p, a, panier?, favoris? }` (identifiant d'appareil tiré au sort dans `localStorage` « visiteur », signal toutes les 45 s si la page est visible ; rien si la mesure est refusée, DNT ou GPC). Tables SQL hors collections : `sokoyetu_visiteurs` (jour, visiteur, vu, vues, produit affiché), `sokoyetu_articles` (jour, produit, visiteur, vues, panier, favori), `sokoyetu_etats` (paniers et favoris actuels). En ligne = signal depuis moins de 90 s. Jours à l'heure de Bukavu (UTC+2). Purge à 90 jours. Admin : pages `#/audience` et `#/audience/{id}`, relues toutes les 15 s (`useEnDirect`), commandes par article calculées depuis `orders`.
 

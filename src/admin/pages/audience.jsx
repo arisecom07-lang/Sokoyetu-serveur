@@ -128,6 +128,7 @@ export function Audience() {
                   </a>
                 ))}</div> : <p class="attenue petit">{a.enLigne ? `${pluriel(a.enLigne, 'visiteur parcourt', 'visiteurs parcourent')} la boutique, sans article ouvert.` : 'Aucun visiteur sur la boutique en ce moment.'}</p>}
               </section>
+              <Recherches r={a.recherches} lib={lib} />
               <PaniersARelancer />
               <Note ton="info" icone="cadenas">Un visiteur sans compte est un téléphone ou un ordinateur, compté sans nom ni numéro. Vous connaissez une personne quand elle commande, ou quand elle crée son compte : vous voyez alors son nom, son téléphone, son panier et ses favoris. Compteurs effacés au bout de {a.gardeJours} jours.</Note>
             </div>
@@ -135,6 +136,42 @@ export function Audience() {
         </div>
       )}
     </>
+  );
+}
+
+/*
+ * Ce que les clients cherchent dans la boutique : d'abord ce qu'ils n'ont pas trouvé (des articles à proposer, ou un mot à
+ * ajouter aux mots-clés d'un article), puis les recherches les plus fréquentes. Comptées par appareil, sans nom ni numéro.
+ */
+function Recherches({ r, lib }) {
+  if (!r) return null;
+  const ligne = (x, sans) => (
+    <div key={x.terme} class="ligne">
+      <span class="ligne-texte"><b>« {x.texte || x.terme} »</b><small>{sans ? 'aucun article trouvé' : pluriel(x.resultats, 'article trouvé', 'articles trouvés')}</small></span>
+      <span class="ligne-fin"><b>{nb(x.visiteurs)}</b><small>{x.visiteurs > 1 ? 'personnes' : 'personne'}</small></span>
+    </div>
+  );
+  return (
+    <section class="carte">
+      <h2 class="carte-titre"><Icone n="recherche" />Ce que vos clients cherchent<span class="fin">{lib}</span></h2>
+      {r.sansResultat.length || r.trouvees.length ? (
+        <div class="pile">
+          {r.sansResultat.length ? (
+            <div>
+              <h3 class="sous-titre-carte">Cherché sans résultat</h3>
+              <p class="attenue petit">Des articles à proposer, ou un mot à ajouter dans les mots-clés d’un article que vous avez déjà.</p>
+              <div class="liste sans-bord">{r.sansResultat.slice(0, 8).map((x) => ligne(x, true))}</div>
+            </div>
+          ) : null}
+          {r.trouvees.length ? (
+            <div>
+              <h3 class="sous-titre-carte">Les plus cherchés</h3>
+              <div class="liste sans-bord">{r.trouvees.slice(0, 8).map((x) => ligne(x, false))}</div>
+            </div>
+          ) : null}
+        </div>
+      ) : <p class="attenue petit">Dès qu’un visiteur fait une recherche dans la boutique, elle apparaît ici : ce qu’il a tapé et le nombre d’articles trouvés, sans son nom ni son numéro.</p>}
+    </section>
   );
 }
 

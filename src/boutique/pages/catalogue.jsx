@@ -4,11 +4,15 @@ import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
 import { Vide } from '../../commun/js/interface.jsx';
-import { pluriel, normaliser, differer } from '../../commun/js/outils.js';
+import RS from '../../commun/js/recherche.js';
+import { pluriel, differer } from '../../commun/js/outils.js';
 import { lien, route, retour } from '../routeur.js';
-import { cfg, produits, rayons, rayonsParId, favoris, catalogueDisponible, catalogueAJour, catalogueErreur, recherches, memoriserRecherche, effacerRecherches } from '../etat.js';
+import { cfg, produits, rayons, rayonsParId, favoris, catalogueDisponible, catalogueAJour, catalogueErreur, recherches, memoriserRecherche, effacerRecherches, indexRecherche, chargerPopulaires } from '../etat.js';
 import { EnteteBoutique, EntetePage, Pied } from '../composants/cadre.jsx';
 import { GrilleProduits, SqueletteGrille, ErreurCatalogue, trier, lienRayon, photoRayon } from '../composants/produits.jsx';
+import { PucesSuggestions, useSuggestions, usePopulaires } from '../composants/recherche.jsx';
+import { signalerRecherche } from '../visites.js';
+import { mesurerEvenement } from '../mesure.js';
 import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
 
@@ -147,19 +151,40 @@ export function Provenance() {
   );
 }
 
+/*
+ * Recherche : résultats pendant la frappe, fautes comprises (« monter » → montre, « saa » → montre). La recherche comprise est
+ * annoncée quand un mot a été corrigé ; sans article pour tous les mots, les articles les plus proches. Suggestions en puces,
+ * recherches récentes (cet appareil) et populaires (tous les clients) quand le champ est vide.
+ */
 export function Recherche() {
   const q0 = route.value.query.get('q') || '';
   const [q, setQ] = useState(q0);
   const champ = useRef(null);
   const majAdresse = useMemo(() => differer((v) => { try { history.replaceState(history.state, '', (typeof __DEMO__ !== 'undefined' && __DEMO__ ? '#' : '') + '/recherche' + (v.trim() ? '?q=' + encodeURIComponent(v.trim()) : '')); } catch (e) { } }, 400), []);
-  useEffect(() => { const t = setTimeout(() => champ.current && champ.current.focus({ preventScroll: true }), 120); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => champ.current && champ.current.focus({ preventScroll: true }), 120); chargerPopulaires(); return () => clearTimeout(t); }, []);
   useSeo(() => ({ titre: 'Recherche', noindex: true }), []);
-  const mots = normaliser(q).split(/\s+/).filter(Boolean);
-  const resultats = mots.length ? trier(produits.value.filter((p) => {
-    const texte = normaliser([p.title, p.tags, p.description, (p.collectionIds || []).map((id) => (rayonsParId.value.get(id) || {}).name).join(' '), ((p.options && p.options.colors) || []).map((c) => c.name).join(' ')].join(' '));
-    return mots.every((m) => texte.includes(m));
-  }), 'pour-vous') : [];
-  const envoyer = (e) => { e.preventDefault(); memoriserRecherche(q); champ.current && champ.current.blur(); };
+  const index = indexRecherche.value;
+  const ordre = useMemo(() => new Map(trier(produits.value, 'pour-vous').map((p, i) => [p.id, i])), [produits.value]);
+  const res = useMemo(() => RS.chercher(index, q), [index, q]);
+  const resultats = res.resultats.slice().sort((a, b) => (b.score - a.score) || ((ordre.get(a.p.id) || 0) - (ordre.get(b.p.id) || 0))).map((x) => x.p);
+  const sug = useSuggestions(q, 0);
+  const populaires = usePopulaires(8);
+  const actif = RS.normaliser(q).replace(/[^0-9a-z]+/g, '').length > 0;
+  // La recherche est comptée (anonymement) quand on s'arrête de taper, ou tout de suite avec « Rechercher ».
+  useEffect(() => {
+    if (!actif) return undefined;
+    const t = setTimeout(() => signalerRecherche(q, res.complet ? res.resultats.length : 0), 1800);
+    return () => clearTimeout(t);
+  }, [q]);
+  const changer = (v) => { setQ(v); majAdresse(v); };
+  const choisir = (t) => { changer(t); memoriserRecherche(t); mesurerEvenement('search', { search_term: t }); signalerRecherche(t, RS.chercher(index, t).resultats.length); champ.current && champ.current.blur(); window.scrollTo(0, 0); };
+  const envoyer = (e) => { e.preventDefault(); if (q.trim()) choisir(q.trim()); };
+  const puces = (titre, icone, l) => (l.length ? (
+    <section class="pile">
+      <h2 class="sous-titre">{titre}</h2>
+      <div class="rangee-l">{l.map((r) => <button key={r} type="button" class="puce" onClick={() => choisir(r)}><Icone n={icone} />{r}</button>)}</div>
+    </section>
+  ) : null);
   return (
     <>
       <EnteteBoutique classe="seulement-ordi" />
@@ -168,24 +193,25 @@ export function Recherche() {
           <button class="btn-icone" onClick={() => retour('/')} aria-label="Retour"><Icone n="retour" /></button>
           <form role="search" class="recherche-mobile" onSubmit={envoyer}>
             <Icone n="recherche" />
-            <input ref={champ} type="search" value={q} onInput={(e) => { setQ(e.currentTarget.value); majAdresse(e.currentTarget.value); }} placeholder="Rechercher un article" aria-label="Rechercher un article" enterkeyhint="search" autocomplete="off" />
-            {q ? <button type="button" class="btn-icone" aria-label="Effacer" onClick={() => { setQ(''); majAdresse(''); champ.current.focus(); }}><Icone n="fermer" /></button> : null}
+            <input ref={champ} type="search" value={q} onInput={(e) => changer(e.currentTarget.value)} placeholder="Rechercher un article" aria-label="Rechercher un article" enterkeyhint="search" autocomplete="off" />
+            {q ? <button type="button" class="btn-icone" aria-label="Effacer" onClick={() => { changer(''); champ.current.focus(); }}><Icone n="fermer" /></button> : null}
           </form>
         </div>
       </header>
       <main id="contenu" class="page conteneur">
         <form role="search" class="recherche-page seulement-ordi" onSubmit={envoyer}>
           <Icone n="recherche" />
-          <input type="search" value={q} onInput={(e) => { setQ(e.currentTarget.value); majAdresse(e.currentTarget.value); }} placeholder="Rechercher un article, une couleur, un rayon…" aria-label="Rechercher" />
+          <input type="search" value={q} onInput={(e) => changer(e.currentTarget.value)} placeholder="Rechercher un article, une couleur, un rayon…" aria-label="Rechercher" autocomplete="off" />
         </form>
-        {!mots.length ? (
+        {!actif ? (
           <div class="pile-l espace-haut">
             {recherches.value.length ? (
               <section class="pile">
                 <div class="entre"><h2 class="sous-titre">Recherches récentes</h2><button class="btn btn-fantome btn-s" onClick={effacerRecherches}>Effacer</button></div>
-                <div class="rangee-l">{recherches.value.map((r) => <button key={r} class="puce" onClick={() => { setQ(r); majAdresse(r); }}><Icone n="horloge" />{r}</button>)}</div>
+                <div class="rangee-l">{recherches.value.map((r) => <button key={r} type="button" class="puce" onClick={() => choisir(r)}><Icone n="horloge" />{r}</button>)}</div>
               </section>
             ) : null}
+            {puces('Recherches populaires', 'etincelle', populaires.filter((t) => !recherches.value.some((x) => RS.normaliser(x) === RS.normaliser(t))))}
             {rayons.value.length ? (
               <section class="pile">
                 <h2 class="sous-titre">Rayons</h2>
@@ -195,8 +221,19 @@ export function Recherche() {
           </div>
         ) : (
           <>
-            <p class="attenue espace-haut" role="status">{pluriel(resultats.length, 'résultat')} pour « {q.trim()} »</p>
-            <div class="espace-haut"><GrilleProduits key={q} liste={resultats} vide={<Vide icone="recherche" titre="Aucun article trouvé" texte="Essayez un autre mot, par exemple « robe », « montre » ou « sac ».">{rayons.value.length ? <a class="btn btn-secondaire" href={lien('/categories')}>Parcourir les rayons</a> : null}</Vide>} /></div>
+            <PucesSuggestions termes={sug.termes} q={q} onChoisir={choisir} />
+            <div class="espace-haut" role="status">
+              {!resultats.length ? null
+                : !res.complet ? <p class="attenue">Aucun article ne correspond à tous les mots de « {q.trim()} ». Voici les plus proches :</p>
+                : res.correction ? <p class="recherche-correction">{pluriel(resultats.length, 'résultat')} pour « <b>{res.correction}</b> » <span class="attenue">· vous avez écrit « {q.trim()} »</span></p>
+                : <p class="attenue">{pluriel(resultats.length, 'résultat')} pour « {q.trim()} »</p>}
+            </div>
+            <div class="espace-haut"><GrilleProduits key={q} liste={resultats} vide={(
+              <Vide icone="recherche" titre="Aucun article trouvé" texte={populaires.length ? 'Essayez un autre mot, ou l’une des recherches de nos clients :' : 'Essayez un autre mot, par exemple « robe », « montre » ou « sac ».'}>
+                {populaires.length ? <div class="rangee-l centre">{populaires.slice(0, 5).map((t) => <button key={t} type="button" class="puce" onClick={() => choisir(t)}><Icone n="etincelle" />{t}</button>)}</div> : null}
+                {rayons.value.length ? <a class="btn btn-secondaire" href={lien('/categories')}>Parcourir les rayons</a> : null}
+              </Vide>
+            )} /></div>
           </>
         )}
       </main>

@@ -403,6 +403,8 @@ async function serveur(chemin, method, corps) {
     return { effacees: l.length, comptes: comptes.length };
   }
   if (p === 'sokoyetu/visite') { visiteDemo(corps); return null; }
+  // Démo : un seul visiteur, ses propres recherches servent de recherches populaires.
+  if (p === 'sokoyetu/recherches') return { termes: recherchesDemo(periodeDemo(30)[0]).trouvees.slice(0, 12).map((x) => x.terme) };
   if (p === 'sokoyetu/audience') { exigerGerant(); return resumeDemo(q.get('jours'), q.get('graphe')); }
   if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant(); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
@@ -461,6 +463,12 @@ function visiteDemo(c) {
   const a = audienceDemo(); const now = Date.now(); const j = jourDe(now);
   const p = /^[a-z0-9-]{2,40}$/.test(String(c.p || '')) ? String(c.p) : '';
   const act = ['vue', 'panier', 'favori'].includes(c.a) && p ? c.a : '';
+  // Recherche (comme serveur/pb_hooks/lib/audience.js) : mot sans accents ni ponctuation, jamais un numéro de téléphone.
+  const terme = c.a === 'recherche' ? String(c.q || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() : '';
+  if (terme.length >= 2 && terme.length <= 40 && terme.split(' ').length <= 6 && (terme.match(/[0-9]/g) || []).length < 7) {
+    a.recherches = a.recherches || {};
+    a.recherches[j + '|' + terme + '|' + v] = { jour: j, terme, v, texte: String(c.q || '').trim().toLowerCase().slice(0, 60), resultats: Math.max(0, parseInt(c.n, 10) || 0), vu: now };
+  }
   const x = a.visiteurs[j + '|' + v] = a.visiteurs[j + '|' + v] || { jour: j, v, vu: 0, vues: 0, produit: '' };
   x.vu = now; x.produit = p; if (act === 'vue') x.vues++;
   if (act) { const k = j + '|' + p + '|' + v; const y = a.articles[k] = a.articles[k] || { jour: j, p, v, vues: 0, panier: 0, favori: 0 }; y[act === 'vue' ? 'vues' : act]++; }
@@ -486,8 +494,20 @@ function resumeDemo(jours, graphe) {
     nouveaux: Object.values(premier).filter((j) => j >= P[0]).length, vues: dansP.reduce((s, x) => s + x.vues, 0),
     visiteursTotal: Object.keys(premier).length, gardeJours: 90,
     jours: G.map((j) => { const l = vis.filter((x) => x.jour === j); return { jour: j, visiteurs: l.length, vues: l.reduce((s, x) => s + x.vues, 0), nouveaux: Object.values(premier).filter((d) => d === j).length }; }),
-    produits: Object.values(produits)
+    produits: Object.values(produits),
+    recherches: recherchesDemo(P[0])
   };
+}
+/* Recherches depuis le jour « debut » : appareils différents par mot, et ce que la dernière trouvait. */
+function recherchesDemo(debut) {
+  const par = {};
+  Object.values(audienceDemo().recherches || {}).filter((x) => x.jour >= debut).forEach((x) => {
+    const t = par[x.terme] = par[x.terme] || { terme: x.terme, visiteurs: new Set(), fois: 0, vu: 0, texte: '', resultats: 0 };
+    t.visiteurs.add(x.v); t.fois++; if (x.vu >= t.vu) { t.vu = x.vu; t.texte = x.texte; t.resultats = x.resultats; }
+  });
+  const l = Object.values(par).map((t) => ({ ...t, visiteurs: t.visiteurs.size })).sort((a, b) => b.visiteurs - a.visiteurs || b.vu - a.vu);
+  const tous = new Set(Object.values(audienceDemo().recherches || {}).filter((x) => x.jour >= debut).map((x) => x.v));
+  return { visiteurs: tous.size, trouvees: l.filter((x) => x.resultats > 0).slice(0, 15), sansResultat: l.filter((x) => !x.resultats).slice(0, 15) };
 }
 function articleDemo(id, jours, graphe) {
   const a = audienceDemo(); const P = periodeDemo(jours); const G = periodeDemo(Math.max(P.length, parseInt(graphe, 10) || 0));

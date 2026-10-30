@@ -14,7 +14,7 @@ https://github.com/arisecom07-lang/Sokoyetu-serveur/raw/main/sokoyetu-serveur.zi
 ```
 
 - Installation et mise à jour, pas à pas depuis un téléphone : [LISEZMOI.md](LISEZMOI.md)
-- Ce qui a changé (version 2.4 : partager un article ou tout son panier, avec un aperçu soigné dans WhatsApp et Facebook) : [CHANGEMENTS.md](CHANGEMENTS.md)
+- Ce qui a changé (version 2.5 : une recherche qui comprend les fautes, avec suggestions et recherches populaires) : [CHANGEMENTS.md](CHANGEMENTS.md)
 - Notes techniques pour reprendre le code : [A-LIRE-CLAUDE-CODE.md](A-LIRE-CLAUDE-CODE.md)
 
 Reconstruire le paquet : `npm install && npm run build` (résultat dans `dist/sokoyetu-serveur.zip`, à copier à la racine).

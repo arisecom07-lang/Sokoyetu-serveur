@@ -482,3 +482,28 @@ test('audience : visites anonymes comptées, robots ignorés, chiffres réservé
   assert.equal(d.json.dansPaniers, 0);
   assert.equal(d.json.total.vues, 1);
 });
+
+test('recherches : comptées par appareil, populaires dès deux appareils, sans résultat pour la boutique, numéros jamais gardés', async () => {
+  const UA = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile' };
+  const v1 = 'cherche' + Date.now().toString(36) + 'aaaaaaaa', v2 = 'cherche' + Date.now().toString(36) + 'bbbbbbbb';
+  const chercher = (v, q, n) => api('/api/sokoyetu/visite', { method: 'POST', headers: UA, body: { v, p: '', a: 'recherche', q, n } });
+  assert.equal((await chercher(v1, 'Montre Connectée', 3)).status, 204);
+  await chercher(v1, 'montre connectee', 3); // le même appareil le même jour : compté une fois
+  assert.ok(!(await api('/api/sokoyetu/recherches')).json.termes.includes('montre connectee'), 'un seul appareil : pas encore populaire');
+  await chercher(v2, 'montre connectée', 2);
+  await chercher(v1, 'tablette pliante', 0); await chercher(v2, 'Tablette  pliante', 0);
+  await chercher(v1, '0991234567', 0); await chercher(v2, 'x', 1);
+  await api('/api/sokoyetu/visite', { method: 'POST', headers: { 'User-Agent': 'Googlebot/2.1' }, body: { v: 'robotrobotrobotrobot', a: 'recherche', q: 'robot', n: 1 } });
+  const pop = await api('/api/sokoyetu/recherches');
+  assert.equal(pop.status, 200);
+  assert.match(pop.headers.get('cache-control') || '', /max-age=3600/);
+  assert.ok(pop.json.termes.includes('montre connectee'));
+  assert.ok(!pop.json.termes.includes('tablette pliante'), 'une recherche sans résultat n’est jamais proposée');
+  // Pour la boutique : ce qui est cherché, tel que tapé, et ce qui ne trouve rien.
+  const r = (await api('/api/sokoyetu/audience?jours=1', { auth: true })).json.recherches;
+  const montre = r.trouvees.find((x) => x.terme === 'montre connectee');
+  assert.deepEqual([montre.visiteurs, montre.texte, montre.resultats], [2, 'montre connectée', 2]);
+  assert.equal(r.sansResultat.find((x) => x.terme === 'tablette pliante').visiteurs, 2);
+  assert.ok(![...r.trouvees, ...r.sansResultat].some((x) => /[0-9]{7}/.test(x.terme) || x.terme === 'x' || x.terme === 'robot'));
+  assert.ok(r.visiteurs >= 2);
+});
