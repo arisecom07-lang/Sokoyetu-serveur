@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sokoyetu · Bientôt en ligne</title>
+<meta name="description" content="Sokoyetu, la boutique en ligne de Bukavu : articles en stock à Bukavu et importés de Chine, livrés à Bukavu et à Goma, payés par Mobile Money. Ouverture très bientôt.">
+<meta name="theme-color" content="#2A1D16">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-192.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sokoyetu">
+<meta property="og:locale" content="fr_CD">
+<meta property="og:title" content="Sokoyetu · Bientôt en ligne">
+<meta property="og:description" content="La boutique en ligne de Bukavu et Goma : en stock à Bukavu, importé de Chine, payé par Mobile Money.">
+<meta property="og:image" content="https://sokoyakwetu.com/og-image.png">
+<meta property="og:url" content="https://sokoyakwetu.com/">
+<link rel="preload" href="port-s.webp" as="image" media="(max-width: 899px)">
+<link rel="preload" href="port.webp" as="image" media="(min-width: 900px)">
+<style>
+/* Page d'attente de sokoyakwetu.com, le temps que le serveur de la boutique soit installé. */
+@font-face { font-family: 'Fraunces'; font-weight: 100 900; font-display: swap; src: url(fraunces.woff2) format('woff2-variations'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 200 800; font-display: swap; src: url(plus-jakarta-sans.woff2) format('woff2-variations'); }
+:root {
+  --fond: #FBF8F4; --surface: #FFFFFF; --ligne: #E9DFD4;
+  --encre: #1E1611; --encre-2: #5A4B41; --encre-3: #75665B;
+  --marque: #6B4430; --ebene: #2A1D16; --sur-ebene: #FFF8F1; --or: #C8902E;
+  --titre: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --texte: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--fond); color: var(--encre); font: 400 16px/1.6 var(--texte); -webkit-font-smoothing: antialiased; }
+h1, h2, p { margin: 0; }
+
+.heros { position: relative; isolation: isolate; display: grid; place-items: center; text-align: center; min-height: min(78vh, 720px); min-height: min(78dvh, 720px); padding: calc(56px + env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) 72px max(20px, env(safe-area-inset-left, 0px)); color: var(--sur-ebene); overflow: hidden; background: var(--ebene); }
+.heros picture, .heros img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+.heros::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(30, 22, 17, .55) 0%, rgba(30, 22, 17, .38) 42%, rgba(30, 22, 17, .82) 100%); }
+.heros-in { display: grid; justify-items: center; gap: 18px; max-width: 640px; animation: monte .9s cubic-bezier(.2, .8, .2, 1) both; }
+.lieu { font-size: 12.5px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; color: rgba(255, 248, 241, .86); }
+.marque { display: inline-flex; align-items: center; gap: .28em; font-family: var(--titre); font-weight: 650; font-optical-sizing: auto; font-size: clamp(52px, 15vw, 104px); letter-spacing: -.035em; line-height: .95; }
+.marque svg { width: auto; height: .92em; margin-top: -.1em; flex: none; }
+.slogan { font-size: clamp(17px, 4.4vw, 21px); font-weight: 600; color: rgba(255, 248, 241, .92); }
+.bientot { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 11px 20px; border-radius: 999px; background: rgba(255, 248, 241, .14); border: 1px solid rgba(255, 248, 241, .32); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-weight: 700; font-size: 15.5px; }
+.bientot i { width: 9px; height: 9px; border-radius: 50%; background: var(--or); box-shadow: 0 0 0 0 rgba(200, 144, 46, .6); animation: pouls 2.2s ease-out infinite; }
+
+main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); }
+.annonce { position: relative; margin: -40px auto 0; max-width: 680px; padding: 26px 24px; border-radius: 24px; background: var(--surface); border: 1px solid var(--ligne); box-shadow: 0 2px 6px rgba(42, 29, 22, .05), 0 18px 40px rgba(42, 29, 22, .10); text-align: center; }
+.annonce h2 { font-family: var(--titre); font-weight: 620; font-size: clamp(24px, 6vw, 30px); letter-spacing: -.015em; line-height: 1.2; }
+.annonce p { margin-top: 10px; color: var(--encre-2); text-wrap: pretty; }
+.points { list-style: none; margin: 32px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 14px; }
+.points li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; padding: 18px; border-radius: 18px; background: var(--surface); border: 1px solid var(--ligne); }
+.points svg { width: 40px; height: 40px; padding: 9px; border-radius: 12px; background: #F4EDE5; color: var(--marque); }
+.points b { display: block; font-weight: 750; }
+.points span { display: block; margin-top: 2px; font-size: 14.5px; color: var(--encre-2); }
+
+footer { padding: 22px max(16px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); text-align: center; font-size: 13.5px; color: var(--encre-3); border-top: 1px solid var(--ligne); }
+
+@keyframes monte { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pouls { 0% { box-shadow: 0 0 0 0 rgba(200, 144, 46, .6); } 70%, 100% { box-shadow: 0 0 0 10px rgba(200, 144, 46, 0); } }
+@media (prefers-reduced-motion: reduce) { .heros-in, .bientot i { animation: none; } }
+</style>
+</head>
+<body>
+<header class="heros">
+  <picture>
+    <source media="(min-width: 900px)" srcset="port.webp">
+    <img src="port-s.webp" alt="" width="900" height="506" fetchpriority="high">
+  </picture>
+  <div class="heros-in">
+    <p class="lieu">Bukavu · Goma</p>
+    <h1 class="marque"><svg viewBox="38 39 183 201" aria-hidden="true" focusable="false"><g transform="translate(0 6)"><path d="M80 92V84a48 48 0 0 1 96 0v8h-12v-8a36 36 0 0 0-72 0v8Z M40 92H216L203.5 210Q201.5 232 179 232H77Q54.5 232 52.5 210Z M130.9 206.4Q124.6 206.4 120.5 204.6Q116.5 202.8 114.2 201Q112 199.2 111.1 199.2Q110.6 199.2 109.6 200.3Q108.6 201.4 107.3 202.9Q106.1 204.4 105.1 205.6Q104 206.7 103.4 206.7Q103 206.7 102.6 206.4Q102.1 206 102 205.5L96.9 176.2Q96.8 175.8 96.8 175.6Q96.9 175.3 97 175.3Q97.2 175.1 97.4 175.3Q97.7 175.4 97.8 175.7Q103.5 187.3 108.8 193.7Q114.2 200.1 119.3 202.6Q124.4 205.1 129.4 205.1Q136.7 205.1 141.1 201.1Q145.5 197 145.5 189.3Q145.5 184.4 143.6 180.4Q141.6 176.4 136.9 173Q132.2 169.6 124 166.7Q113.3 162.8 106.9 158.3Q100.5 153.7 97.6 148.1Q94.8 142.6 94.8 135.7Q94.8 127.6 98.9 121.4Q102.9 115.3 110.1 111.9Q117.3 108.4 126.4 108.4Q132.2 108.4 135.9 109.8Q139.6 111.2 141.8 112.6Q144 114 145 114Q145.9 114 147.7 112.6Q149.5 111.1 151.2 109.6Q152.9 108.2 153.6 108.2Q153.9 108.2 154.2 108.4Q154.5 108.6 154.6 109.1L161.8 138.3Q161.9 138.6 161.9 138.9Q161.8 139.1 161.6 139.2Q161.5 139.3 161.3 139.1Q161 139 160.9 138.8Q154.7 127.4 149.2 121.1Q143.7 114.8 138.4 112.2Q133.1 109.7 127.6 109.7Q120.5 109.7 115.9 114.3Q111.3 118.9 111.3 126.9Q111.3 131.9 113.2 136Q115.1 140.2 119.6 143.6Q124.1 147.1 131.9 150Q143.1 154 149.6 158.5Q156 163.1 158.7 168.4Q161.5 173.7 161.5 180.1Q161.5 187.5 157.8 193.4Q154.2 199.4 147.4 202.9Q140.5 206.4 130.9 206.4Z" fill="currentColor" fill-rule="evenodd"/><circle cx="204" cy="50" r="15" fill="#C8902E"/></g></svg>Sokoyetu</h1>
+    <p class="slogan">Commandez et recevez chez vous</p>
+    <p class="bientot"><i aria-hidden="true"></i>Bientôt en ligne</p>
+  </div>
+</header>
+
+<main>
+  <section class="annonce">
+    <h2>Notre boutique en ligne ouvre très bientôt</h2>
+    <p>Des articles en stock à Bukavu et d’autres importés de Chine pour vous : bijoux, montres, sacs, habits, électronique. Vous commandez depuis votre téléphone, vous payez par Mobile Money, et nous livrons à Bukavu et à Goma.</p>
+  </section>
+  <ul class="points">
+    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5"/><path d="M5 10v9h14v-9"/><path d="M9.5 19v-5h5v5"/></svg><div><b>En stock à Bukavu</b><span>Des articles déjà sur place, livrés vite.</span></div></li>
+    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 16h18l-2.5 4h-13Z"/><path d="M6 16V9h5v7"/><path d="M11 12h6v4"/><path d="M8.5 9V6"/></svg><div><b>Importés de Chine pour vous</b><span>Un plus grand choix, commandé pour vous et livré chez vous.</span></div></li>
+    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/><path d="M9.5 9.5 11.5 11.5 15 8"/></svg><div><b>Payé par Mobile Money</b><span>Directement depuis votre téléphone, avec un reçu pour chaque commande.</span></div></li>
+  </ul>
+</main>
+
+<footer>© 2026 Sokoyetu · Bukavu, République démocratique du Congo</footer>
+</body>
+</html>
