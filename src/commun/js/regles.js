@@ -855,6 +855,7 @@ const TEXTES_NOTIFICATIONS = {
     remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).'],
     stock: ['De retour en stock', '« {titre} » ({option}) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !'],
     promo: ['{titre}', '{texte}'],
+    message: ['Réponse de la boutique', '{texte}'],
     panier: ['Votre panier vous attend', (d) => (int(d.autres)
       ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.`
       : `« ${d.titre} » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.`)]
@@ -925,6 +926,23 @@ function annonceNettoyee(b) {
   return { titre, texte, url };
 }
 
+/* ---------- Discussion avec la boutique (service client dans l'application, gratuit) ---------- */
+
+const MAX_MESSAGE = 1000;            // caractères par message
+const MESSAGES_PAR_JOUR = 60;        // messages d'un client en 24 heures (au-delà : abus)
+/* Message saisi : { texte, produit, commande } (article ou commande dont il parle, facultatifs), ou ErreurCommande. */
+function messageNettoye(b) {
+  const x = estObjet(b) ? b : {};
+  const texte = nettoyer(x.texte, MAX_MESSAGE + 200).replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_MESSAGE);
+  if (!texte) throw new ErreurCommande('Écrivez votre message.', 'texte');
+  return { texte, produit: valider.identifiant(x.produit), commande: valider.identifiant(x.commande) };
+}
+/* Début d'un message sur une ligne (liste des discussions, notification). */
+function apercuMessage(texte, max) {
+  const n = max || 140; const t = String(texte == null ? '' : texte).replace(/\s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
+}
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
@@ -941,5 +959,6 @@ module.exports = {
   MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage,
   evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification,
   MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee,
-  RELANCE_PANIER_JOURS, relancePanier
+  RELANCE_PANIER_JOURS, relancePanier,
+  MAX_MESSAGE, MESSAGES_PAR_JOUR, messageNettoye, apercuMessage
 };

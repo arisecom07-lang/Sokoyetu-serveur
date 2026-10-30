@@ -292,6 +292,21 @@ routerAdd('POST', '/api/sokoyetu/alertes/retirer', (e) => {
   return e.json(200, require(`${__hooks}/lib/alertes.js`).retirer(e.app, N.destinataire(e, b), b));
 }, LIMITE.petite);
 
+/* ---------- Boutique : discussion avec la boutique, le service client dans l'application (voir lib/discussions.js) ---------- */
+
+// La discussion de ce client (son compte, sinon cet appareil) : { appareil, apres } ; les réponses de la boutique sont alors lues.
+routerAdd('POST', '/api/sokoyetu/discussion', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
+  const b = S.corps(e);
+  return e.json(200, D.lire(e.app, D.qui(e, b), b));
+}, LIMITE.petite);
+// Le client écrit : { appareil, texte, produit, commande, t (jeton de suivi de la commande), nom, apres }.
+routerAdd('POST', '/api/sokoyetu/discussion/envoyer', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
+  const b = S.corps(e);
+  return e.json(200, D.envoyer(e.app, D.qui(e, b), b));
+}, LIMITE.petite);
+
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
 
 // La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
@@ -307,6 +322,7 @@ cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/comptes.js`).purger($app);
   require(`${__hooks}/lib/notifications.js`).purger($app);
   require(`${__hooks}/lib/alertes.js`).purger($app);
+  require(`${__hooks}/lib/discussions.js`).purger($app);
   require(`${__hooks}/lib/serveur.js`).purgerCompteurs($app);
 });
 
@@ -375,10 +391,11 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
       S.enregistrerCommande(tx, rec, d); n++;
     });
   });
-  // Notifications, abonnements et alertes du compte et des appareils de ces commandes : effacés aussi (avant le compte).
+  // Notifications, abonnements, alertes et discussions du compte, des appareils de ces commandes et de ce téléphone : effacés aussi (avant le compte).
   const clients = e.app.findRecordsByFilter('clients', 'phone = {:a} || phone = {:b}', '', 10, 0, { a: tel, b: '+' + tel }).map((c) => c.id);
   require(`${__hooks}/lib/notifications.js`).effacer(e.app, clients, appareils);
   require(`${__hooks}/lib/alertes.js`).effacer(e.app, clients, appareils);
+  require(`${__hooks}/lib/discussions.js`).effacer(e.app, clients, appareils, tel);
   const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   return e.json(200, { effacees: n, comptes });
 }, LIMITE.petite);
@@ -479,6 +496,28 @@ routerAdd('POST', '/api/sokoyetu/equipe/{id}', (e) => {
 routerAdd('DELETE', '/api/sokoyetu/equipe/{id}', (e) => {
   require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'equipe');
   return e.json(200, require(`${__hooks}/lib/equipe.js`).retirer(e.app, e.request.pathValue('id'), e.auth ? e.auth.id : ''));
+});
+
+/* ---------- Administration : messages des clients (propriétaire et vendeurs, voir lib/discussions.js) ---------- */
+// La liste des discussions se lit dans la collection « discussions » (temps réel) ; ici, une discussion et ses messages.
+
+// Messages (?apres=<id> : seulement les nouveaux) et commandes de ce client.
+routerAdd('GET', '/api/sokoyetu/discussions/{id}', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'messages');
+  return e.json(200, require(`${__hooks}/lib/discussions.js`).vue(e.app, e.request.pathValue('id'), (e.requestInfo().query || {})['apres']));
+});
+// Réponse de l'équipe { texte, produit, commande, apres } (le client est prévenu), ou { action: 'lue' | 'traitee' }.
+routerAdd('POST', '/api/sokoyetu/discussions/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
+  S.exigerGerant(e, 'messages');
+  const b = S.corps(e); const id = e.request.pathValue('id');
+  if (b.action) return e.json(200, D.marquer(e.app, id, String(b.action)));
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, D.repondre(e.app, id, auteur, b));
+}, LIMITE.petite);
+routerAdd('DELETE', '/api/sokoyetu/discussions/{id}', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'messages');
+  return e.json(200, require(`${__hooks}/lib/discussions.js`).supprimer(e.app, e.request.pathValue('id')));
 });
 
 /* ---------- Administration : clients en attente d'un article, annonces aux clients (voir lib/alertes.js) ---------- */

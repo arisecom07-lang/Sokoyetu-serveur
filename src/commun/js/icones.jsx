@@ -20,6 +20,8 @@ const P = {
   echange: <path d="M7 8h12l-3.5-3.5M17 16H5l3.5 3.5" />,
   mobile: <><rect x="7" y="3" width="10" height="18" rx="2.6" /><path d="M11 17.6h2" /></>,
   bulle: <path d="M20 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-4.2A8 8 0 1 1 20 11.5z" />,
+  papier: <><path d="M20.5 3.5 3.8 10.4a.6.6 0 0 0 0 1.1l6.4 2.3 2.3 6.4a.6.6 0 0 0 1.1 0z" /><path d="m10.2 13.8 4.6-4.6" /></>,
+  trombone: <path d="m19 11.5-7.2 7.2a4.6 4.6 0 0 1-6.5-6.5l7.6-7.6a3.1 3.1 0 0 1 4.4 4.4l-7.6 7.6a1.5 1.5 0 0 1-2.2-2.2l7-7" />,
   colis: <><path d="M4 8l8-4 8 4v8.5l-8 4-8-4z" /><path d="M4 8l8 4 8-4M12 12v8.5" /></>,
   recu: <><path d="M6 3.5h12v17l-2.5-1.5-2.5 1.5-2.5-1.5-2.5 1.5L6 19.3z" /><path d="M9 8h6M9 11.5h6M9 15h3.5" /></>,
   graphique: <><path d="M4 20h16" /><rect x="5.5" y="11" width="3" height="6" rx="1" /><rect x="10.5" y="6" width="3" height="11" rx="1" /><rect x="15.5" y="9" width="3" height="8" rx="1" /></>,

@@ -9,7 +9,7 @@ import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
+import { cfg, clients, comptes, discussions, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
 
@@ -59,6 +59,7 @@ export function Client() {
   if (!pret.value) return <Chargement />;
   if (!c) return <><TetePage titre="Client" parent="/clients" /><div class="carte"><Vide icone="personnes" titre="Client introuvable" /></div></>;
   const valides = c.commandes.filter((o) => o.status !== 'cancelled' && R.estPayee(o));
+  const discussion = peut('messages') ? discussions.value.find((d) => R.chiffres(d.telephone) === c.tel || (c.compte && d.client === c.compte.id)) : null;
   const effacer = async () => {
     if (!(await confirmer({ titre: `Effacer les données de ${c.nom || 'ce client'} ?`, texte: 'Nom, téléphones et adresses sont retirés de toutes ses commandes. Les montants restent pour la comptabilité. C’est définitif.', ok: 'Effacer définitivement', danger: true }))) return;
     try { const r = await effacerClient(c.tel); toast(`Données effacées (${pluriel(r.effacees, 'commande')})`, { icone: 'poubelle' }); history.back(); } catch (e) { gererErreur(e, 'Effacement impossible'); }
@@ -74,7 +75,8 @@ export function Client() {
           <Kpi libelle="Dernière commande" icone="calendrier" valeur={c.derniere ? date(c.derniere, { day: 'numeric', month: 'short' }) : '—'} sous={c.derniere ? ilya(c.derniere) : 'pas encore de commande'} />
         </div>
         <div class="rangee-l">
-          <a class="btn btn-primaire" href={lienWhatsApp(c.affiche, `Bonjour ${String(c.nom).split(' ')[0]}, `)} target="_blank" rel="noopener"><Icone n="bulle" />WhatsApp</a>
+          {discussion ? <a class="btn btn-primaire" href={lien('/messages/' + discussion.id)}><Icone n="bulle" />Discussion{discussion.a_repondre ? ' (à répondre)' : ''}</a> : null}
+          <a class={discussion ? 'btn btn-secondaire' : 'btn btn-primaire'} href={lienWhatsApp(c.affiche, `Bonjour ${String(c.nom).split(' ')[0]}, `)} target="_blank" rel="noopener"><Icone n="bulle" />WhatsApp</a>
           <a class="btn btn-secondaire" href={lienAppel(c.affiche)}><Icone n="appel" />Appeler</a>
           <button class="btn btn-secondaire" onClick={async () => { if (await copier(R.chiffres(c.affiche))) toast('Numéro copié'); }}><Icone n="copier" />Copier le numéro</button>
         </div>
@@ -134,6 +136,7 @@ export function Plus() {
       <div class="pile-l formulaire-etroit">
         <p class="intertitre">Suivi</p>
         <div class="menu">
+          {peut('clients') ? item(lien('/clients'), 'personnes', 'Clients', `${pluriel(clients.value.length, 'client')}${comptes.value.length ? ` · ${pluriel(comptes.value.length, 'compte')}` : ''}`) : null}
           {peut('audience') ? item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article') : null}
           {peut('journal') ? item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site') : null}
         </div>

@@ -58,6 +58,9 @@ await controler('Boutique · paiement refusé', BASE + '/paiement/' + refusee.id
 await controler('Boutique · reçu', BASE + '/merci/' + payee.id, '.recu');
 await controler('Boutique · suivi', BASE + '/suivi/' + payee.id, '.page-suivi');
 await controler('Boutique · retrouver une commande', BASE + '/compte/retrouver', '.page-retrouver');
+await controler('Boutique · discussion avec la boutique', BASE + '/discussion?p=ex-p08', '.page-discussion .composeur-sujet', async () => {
+  await p.fill('.composeur textarea', 'Bonjour, existe-t-elle en XL ?'); await p.click('.composeur-envoyer'); await p.waitForSelector('.bulle-moi:not(.en-envoi)');
+});
 await controler('Admin · connexion', ADMIN + '/', '.connexion-carte');
 await p.fill('input[type=email]', 'admin@sokoyetu.test'); await p.fill('input[autocomplete="current-password"]', 'Sokoyetu-2026'); await p.click('button[type=submit]'); await p.waitForSelector('.kpis');
 await controler('Admin · tableau de bord', ADMIN + '/#/', '.kpis');
@@ -68,6 +71,7 @@ await controler('Admin · fiche produit', ADMIN + '/#/produits/ex-p08', '.grille
 await controler('Admin · réglages paiements', ADMIN + '/#/reglages/paiements', '.operateur-tete');
 await controler('Admin · compte', ADMIN + '/#/compte', '.menu');
 await controler('Admin · clients', ADMIN + '/#/clients', '.page, .liste');
+await controler('Admin · messages des clients', ADMIN + '/#/messages', '.ligne-discussion', async () => { await p.click('.ligne-discussion >> nth=0'); await p.waitForSelector('.messagerie-fil .bulle'); });
 await controler('Admin · audience', ADMIN + '/#/audience', '.kpis');
 await b.close();
 console.log(total ? `\n${total} problème(s) d’accessibilité.` : '\nAucune violation d’accessibilité détectée.');

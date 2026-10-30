@@ -311,6 +311,11 @@ export function Produit() {
             </section>
 
             <Livraison p={p} />
+            <a class="carte encours question" href={lien('/discussion?p=' + encodeURIComponent(p.id))}>
+              <span class="menu-icone"><Icone n="bulle" /></span>
+              <span class="menu-texte"><b>Une question sur cet article ?</b><small>Taille, couleur, délai : la boutique vous répond dans l’application</small></span>
+              <Icone n="droite" classe="chevron" />
+            </a>
 
             {p.description || details.length ? (
               <section class="produit-description">

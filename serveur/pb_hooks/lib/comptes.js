@@ -157,6 +157,8 @@ function supprimer(app, rec) {
     tx.delete(tx.findRecordById('clients', rec.id));
   });
   try { require(`${__hooks}/lib/notifications.js`).detacher(app, rec.id); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Notifications du compte non détachées', { module: 'comptes', erreur: String(e) }); }
+  // Sa discussion avec la boutique disparaît (elle n'appartenait qu'au compte).
+  try { require(`${__hooks}/lib/discussions.js`).effacer(app, [rec.id], [], ''); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Discussion du compte non effacée', { module: 'comptes', erreur: String(e) }); }
 }
 
 /* Droit à l'effacement demandé à la boutique (administration) : le compte de ce téléphone disparaît aussi. */

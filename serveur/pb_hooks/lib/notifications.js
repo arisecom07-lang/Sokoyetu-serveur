@@ -124,7 +124,8 @@ function desabonner(app, b) {
 
 /*
  * Le téléphone a reçu le signal : il vient chercher ce qu'il doit afficher (4 au plus, pas encore lues ni montrées).
- * Une même commande n'occupe qu'une place dans la liste des notifications du téléphone (tag), la dernière étape remplaçant la précédente.
+ * Une même commande n'occupe qu'une place dans la liste des notifications du téléphone (tag), la dernière étape remplaçant la précédente ;
+ * de même pour les réponses de la boutique (discussion).
  */
 function attente(app, b) {
   const ab = abonnement(app, b.endpoint);
@@ -137,7 +138,7 @@ function attente(app, b) {
   const notifications = l.map((x) => {
     const v = vue(x, String(ab.langue)); if (!v) return null;
     const commande = /^\/suivi\/([a-z0-9]+)$/.exec(v.url);
-    return { titre: v.titre, texte: v.texte, url: v.url, tag: commande ? 'commande-' + commande[1] : 'notification-' + v.id };
+    return { titre: v.titre, texte: v.texte, url: v.url, tag: commande ? 'commande-' + commande[1] : v.url === '/discussion' ? 'discussion' : 'notification-' + v.id };
   }).filter(Boolean);
   return { notifications };
 }

@@ -809,3 +809,106 @@ test('relance des paniers : le client avec compte qui laisse son panier est pré
   assert.equal(await relancer(), 1);
   assert.equal((await notifs(c.moi)).length, 1);
 });
+
+test('discussion avec la boutique : le client écrit, l’équipe répond, le client est prévenu gratuitement', async () => {
+  const appareil = secret();
+  const lire = (a = appareil, headers = {}) => api('/api/sokoyetu/discussion', { method: 'POST', headers, body: { appareil: a } });
+  const ecrit = (corps, a = appareil, headers = {}) => api('/api/sokoyetu/discussion/envoyer', { method: 'POST', headers, body: { appareil: a, ...corps } });
+  const equipe = (id, options = {}) => api('/api/sokoyetu/discussions/' + id, { auth: true, ...options });
+  const reponses = async (a, headers = {}) => (await api('/api/sokoyetu/notifications', { method: 'POST', headers, body: { appareil: a } })).json.notifications.filter((n) => n.type === 'message');
+  const dernier = (r) => r.json.messages[r.json.messages.length - 1];
+
+  assert.deepEqual((await lire()).json, { discussion: null, messages: [] });
+  assert.equal((await ecrit({ texte: ' \n ' })).status, 400, 'message vide');
+  assert.equal((await ecrit({ texte: 'Bonjour' }, 'court')).status, 400, 'appareil inconnu');
+  const r1 = await ecrit({ texte: '  Bonjour,   la robe existe en XL ?\n\n\n\nMerci ', produit: 't-robe', nom: 'Aline' });
+  assert.equal(r1.status, 200, r1.texte);
+  assert.deepEqual(r1.json.messages.map((m) => [m.auteur, m.texte, m.produit, m.commande, m.par]), [['client', 'Bonjour, la robe existe en XL ?\n\nMerci', 't-robe', null, undefined]]);
+  const id = r1.json.discussion.id;
+  const r2 = await ecrit({ texte: 'Et celui-ci ?', produit: 't-cache', apres: r1.json.messages[0].id });
+  assert.deepEqual(r2.json.messages.map((m) => [m.texte, m.produit]), [['Et celui-ci ?', '']], 'brouillon jamais joint ; seulement les nouveaux messages');
+
+  // Une commande se joint depuis l'appareil (ou le compte) qui l'a passée, ou avec son jeton de suivi.
+  const items = [{ productId: 't-montre', qty: 1 }];
+  const total = (await api('/api/sokoyetu/devis', { method: 'POST', body: { items, zoneId: 'bukavu' } })).json.total;
+  const o = await commander(saisie({ token: secret(), customer: { name: 'Aline Furaha', phone: '0894445566' }, items, discountCode: '', total, payment: { method: 'mpesa', phone: '0894445566' }, appareil }));
+  assert.equal(o.status, 200, o.texte);
+  assert.deepEqual(dernier(await ecrit({ texte: 'Quand arrive ma commande ?', commande: o.json.id })).commande, { id: o.json.id, numero: o.json.order.number });
+  assert.equal(dernier(await ecrit({ texte: 'Et celle-ci ?', commande: commandeId, t: secret() })).commande, null, 'commande d’un autre client : pas jointe');
+  assert.deepEqual(dernier(await ecrit({ texte: 'Celle de ma sœur, avec son lien de suivi.', commande: commandeId, t: commandeJeton })).commande, { id: commandeId, numero: commandeNumero });
+
+  // L'équipe voit la discussion (jamais l'empreinte de l'appareil) ; un visiteur ne voit rien.
+  assert.deepEqual((await api('/api/collections/discussions/records')).json.items, []);
+  const d = (await api('/api/collections/discussions/records?sort=-maj', { auth: true })).json.items.find((x) => x.id === id);
+  assert.deepEqual([d.nom, d.telephone, d.auteur, d.non_lus, d.a_repondre, d.dernier, d.appareil], ['Aline', '0894445566', 'client', 5, true, 'Celle de ma sœur, avec son lien de suivi.', undefined]);
+  const v = await equipe(id);
+  assert.equal(v.status, 200, v.texte);
+  assert.deepEqual([v.json.messages.length, v.json.commandes], [5, [o.json.id]]);
+  assert.equal((await equipe('inconnue')).status, 404);
+  assert.equal((await equipe(id, { method: 'POST', body: { texte: '' } })).status, 400);
+  const rep = await equipe(id, { method: 'POST', body: { texte: 'Bonjour Aline, oui, en XL aussi. Votre commande part demain.', produit: 't-robe', commande: o.json.id, apres: v.json.messages[4].id } });
+  assert.equal(rep.status, 200, rep.texte);
+  assert.deepEqual(rep.json.messages.map((m) => [m.auteur, m.par, m.produit, m.commande]), [['boutique', 'admin@sokoyetu.test', 't-robe', { id: o.json.id, numero: o.json.order.number }]]);
+  assert.deepEqual([rep.json.discussion.auteur, rep.json.discussion.non_lus, rep.json.discussion.a_repondre], ['boutique', 0, false]);
+
+  // Le client est prévenu (notification gratuite) ; lire la discussion la marque lue, et l'équipe voit « Vu ».
+  assert.deepEqual((await reponses(appareil)).map((n) => [n.titre, n.texte, n.url, n.lu]), [['Réponse de la boutique', 'Bonjour Aline, oui, en XL aussi. Votre commande part demain.', '/discussion', false]]);
+  assert.deepEqual(await reponses(secret()), [], 'un autre appareil ne voit rien');
+  const lu = await lire();
+  assert.deepEqual([dernier(lu).auteur, dernier(lu).par, lu.json.discussion.luBoutique > 0], ['boutique', undefined, true], 'le nom du membre de l’équipe reste interne');
+  assert.equal((await reponses(appareil))[0].lu, true);
+  assert.ok((await equipe(id)).json.discussion.lu_client >= dernier(lu).cree);
+  // Un merci : rien à répondre, l'équipe classe la discussion.
+  await ecrit({ texte: 'Merci beaucoup !' });
+  assert.deepEqual((({ a_repondre, non_lus }) => [a_repondre, non_lus])((await equipe(id)).json.discussion), [true, 1]);
+  assert.equal((await equipe(id, { method: 'POST', body: { action: 'n-importe' } })).status, 400);
+  const classee = (await equipe(id, { method: 'POST', body: { action: 'traitee' } })).json.discussion;
+  assert.deepEqual([classee.a_repondre, classee.non_lus], [false, 0]);
+
+  // Le client se connecte : la discussion de ce téléphone rejoint son compte, lisible de tous ses appareils et de ceux-là seulement.
+  const technicien = { Authorization: technique };
+  const mdp = secret() + secret();
+  const c = await api('/api/collections/clients/records', { method: 'POST', headers: technicien, body: { phone: '0894445566', name: 'Aline Furaha', password: mdp, passwordConfirm: mdp, verified: true, doc: { panier: [], favoris: [], profil: {} } } });
+  assert.equal(c.status, 200, c.texte);
+  const moi = { Authorization: (await api(`/api/collections/clients/impersonate/${c.json.id}`, { method: 'POST', headers: technicien, body: {} })).json.token };
+  const connecte = await lire(appareil, moi);
+  assert.deepEqual([connecte.json.discussion.id, connecte.json.messages.length], [id, 7]);
+  assert.equal((await lire(secret(), moi)).json.discussion.id, id, 'autre téléphone du compte');
+  assert.deepEqual((await lire()).json, { discussion: null, messages: [] }, 'téléphone déconnecté : la discussion du compte reste privée');
+  // Écrite d'un autre téléphone avant de se connecter : elle rejoint celle du compte.
+  const appareil2 = secret();
+  const d2 = (await ecrit({ texte: 'Bonjour depuis mon autre téléphone' }, appareil2)).json.discussion.id;
+  assert.notEqual(d2, id);
+  const reunie = await lire(appareil2, moi);
+  assert.deepEqual([reunie.json.discussion.id, reunie.json.messages.length, dernier(reunie).texte], [id, 8, 'Bonjour depuis mon autre téléphone']);
+  assert.equal((await equipe(d2)).status, 404);
+  const s = (await equipe(id)).json.discussion;
+  assert.deepEqual([s.nom, s.telephone, s.client, s.a_repondre, s.non_lus, s.dernier], ['Aline Furaha', '0894445566', c.json.id, true, 1, 'Bonjour depuis mon autre téléphone']);
+  // La réponse suivante arrive sur le compte.
+  assert.equal((await equipe(id, { method: 'POST', body: { texte: 'Bien reçu !' } })).status, 200);
+  assert.deepEqual((await reponses(secret(), moi)).map((n) => [n.texte, n.lu]), [['Bien reçu !', false]]);
+
+  // Le livreur n'a pas accès aux messages des clients.
+  const membre = await api('/api/sokoyetu/equipe', { method: 'POST', auth: true, body: { name: 'Jean Mulume', email: 'livreur-messages@sokoyetu.test', role: 'livreur' } });
+  assert.equal(membre.status, 200, membre.texte);
+  let x;
+  for (let i = 0; i < 9; i++) { x = await api('/api/collections/admins/auth-with-password', { method: 'POST', body: { identity: 'livreur-messages@sokoyetu.test', password: membre.json.motDePasse } }); if (x.status !== 429) break; await pause(2000); }
+  assert.equal(x.status, 200, x.texte);
+  const livreur = { Authorization: x.json.token };
+  assert.deepEqual((await api('/api/collections/discussions/records', { headers: livreur })).json.items, []);
+  assert.equal((await api('/api/sokoyetu/discussions/' + id, { headers: livreur })).status, 403);
+  assert.equal((await api('/api/sokoyetu/discussions/' + id, { method: 'POST', headers: livreur, body: { texte: 'Bonjour' } })).status, 403);
+
+  // Compte supprimé par le client : sa discussion disparaît.
+  assert.equal((await api('/api/sokoyetu/compte/supprimer', { method: 'POST', headers: moi, body: {} })).status, 200);
+  assert.equal((await equipe(id)).status, 404);
+  // Effacement des données du client (son téléphone) : la discussion de son appareil aussi.
+  const d4 = (await ecrit({ texte: 'Me revoilà, sans compte.' })).json.discussion.id;
+  assert.deepEqual((({ nom, telephone }) => [nom, telephone])((await equipe(d4)).json.discussion), ['Aline Furaha', '0894445566'], 'nom et téléphone de sa dernière commande');
+  assert.equal((await api('/api/sokoyetu/clients/effacer', { method: 'POST', auth: true, body: { phone: '0894445566' } })).status, 200);
+  assert.equal((await equipe(d4)).status, 404);
+  // Supprimée par l'équipe (message abusif) : ses messages aussi.
+  const d5 = (await ecrit({ texte: 'Message à supprimer' }, secret())).json.discussion.id;
+  assert.equal((await equipe(d5, { method: 'DELETE' })).status, 200);
+  assert.equal((await equipe(d5)).status, 404);
+});

@@ -106,7 +106,7 @@ export function EntetePage({ titre, sous, repli = '/', actions, cacherTitreOrdi,
 }
 
 const ONGLETS = [['/', 'accueil', 'Accueil', 'accueil'], ['/categories', 'rayons', 'Rayons', 'rayons'], ['/nouveautes', 'nouveautes', 'Nouveautés', 'etincelle'], ['/panier', 'panier', 'Panier', 'sac'], ['/compte', 'compte', 'Compte', 'personne']];
-const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte', notifications: 'compte' };
+const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte', notifications: 'compte', discussion: 'compte' };
 
 export function NavBas() {
   const nom = route.value.nom; const actif = DANS_ONGLET[nom] || nom; const n = nbArticles.value;
@@ -144,6 +144,7 @@ export function Pied() {
           <button type="button" onClick={ouvrirLivraisonPaiement}>Livraison et paiement</button>
           <button type="button" onClick={ouvrirCommentCaMarche}>Comment ça marche</button>
           <a href={lien('/compte/commandes')}>Suivre ma commande</a>
+          <a href={lien('/discussion')}>Écrire à la boutique</a>
           {wa ? <a href={wa} target="_blank" rel="noopener">Nous écrire sur WhatsApp</a> : null}
         </nav>
         <nav aria-label="Informations légales">

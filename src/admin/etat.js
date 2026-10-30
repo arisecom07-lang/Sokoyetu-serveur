@@ -90,6 +90,7 @@ export async function charger() {
   }))));
   if (echecs.length && !pret.value) throw echecs[0];
   if (peut('clients')) chargerComptes();
+  if (peut('messages')) chargerDiscussions();
   batch(() => {
     const avant = donnees.value; const d = {};
     COLLECTIONS.forEach((c, i) => { d[c] = res[i] || (c === 'config' ? null : avant[c]); });
@@ -145,6 +146,14 @@ export function suivreEnDirect() {
     if (!m || !m.record) return;
     const autres = comptes.value.filter((c) => c.id !== m.record.id);
     comptes.value = m.action === 'delete' ? autres : [...autres, versCompte(m.record)];
+  });
+  // Un client écrit à la boutique : la liste des messages suit, et l'équipe est prévenue (toast, carillon).
+  if (peut('messages')) TempsReel.abonner('discussions/*', (m) => {
+    if (!m || !m.record) return;
+    const d = versDiscussion(m.record); const avant = discussions.value.find((x) => x.id === d.id);
+    const autres = discussions.value.filter((x) => x.id !== d.id);
+    discussions.value = m.action === 'delete' ? autres : [d, ...autres].sort((a, b) => b.maj - a.maj);
+    if (m.action !== 'delete' && d.auteur === 'client' && d.maj > ((avant && avant.maj) || 0)) surNouveauMessage(d);
   });
   COLLECTIONS.filter(lisible).forEach((col) => TempsReel.abonner(col + '/*', (m) => {
     if (!m || !m.record) return;
@@ -239,6 +248,40 @@ export const lireEquipe = () => requete('sokoyetu/equipe').then((r) => r.membres
 export const ajouterMembre = (d) => requete('sokoyetu/equipe', { method: 'POST', corps: d });
 export const modifierMembre = (id, d) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'POST', corps: d });
 export const retirerMembre = (id) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'DELETE' });
+
+/* ---------- Messages des clients : une discussion par client (propriétaire et vendeurs, droit « messages ») ---------- */
+
+export const discussions = signal([]);
+/* Discussions où le client attend une réponse (pastille du menu, tableau de bord). */
+export const aRepondre = computed(() => discussions.value.filter((d) => d.a_repondre).length);
+const versDiscussion = (r) => ({
+  id: r.id, client: r.client || '', nom: r.nom || '', telephone: r.telephone || '', dernier: r.dernier || '', auteur: r.auteur || '',
+  maj: R.num(r.maj), non_lus: R.num(r.non_lus), a_repondre: !!r.a_repondre, lu_client: R.num(r.lu_client), lu_boutique: R.num(r.lu_boutique)
+});
+async function chargerDiscussions() {
+  try {
+    const j = await requete('collections/discussions/records?sort=-maj&perPage=500&skipTotal=1');
+    discussions.value = (j.items || []).map(versDiscussion);
+  } catch (e) { /* serveur sans discussions (ancienne version) */ }
+}
+let surNouveauMessage = () => { };
+export function quandNouveauMessage(fn) { surNouveauMessage = fn; }
+/* Résumé renvoyé par le serveur (réponse, lecture) : la liste suit sans attendre le temps réel. */
+function poserDiscussion(d) {
+  if (!d || !d.id) return;
+  discussions.value = [versDiscussion(d), ...discussions.value.filter((x) => x.id !== d.id)].sort((a, b) => b.maj - a.maj);
+}
+/* { discussion, messages, commandes } : messages après « apres » (identifiant du dernier message déjà affiché). */
+export const lireDiscussion = (id, apres) => requete(`sokoyetu/discussions/${encodeURIComponent(id)}${apres ? '?apres=' + apres : ''}`, )
+  .then((r) => { poserDiscussion(r.discussion); return r; });
+export const repondreDiscussion = (id, m) => requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'POST', corps: m })
+  .then((r) => { poserDiscussion(r.discussion); return r; });
+export const marquerDiscussion = (id, action) => requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'POST', corps: { action } })
+  .then((r) => { poserDiscussion(r.discussion); return r; });
+export async function supprimerDiscussion(id) {
+  await requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  discussions.value = discussions.value.filter((x) => x.id !== id);
+}
 
 /* ---------- Clients qui attendent un article épuisé (« Prévenez-moi »), annonces aux clients (propriétaire) ---------- */
 

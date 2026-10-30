@@ -79,6 +79,22 @@ await client.goto(BASE + '/boutique/index.html#/'); await client.waitForSelector
 await client.waitForSelector('.notif-texte b:text("Arrivage de chemises")');
 etape('annonce aux clients : envoyée depuis l’administration, reçue dans la boutique');
 
+// Discussion avec la boutique : question sur un article, réponse de l'équipe, reçue dans la boutique.
+await client.goto(BASE + '/boutique/index.html#/p/ex-p17/montre-classique-bracelet-cuir'); await client.waitForSelector('.produit-titre');
+await client.click('a:has-text("Une question sur cet article ?")'); await client.waitForSelector('.page-discussion .composeur-sujet');
+await client.fill('.composeur textarea', 'Bonjour, le bracelet existe-t-il en noir ?'); await client.click('.composeur-envoyer');
+await client.waitForSelector('.bulle-moi:not(.en-envoi):has-text("le bracelet existe-t-il en noir")');
+await client.screenshot({ path: SORTIE + 'demo-discussion.png' });
+await admin.bringToFront();
+await admin.goto(BASE + '/admin/index.html#/messages'); await admin.click('.ligne-discussion:has-text("Amani Bahati")');
+await admin.waitForSelector('.messagerie-fil .bulle-autre:has-text("le bracelet existe-t-il en noir")');
+await admin.fill('.composeur-admin textarea', 'Bonjour Amani, oui : il existe en noir, au même prix.'); await admin.click('.composeur-admin .composeur-envoyer');
+await admin.waitForSelector('.messagerie-fil .bulle-moi:not(.en-envoi):has-text("il existe en noir")');
+await admin.screenshot({ path: SORTIE + 'demo-messages.png' });
+await client.bringToFront();
+await client.waitForSelector('.bulle-autre:has-text("il existe en noir")', { timeout: 10000 });
+etape('discussion avec la boutique : question sur un article, réponse de l’équipe reçue dans la boutique');
+
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.
 const envelopper = async (route) => { const r = await route.fetch(); route.fulfill({ response: r, headers: { ...r.headers(), 'content-type': 'text/html; charset=utf-8' }, body: '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + (await r.text()) + '</body></html>' }); };

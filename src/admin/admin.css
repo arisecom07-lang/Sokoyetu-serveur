@@ -498,3 +498,39 @@ label.import-ligne { cursor: pointer; grid-template-columns: auto auto minmax(0,
 .apercu-notif-texte b { font-weight: 750; overflow-wrap: anywhere; }
 .apercu-notif-texte span { color: var(--encre-2); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .ligne-texte small.attente { color: var(--info); font-weight: 650; }
+
+/* ---------- Messages des clients : liste des discussions et discussion ouverte (côte à côte sur ordinateur) ---------- */
+.messagerie { display: grid; gap: var(--e4); }
+.messagerie-outils { margin-bottom: var(--e3); }
+@media (max-width: 1023.98px) { .messagerie.avec-fil .messagerie-liste { display: none; } }
+.ligne-discussion .ligne-fin { align-self: start; }
+.ligne-discussion.non-lue .ligne-texte b { font-weight: 800; }
+.ligne-discussion.non-lue .ligne-texte small { color: var(--encre); font-weight: 600; }
+.ligne-discussion.active { background: var(--marque-doux); }
+.messagerie-fil { display: grid; gap: var(--e3); min-width: 0; }
+.messagerie-tete { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--e3); align-items: center; padding: 14px 16px; }
+.messagerie-tete .initiale { width: 44px; height: 44px; font-size: 19px; }
+.messagerie-qui { display: grid; gap: 3px; min-width: 0; }
+.messagerie-qui b { font-weight: 750; font-size: var(--t-l); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.messagerie-qui small { color: var(--encre-3); font-size: var(--t-s); }
+.messagerie-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 599.98px) {
+  .messagerie-tete { grid-template-columns: auto minmax(0, 1fr); }
+  .messagerie-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+.messagerie-messages { min-height: 96px; padding: 2px; }
+.composeur-admin {
+  position: sticky; z-index: 30; bottom: calc(var(--h-nav) + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px;
+  margin: 0 calc(-1 * var(--gouttiere-d)) 0 calc(-1 * var(--gouttiere)); padding: 10px var(--gouttiere-d) 10px var(--gouttiere);
+  background: var(--surface); border-top: 1px solid var(--ligne); box-shadow: var(--ombre-haut);
+}
+.composeur-admin .composeur-ligne { grid-template-columns: auto minmax(0, 1fr) auto; }
+.composeur-aide { font-size: var(--t-xs); color: var(--encre-3); }
+.messagerie-supprimer { justify-self: center; margin-top: var(--e2); }
+.messagerie-vide { padding: var(--e6) var(--e4); }
+@media (min-width: 1024px) {
+  .messagerie { grid-template-columns: 340px minmax(0, 1fr); align-items: start; }
+  .messagerie-liste { position: sticky; top: 28px; max-height: calc(100vh - 56px); max-height: calc(100dvh - 56px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .composeur-admin { bottom: 16px; margin: 0; padding: 12px; border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-2); }
+  .composeur-admin .composeur-idees { margin: 0; padding: 0; flex-wrap: wrap; }
+}

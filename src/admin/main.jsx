@@ -4,10 +4,11 @@ import { useEffect } from 'preact/hooks';
 import { appliquerTheme } from '../commun/js/theme.js';
 import { Toasts, Feuilles, Annonceur, toast } from '../commun/js/interface.jsx';
 import { Garde, surveillerErreurs } from '../commun/js/erreurs.jsx';
+import R from '../commun/js/regles.js';
 import { dollars } from '../commun/js/outils.js';
 import { Local } from '../commun/js/stockage.js';
 import { route, aller } from './routeur.js';
-import { compte, demarrer, verifierSession, quandNouvelleCommande, aTraiter, aLivrer, cfg, role, peut } from './etat.js';
+import { compte, demarrer, verifierSession, quandNouvelleCommande, quandNouveauMessage, aTraiter, aLivrer, aRepondre, cfg, role, peut } from './etat.js';
 import { BarreLaterale, NavBasAdmin } from './composants/cadre.jsx';
 import { Connexion, Tableau } from './pages/accueil.jsx';
 import { Commandes, Commande } from './pages/commandes.jsx';
@@ -22,9 +23,10 @@ import { Journal } from './pages/journal.jsx';
 import { Equipe, AccesReserve } from './pages/equipe.jsx';
 import { Livraisons } from './pages/livraisons.jsx';
 import { Annonces } from './pages/annonces.jsx';
+import { Messages } from './pages/messages.jsx';
 
 /* Droit nécessaire pour chaque page (regles.DROITS) : sans lui, « accès réservé » (le serveur refuse de toute façon). */
-const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe', annonces: 'annonces' };
+const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe', annonces: 'annonces', messages: 'messages' };
 function page(segs) {
   const [a, b] = segs;
   if (a === 'plus' || (a === 'reglages' && !b)) return role.value === 'livreur' ? Compte : Plus;
@@ -44,6 +46,7 @@ function page(segs) {
   if (a === 'compte') return Compte;
   if (a === 'journal') return Journal;
   if (a === 'annonces') return Annonces;
+  if (a === 'messages') return Messages;
   return role.value === 'livreur' ? Livraisons : Tableau;
 }
 
@@ -68,9 +71,22 @@ quandNouvelleCommande((o) => {
   }
 });
 
+// Un client écrit : l'équipe est prévenue, sauf si elle a déjà cette discussion sous les yeux (l'alerte part quand elle l'ouvre).
+let alerteMessage = null;
+quandNouveauMessage((d) => {
+  const ouverte = route.value.segs[0] === 'messages' && route.value.segs[1] === d.id && !document.hidden;
+  if (ouverte) return;
+  alerteMessage = { id: d.id, retirer: toast(`${d.nom || 'Un client'} : « ${R.apercuMessage(d.dernier, 70)} »`, { icone: 'bulle', duree: 6000 }) };
+  carillon();
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
+    navigator.serviceWorker.ready.then((r) => r.showNotification(`Message de ${d.nom || 'un client'}`, { body: d.dernier, icon: 'icone-192.png', tag: 'discussion-' + d.id, data: { url: '/#/messages/' + d.id } })).catch(() => { });
+  }
+});
+route.subscribe((r) => { if (alerteMessage && r.segs[0] === 'messages' && r.segs[1] === alerteMessage.id) { alerteMessage.retirer(); alerteMessage = null; } });
+
 function App() {
   const connecte = !!compte.value;
-  const n = role.value === 'livreur' ? aLivrer.value : aTraiter.value;
+  const n = (role.value === 'livreur' ? aLivrer.value : aTraiter.value) + aRepondre.value;
   useEffect(() => {
     document.title = `${n ? `(${n}) ` : ''}${cfg.value.name} · Gestion`;
     try { if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => { }); } catch (e) { }

@@ -705,3 +705,23 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 .vignette-video { display: grid; place-items: center; width: 100%; height: 100%; background: var(--encre); color: var(--surface); }
 .pl-prix { display: inline-grid; justify-items: end; line-height: 1.2; }
 .pl-prix .prix-barre { font-size: 12px; }
+
+/* ---------- Discussion avec la boutique : fil, puis zone d'écriture collée en bas (téléphone) ---------- */
+.page-discussion { max-width: 760px; }
+body[data-bas="barre"] .page-discussion { padding-bottom: calc(var(--h-composeur, 132px) + var(--e4) + env(safe-area-inset-bottom, 0px)); }
+.discussion { display: grid; gap: var(--e3); padding-top: var(--e3); }
+.discussion-intro { display: grid; justify-items: center; gap: 8px; padding: var(--e6) var(--e4); text-align: center; }
+.discussion-logo { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--marque-doux); color: var(--marque-texte); margin-bottom: 4px; }
+.discussion-intro h2 { font-family: var(--police-titre); font-size: var(--t-xl); font-weight: 600; }
+.discussion-intro p { max-width: 440px; color: var(--encre-2); font-size: var(--t-m); line-height: 1.5; }
+.composeur { position: fixed; z-index: 35; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--ligne); box-shadow: var(--ombre-haut); padding: 10px var(--gouttiere-d) calc(10px + env(safe-area-inset-bottom, 0px)) var(--gouttiere); }
+.composeur-in { display: grid; gap: 8px; max-width: 760px; margin: 0 auto; }
+.composeur-nom.saisie { height: 42px; border-radius: var(--r-rond); font-size: 15px; }
+@media (min-width: 900px) {
+  body[data-bas] .page-discussion { padding-bottom: var(--e6); }
+  .composeur { position: sticky; bottom: 16px; margin-top: var(--e4); padding: 12px; border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-2); }
+  .composeur-idees { margin: 0; padding: 0; flex-wrap: wrap; }
+}
+.encours.question { margin-top: 0; background: var(--surface); border-color: var(--ligne); transition: border-color var(--rapide); }
+.encours.question:hover { border-color: var(--ligne-saisie); }
+.encours.question .menu-icone { background: var(--marque-doux); color: var(--marque-texte); }

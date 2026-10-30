@@ -401,3 +401,17 @@ test('relance des paniers : une fois par panier, seulement les articles encore d
   assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 1 } }, 'fr').texte, '« Sac cabas » et un autre article vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.');
   assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 3 } }, 'fr').texte, '« Sac cabas » et 3 autres articles vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.');
 });
+
+test('discussion : message nettoyé, article ou commande joints par identifiant, aperçu sur une ligne', () => {
+  assert.deepEqual(R.messageNettoye({ texte: '  Bonjour,\t la robe   existe en XL ? \n\n\n\n Merci \u0007', produit: 'ex-p01', commande: 'abc123def456ghi' }),
+    { texte: 'Bonjour, la robe existe en XL ?\n\nMerci', produit: 'ex-p01', commande: 'abc123def456ghi' });
+  assert.deepEqual(R.messageNettoye({ texte: 'Oui', produit: '../admin', commande: { id: 'x' } }), { texte: 'Oui', produit: '', commande: '' });
+  assert.equal(R.messageNettoye({ texte: 'é'.repeat(5000) }).texte.length, R.MAX_MESSAGE);
+  assert.throws(() => R.messageNettoye({ texte: ' \n \t ' }), /Écrivez votre message/);
+  assert.throws(() => R.messageNettoye(null), /Écrivez votre message/);
+  assert.equal(R.apercuMessage('Bonjour,\n\nla robe existe en XL ?'), 'Bonjour, la robe existe en XL ?');
+  assert.equal(R.apercuMessage('mot '.repeat(60), 20), 'mot mot mot mot mot…');
+  assert.equal(R.texteNotification({ type: 'message', details: { texte: 'Oui, en XL aussi.' } }, 'fr').titre, 'Réponse de la boutique');
+  assert.equal(R.texteNotification({ type: 'message', details: { texte: 'Oui, en XL aussi.' } }, 'fr').texte, 'Oui, en XL aussi.');
+  assert.ok(R.peut('vendeur', 'messages') && R.peut('proprietaire', 'messages') && !R.peut('livreur', 'messages'));
+});

@@ -344,3 +344,42 @@ img.media.charge-en-cours { opacity: 0; }
 .quantite.petit { height: 38px; }
 .quantite.petit button { width: 36px; height: 36px; }
 .quantite.petit button .ic { --ic: 16px; }
+
+/* Discussion entre un client et la boutique (fil commun à la boutique et à l'administration) */
+.fil-messages { display: flex; flex-direction: column; gap: 6px; }
+.fil-jour { align-self: center; margin: 12px 0 6px; }
+.fil-jour span { display: inline-block; padding: 4px 12px; border-radius: var(--r-rond); background: var(--surface-2); color: var(--encre-3); font-size: var(--t-xs); font-weight: 700; }
+.fil-jour span::first-letter { text-transform: uppercase; }
+.bulle { display: grid; gap: 6px; max-width: min(84%, 540px); padding: 9px 12px 6px; border-radius: 20px; background: var(--surface); border: 1px solid var(--ligne); box-shadow: var(--ombre-1); animation: bulle-arrive var(--moyen) var(--sortie); }
+.bulle p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: var(--t-base); }
+.bulle small { justify-self: end; font-size: 11.5px; color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.bulle-autre { align-self: flex-start; border-bottom-left-radius: 6px; }
+.bulle-moi { align-self: flex-end; border-bottom-right-radius: 6px; background: var(--marque-doux); border-color: var(--marque-doux-2); }
+.bulle.en-envoi { opacity: .7; }
+@keyframes bulle-arrive { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+.bulle-piece { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 10px 6px 6px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--ligne); color: var(--encre); transition: border-color var(--rapide); }
+.bulle-moi .bulle-piece { background: var(--surface); }
+.bulle-piece:hover { border-color: var(--ligne-saisie); }
+.bulle-piece-photo { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; background: var(--surface-3); flex: none; }
+.bulle-piece-photo img, .bulle-piece-photo .media { width: 100%; height: 100%; object-fit: cover; }
+.bulle-piece-icone { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: var(--marque-doux); color: var(--marque-texte); flex: none; }
+.bulle-piece-texte { min-width: 0; display: grid; }
+.bulle-piece-texte b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulle-piece-texte small { justify-self: start; font-size: 12.5px; color: var(--encre-2); }
+@media (prefers-reduced-motion: reduce) { .bulle { animation: none; } }
+
+/* Zone d'écriture d'une discussion : article ou commande joint, idées de messages, texte et envoi */
+.composeur-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.composeur-ligne textarea.saisie { min-height: 48px; max-height: 200px; padding: 12px 16px; border-radius: 24px; resize: none; line-height: 1.4; }
+.composeur-ligne > .btn-icone { height: 48px; color: var(--encre-2); }
+.composeur-envoyer { width: 48px; height: 48px; padding: 0; border-radius: 50%; }
+.composeur-envoyer .ic { --ic: 21px; }
+.composeur-idees { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gouttiere-d)) 0 calc(-1 * var(--gouttiere)); padding: 0 var(--gouttiere-d) 0 var(--gouttiere); }
+.composeur-idees::-webkit-scrollbar { display: none; }
+.composeur-idees .puce { height: 34px; font-size: 13.5px; }
+.composeur-sujet { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 4px 4px 6px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--ligne); }
+.composeur-sujet .bulle-piece-photo, .composeur-sujet .bulle-piece-icone { width: 36px; height: 36px; border-radius: 9px; }
+.composeur-sujet-texte { display: grid; min-width: 0; }
+.composeur-sujet-texte small { font-size: 11.5px; color: var(--encre-3); font-weight: 650; }
+.composeur-sujet-texte b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composeur-sujet .btn-icone { width: 36px; height: 36px; }

@@ -36,11 +36,13 @@ function retirerToast(id) {
   toasts.value = toasts.value.map((t) => (t.id === id ? { ...t, sort: true } : t));
   setTimeout(() => { toasts.value = toasts.value.filter((t) => t.id !== id); }, 240);
 }
+/* Renvoie de quoi retirer le message avant la fin de sa durée. */
 export function toast(texte, { icone = 'coche', ton = '', duree = 2600 } = {}) {
   const id = ++n;
   toasts.value.filter((t) => !t.sort).slice(0, -1).forEach((t) => retirerToast(t.id)); // deux messages au plus à l'écran
   toasts.value = [...toasts.value, { id, texte, icone, ton }];
   setTimeout(() => retirerToast(id), duree);
+  return () => retirerToast(id);
 }
 export const Toasts = () => (
   <div class="toasts" aria-live="polite">

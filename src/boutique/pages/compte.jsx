@@ -15,6 +15,7 @@ import { Montants as MontantsDevis } from './commander.jsx';
 import { useSeo } from './commun.jsx';
 import { ActiverNotifications } from './notifications.jsx';
 import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, oublierNotifications } from '../notifications.js';
+import { messagesNonLus, oublierDiscussion } from '../discussion.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
@@ -237,10 +238,11 @@ export function Compte() {
           <div class="menu">
             {item({ href: lien('/compte/commandes'), icone: 'recu', titre: 'Mes commandes', sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : 'Reçus, suivi et historique' })}
             {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
+            {item({ href: lien('/discussion'), icone: 'bulle', titre: 'Écrire à la boutique', sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : 'Une question ? Réponse ici, dans l’application' })}
             {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: 'Retrouver une commande', sous: 'Avec le numéro de votre reçu' })}
             {item({ href: lien('/favoris'), icone: 'coeur', titre: 'Mes favoris', sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : 'Vos coups de cœur' })}
             {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: 'Livraison et paiement', sous: 'Zones, délais, Mobile Money' })}
-            {wa ? item({ href: wa, externe: true, icone: 'bulle', titre: 'Contacter la boutique', sous: `WhatsApp · ${telephone(c.whatsapp)}` }) : null}
+            {wa ? item({ href: wa, externe: true, icone: 'appel', titre: 'WhatsApp de la boutique', sous: telephone(c.whatsapp) }) : null}
           </div>
           <div class="menu">
             <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur ce téléphone' : 'Désactivé : thème clair'} />
@@ -249,7 +251,7 @@ export function Compte() {
             {item({ href: lien('/infos/conditions'), icone: 'recu', titre: 'Conditions et confidentialité', sous: 'Vente, retours, données personnelles' })}
             {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: 'Se déconnecter', sous: 'Panier, favoris et commandes restent dans votre compte' }) : null}
             {cl ? item({ onClick: confirmerSuppression, icone: 'poubelle', titre: 'Supprimer mon compte', sous: 'Vos commandes restent chez la boutique' }) : null}
-            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); oublierNotifications(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
+            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); oublierNotifications(); oublierDiscussion(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
           </div>
         </div>
       </main>
@@ -440,6 +442,11 @@ export function Suivi() {
               <h2 class="carte-titre"><Icone n="repere" />{R.estRetraitCmd(o) ? 'Retrait' : 'Livraison'}</h2>
               <dl class="infos"><dt>Zone</dt><dd>{o.shipping.zoneName}</dd>{o.shipping.address ? <><dt>Adresse</dt><dd>{o.shipping.address}</dd></> : null}{o.shipping.landmark ? <><dt>Repère</dt><dd>{o.shipping.landmark}</dd></> : null}{livraison ? <><dt>Prévue</dt><dd>{livraison}</dd></> : null}<dt>Contact</dt><dd>{o.customer.name} · {telephone(o.customer.phone)}</dd></dl>
             </section>
+            <a class="carte encours question" href={lien('/discussion?c=' + encodeURIComponent(o.id))}>
+              <span class="menu-icone"><Icone n="bulle" /></span>
+              <span class="menu-texte"><b>Une question sur cette commande ?</b><small>Écrivez à la boutique : elle vous répond ici, dans l’application</small></span>
+              <Icone n="droite" classe="chevron" />
+            </a>
             <div class="pile">
               {ls ? <button class="btn btn-fantome btn-bloc" onClick={async () => { if (await copier(ls)) toast('Lien de suivi copié'); }}><Icone n="copier" />Copier le lien de suivi</button> : null}
               {ls ? <p class="discret tres-petit centre">Ce lien permet de suivre la commande depuis un autre téléphone. Partagez-le seulement avec vos proches.</p> : null}

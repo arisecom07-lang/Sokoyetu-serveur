@@ -9,7 +9,7 @@ import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 8;
+const VERSION_BASE = 9;
 const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
@@ -52,7 +52,7 @@ const configPaiement = (doc) => R.config({ ...(doc || {}), payment: { ...((doc &
 
 function creerBase() {
   const now = Date.now();
-  const b = { v: VERSION_BASE, cols: { config: {}, collections: {}, products: {}, banners: {}, discounts: {}, orders: {}, media: {}, clients: {} }, codes: {} };
+  const b = { v: VERSION_BASE, cols: { config: {}, collections: {}, products: {}, banners: {}, discounts: {}, orders: {}, media: {}, clients: {}, discussions: {} }, codes: {}, messages: [] };
   const poser = (col, id, doc, extra) => { b.cols[col][id] = { id, doc, created: now, updated: now, ...extra }; };
   poser('config', 'store', R.copie(CONFIG_DEMO));
   for (const k of ['collections', 'products', 'banners', 'discounts']) {
@@ -84,6 +84,24 @@ function creerBase() {
     panier.forEach((l) => { dates['panier:' + l.productId] = t; }); favoris.forEach((id) => { dates['favori:' + id] = t - 3600e3; });
     poser('clients', 'cli' + uid().slice(0, 12), R.docCompte({ panier, favoris, dates }), { phone, name, seen: t, created: t - 9 * JOUR });
   });
+  // Deux discussions avec la boutique : une question qui attend sa réponse, une commande suivie (page Messages).
+  const compte = (tel) => Object.values(b.cols.clients).find((c) => c.phone === tel);
+  const discussion = (c, l, extra) => {
+    const id = 'dis' + uid().slice(0, 12);
+    l.forEach(([auteur, texte, heures, piece]) => b.messages.push({ id: b.messages.length + 1, discussion: id, auteur, texte, produit: (piece && piece.produit) || '', commande: (piece && piece.commande) || '', par: auteur === 'boutique' ? 'demo' : '', cree: now - heures * 3600e3 }));
+    const der = l[l.length - 1];
+    b.cols.discussions[id] = { id, created: now - l[0][2] * 3600e3, updated: now, client: c.id, appareil: '', nom: c.name, telephone: c.phone, dernier: R.apercuMessage(der[1], 160), auteur: der[0], maj: now - der[2] * 3600e3, non_lus: 0, a_repondre: false, lu_client: 0, lu_boutique: 0, ...extra };
+  };
+  const aline = compte('0971234507'), patient = compte('0971234502');
+  if (aline) discussion(aline, [['client', 'Bonjour ! La robe midi bordeaux existe-t-elle en XL ? D’habitude je prends du L.', 3, { produit: 'ex-p01' }]], { non_lus: 1, a_repondre: true });
+  const cmdPatient = Object.values(b.cols.orders).find((o) => o.phone === '0971234502');
+  if (patient) {
+    discussion(patient, [
+      ['client', 'Bonjour, ma commande arrive quand à Goma ?', 30, { commande: cmdPatient ? cmdPatient.id : '' }],
+      ['boutique', 'Bonjour Patient ! Elle part demain matin avec notre transporteur : livraison à Goma sous 48 h. Nous vous prévenons dès qu’elle est en route.', 29],
+      ['client', 'Merci beaucoup, à bientôt !', 28]
+    ], { lu_client: now - 29 * 3600e3, lu_boutique: now - 27 * 3600e3 });
+  }
   return b;
 }
 function stock(b, entrees, sens) {
@@ -135,6 +153,7 @@ function vue(col, rec, gerant) {
   if (col === 'products') r.active = rec.active !== false;
   if (col === 'media') r.file = rec.file;
   if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, relance: rec.relance || 0, created: new Date(rec.created).toISOString().replace('T', ' ') });
+  if (col === 'discussions') { delete r.doc; Object.assign(r, resumeDiscussion(rec)); }
   if (!gerant) { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = commandePublique(rec.doc); }
   else if (roleActuel() === 'livreur') { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = { ...commandePublique(rec.doc), adminNote: rec.doc.adminNote || '' }; }
   // Comme le serveur : la boutique apprend quel paiement est ouvert (ici, le mode test).
@@ -207,7 +226,7 @@ function recevoir({ col, id, action, avant }) {
       if (col === 'media') continue;
       message = { action, record: action === 'delete' ? { id, ...(avant ? vue(col, avant, true) : {}) } : vue(col, rec, true) };
     } else {
-      if (col === 'discounts' || col === 'media' || col === 'clients') continue;
+      if (col === 'discounts' || col === 'media' || col === 'clients' || col === 'discussions') continue;
       if (col === 'orders') {
         let t = ''; try { t = JSON.parse(decodeURIComponent((options || '').replace(/^options=/, ''))).query.t; } catch (e) { }
         if (cible === '*' || !rec || !t || rec.token !== t) continue;
@@ -237,7 +256,8 @@ function routeRecords(b, col, id, method, corps, q) {
   const table = b.cols[col]; if (!table) throw new ErreurApi(404, 'Collection inconnue.');
   const lecturePublique = ['config', 'collections', 'banners', 'products'].includes(col);
   const role = roleActuel();
-  if (role && ((col === 'discounts' && !R.peut(role, 'remises')) || (col === 'clients' && !R.peut(role, 'clients')))) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+  if (role && ((col === 'discounts' && !R.peut(role, 'remises')) || (col === 'clients' && !R.peut(role, 'clients')) || (col === 'discussions' && !R.peut(role, 'messages')))) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+  if (col === 'discussions' && method !== 'GET') throw new ErreurApi(403, 'Les discussions se modifient par leurs routes.');
   if (col === 'clients' && method !== 'GET') throw new ErreurApi(403, 'Les comptes se modifient par la boutique.');
   if (col === 'clients' && id && !gerant()) throw new ErreurApi(404, 'Introuvable.');
   if (method === 'GET' && !id) {
@@ -246,6 +266,7 @@ function routeRecords(b, col, id, method, corps, q) {
     if (col === 'products' && !gerant()) l = l.filter((x) => x.active !== false);
     if (col === 'orders' && role === 'livreur') l = l.filter((x) => R.pourLivreur(x.doc));
     if (q.get('sort') === '-created') l.sort((x, y) => y.created - x.created);
+    if (q.get('sort') === '-maj') l.sort((x, y) => y.maj - x.maj);
     const page = Number(q.get('page') || 1), par = Number(q.get('perPage') || 500);
     return { items: l.slice((page - 1) * par, page * par).map((x) => vue(col, x, gerant())), page, perPage: par };
   }
@@ -254,7 +275,7 @@ function routeRecords(b, col, id, method, corps, q) {
     if (!rec) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'orders' && !gerant() && rec.token !== q.get('t')) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'orders' && role === 'livreur' && !R.pourLivreur(rec.doc)) throw new ErreurApi(404, 'Introuvable.');
-    if ((col === 'discounts' || col === 'media') && !gerant()) throw new ErreurApi(404, 'Introuvable.');
+    if ((col === 'discounts' || col === 'media' || col === 'discussions') && !gerant()) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'products' && !gerant() && rec.active === false) throw new ErreurApi(404, 'Introuvable.');
     return vue(col, rec, gerant());
   }
@@ -338,6 +359,7 @@ async function serveur(chemin, method, corps) {
       Object.values(b.cols.orders).filter((o) => o.client === rec.id).forEach((o) => { o.client = ''; });
       // Comme notifications.detacher : ce qui n'appartenait qu'au compte disparaît, l'appareil garde le reste.
       ['notifications', 'alertes'].forEach((k) => { b[k] = (b[k] || []).map((x) => (x.client === rec.id ? { ...x, client: '' } : x)).filter((x) => x.client || x.appareil); });
+      effacerDiscussions(b, (d) => d.client === rec.id);
       delete b.cols.clients[rec.id]; enregistrer(b); diffuser('clients', rec.id, 'delete', rec); return { ok: true };
     }
     if (method === 'GET') return { compte: vueCompte(rec), commandes: commandesDuCompte(b, rec) };
@@ -455,6 +477,25 @@ async function serveur(chemin, method, corps) {
     }
     return { abonnes: { telephones: abonne ? 1 : 0, promos: promo ? 1 : 0 }, restantes: Math.max(0, R.ANNONCES_PAR_JOUR - vue24h()), parJour: R.ANNONCES_PAR_JOUR, annonces: l.slice(0, 30) };
   }
+  // Discussion avec la boutique (comme lib/discussions.js).
+  if (p === 'sokoyetu/discussion') return lireDiscussionDemo(b, trouverDiscussion(b, corps), corps);
+  if (p === 'sokoyetu/discussion/envoyer') return envoyerDiscussionDemo(b, corps);
+  if ((m = p.match(/^sokoyetu\/discussions\/([^/]+)$/))) {
+    exigerGerant('messages');
+    const d = (b.cols.discussions || {})[decodeURIComponent(m[1])];
+    if (!d) throw new ErreurApi(404, 'Discussion introuvable.');
+    if (method === 'DELETE') { effacerDiscussions(b, (x) => x.id === d.id); enregistrer(b); return { ok: true }; }
+    if (method === 'POST' && corps.action) {
+      if (corps.action !== 'lue' && corps.action !== 'traitee') throw new ErreurApi(400, 'Action inconnue.');
+      if (d.non_lus > 0 || (corps.action === 'traitee' && d.a_repondre)) {
+        d.non_lus = 0; d.lu_boutique = Date.now(); if (corps.action === 'traitee') d.a_repondre = false;
+        d.updated = Date.now(); enregistrer(b); diffuser('discussions', d.id, 'update');
+      }
+      return { discussion: resumeDiscussion(d) };
+    }
+    if (method === 'POST') repondreDiscussionDemo(b, d, corps);
+    return { discussion: resumeDiscussion(d), messages: messagesDiscussion(b, d.id, method === 'POST' ? corps.apres : q.get('apres'), true), commandes: commandesDiscussion(b, d) };
+  }
   if (p === 'sokoyetu/notifications/lues') { notificationsPour(b, corps).forEach((x) => { x.lu = x.lu || Date.now(); }); enregistrer(b); return { ok: true }; }
   if (p.startsWith('sokoyetu/push/')) throw new ErreurApi(503, 'Les notifications du téléphone passent par le serveur de la boutique : indisponibles dans la démonstration.');
   if (p === 'sokoyetu/retrouver') {
@@ -529,6 +570,7 @@ async function serveur(chemin, method, corps) {
     const appareils = l.map((rec) => rec.appareil).filter(Boolean); l.forEach((rec) => { rec.appareil = ''; });
     b.notifications = (b.notifications || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
     b.alertes = (b.alertes || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
+    effacerDiscussions(b, (d) => R.chiffres(d.telephone) === tel || comptes.some((c) => c.id === d.client) || (d.appareil && appareils.includes(d.appareil)));
     comptes.forEach((c) => { delete b.cols.clients[c.id]; });
     enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update')); comptes.forEach((c) => diffuser('clients', c.id, 'delete', c));
     return { effacees: l.length, comptes: comptes.length };
@@ -687,6 +729,99 @@ function relancerPaniers(b) {
   });
   if (n) enregistrer(b);
   return n;
+}
+
+/* ---------- Discussion avec la boutique (comme serveur/pb_hooks/lib/discussions.js) ---------- */
+
+const resumeDiscussion = (d) => ({ id: d.id, client: d.client || '', nom: d.nom || '', telephone: d.telephone || '', dernier: d.dernier || '', auteur: d.auteur || '', maj: d.maj || 0, non_lus: d.non_lus || 0, a_repondre: !!d.a_repondre, lu_client: d.lu_client || 0, lu_boutique: d.lu_boutique || 0 });
+function messagesDiscussion(b, id, apres, equipe) {
+  return (b.messages || []).filter((m) => m.discussion === id && m.id > (Number(apres) || 0)).slice(-100).map((m) => {
+    const o = m.commande ? b.cols.orders[m.commande] : null;
+    const x = { id: m.id, auteur: m.auteur, texte: m.texte, produit: m.produit || '', commande: m.commande ? { id: m.commande, numero: o ? o.doc.number : '' } : null, cree: m.cree };
+    if (equipe) x.par = m.par || '';
+    return x;
+  });
+}
+function commandesDiscussion(b, d) {
+  const tel = R.chiffres(d.telephone);
+  return Object.values(b.cols.orders).filter((o) => (d.client && o.client === d.client) || (tel && o.phone === tel) || (d.appareil && o.appareil === d.appareil))
+    .sort((x, y) => y.created - x.created).slice(0, 20).map((o) => o.id);
+}
+function resumerDiscussion(b, d) {
+  const l = (b.messages || []).filter((m) => m.discussion === d.id); const der = l[l.length - 1];
+  Object.assign(d, { dernier: der ? R.apercuMessage(der.texte, 160) : '', auteur: der ? der.auteur : '', maj: der ? der.cree : d.maj, a_repondre: !!der && der.auteur === 'client',
+    non_lus: l.filter((m) => m.auteur === 'client' && m.cree > (d.lu_boutique || 0)).length, updated: Date.now() });
+}
+/* La discussion de ce client : son compte, sinon cet appareil ; connecté, celle de l'appareil rejoint son compte. */
+function trouverDiscussion(b, corps) {
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  const l = Object.values((b.cols.discussions = b.cols.discussions || {}));
+  b.messages = Array.isArray(b.messages) ? b.messages : [];
+  const parCompte = c ? l.find((d) => d.client === c.id) : null;
+  const parAppareil = a ? l.find((d) => !d.client && d.appareil === a) : null;
+  const qui = { c, a };
+  if (!c || !parAppareil) return { ...qui, d: parCompte || parAppareil || null };
+  if (!parCompte) {
+    Object.assign(parAppareil, { client: c.id, appareil: '', telephone: c.phone, nom: c.name || parAppareil.nom, updated: Date.now() });
+    enregistrer(b); diffuser('discussions', parAppareil.id, 'update');
+    return { ...qui, d: parAppareil };
+  }
+  b.messages.forEach((m) => { if (m.discussion === parAppareil.id) m.discussion = parCompte.id; });
+  b.messages.sort((x, y) => x.id - y.id);
+  delete b.cols.discussions[parAppareil.id]; resumerDiscussion(b, parCompte);
+  enregistrer(b); diffuser('discussions', parAppareil.id, 'delete', parAppareil); diffuser('discussions', parCompte.id, 'update');
+  return { ...qui, d: parCompte };
+}
+function lireDiscussionDemo(b, { c, a, d }, corps) {
+  if (!d) return { discussion: null, messages: [] };
+  const recu = (b.messages || []).filter((m) => m.discussion === d.id && m.auteur === 'boutique').reduce((x, m) => Math.max(x, m.cree), 0);
+  if (recu > (d.lu_client || 0)) {
+    d.lu_client = Date.now(); d.updated = Date.now();
+    (b.notifications || []).forEach((n) => { if (n.type === 'message' && !n.lu && ((c && n.client === c.id) || (a && n.appareil === a))) n.lu = Date.now(); });
+    enregistrer(b); diffuser('discussions', d.id, 'update');
+  }
+  return { discussion: { id: d.id, luBoutique: d.lu_boutique || 0 }, messages: messagesDiscussion(b, d.id, corps && corps.apres, false) };
+}
+function envoyerDiscussionDemo(b, corps) {
+  const qui = trouverDiscussion(b, corps); const { c, a } = qui; let { d } = qui;
+  if (!c && !a) throw new ErreurApi(400, 'Appareil inconnu : rechargez la page.');
+  let m; try { m = R.messageNettoye(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
+  const prod = m.produit && b.cols.products[m.produit];
+  if (!prod || !R.estEnVente(prod.doc)) m.produit = '';
+  const o = m.commande && b.cols.orders[m.commande];
+  if (!o || !((R.valider.jeton(corps.t) && o.token === corps.t) || (c && o.client === c.id) || (a && o.appareil === a))) m.commande = '';
+  const now = Date.now();
+  if (d && b.messages.filter((x) => x.discussion === d.id && x.auteur === 'client' && x.cree > now - JOUR).length >= R.MESSAGES_PAR_JOUR) throw new ErreurApi(400, 'Beaucoup de messages d’un coup : attendez la réponse de la boutique, elle vous répond ici.');
+  if (!d) {
+    const id = 'dis' + uid().slice(0, 12);
+    d = b.cols.discussions[id] = { id, created: now, client: c ? c.id : '', appareil: c ? '' : a, nom: '', telephone: '', non_lus: 0, lu_client: 0, lu_boutique: 0 };
+  }
+  const derniere = Object.values(b.cols.orders).filter((x) => (c && x.client === c.id) || (a && x.appareil === a)).sort((x, y) => y.created - x.created)[0];
+  if (c) { d.telephone = c.phone; if (c.name) d.nom = c.name; }
+  if (!(c && c.name) && R.nettoyer(corps.nom, 60)) d.nom = R.nettoyer(corps.nom, 60);
+  if (!d.nom && derniere) d.nom = (derniere.doc.customer && derniere.doc.customer.name) || '';
+  if (!d.telephone && derniere) d.telephone = derniere.phone || '';
+  b.messages.push({ id: b.messages.reduce((x, y) => Math.max(x, y.id), 0) + 1, discussion: d.id, auteur: 'client', texte: m.texte, produit: m.produit, commande: m.commande, par: '', cree: now });
+  Object.assign(d, { dernier: R.apercuMessage(m.texte, 160), auteur: 'client', maj: now, non_lus: (d.non_lus || 0) + 1, a_repondre: true, updated: now });
+  enregistrer(b); diffuser('discussions', d.id, 'update');
+  return lireDiscussionDemo(b, { c, a, d }, corps);
+}
+function repondreDiscussionDemo(b, d, corps) {
+  let m; try { m = R.messageNettoye(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
+  if (m.produit && !b.cols.products[m.produit]) m.produit = '';
+  if (m.commande && !commandesDiscussion(b, d).includes(m.commande)) m.commande = '';
+  const now = Date.now(); const id = b.messages.reduce((x, y) => Math.max(x, y.id), 0) + 1;
+  b.messages.push({ id, discussion: d.id, auteur: 'boutique', texte: m.texte, produit: m.produit, commande: m.commande, par: (Auth.compte && (Auth.compte.name || Auth.compte.email)) || '', cree: now });
+  Object.assign(d, { dernier: R.apercuMessage(m.texte, 160), auteur: 'boutique', maj: now, non_lus: 0, a_repondre: false, lu_boutique: now, updated: now });
+  ajouterNotification(b, { client: d.client, appareil: d.appareil, type: 'message', details: { texte: R.apercuMessage(m.texte, 120) }, url: '/discussion', cle: 'message:' + id });
+  enregistrer(b); diffuser('discussions', d.id, 'update');
+}
+/* Droit à l'effacement, compte supprimé, discussion supprimée par l'équipe : ses messages disparaissent avec elle. */
+function effacerDiscussions(b, choix) {
+  Object.values(b.cols.discussions || {}).filter(choix).forEach((d) => {
+    b.messages = (b.messages || []).filter((m) => m.discussion !== d.id);
+    delete b.cols.discussions[d.id]; diffuser('discussions', d.id, 'delete', d);
+  });
 }
 
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
