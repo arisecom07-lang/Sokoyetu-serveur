@@ -29,7 +29,8 @@ const CONFIG_DEMO = {
   name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir', setup: { livraison: true },
   payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false } },
   serviceFeePct: 2, payment: { holdMinutes: 30 },
-  legal: { company: 'Sokoyetu SARL', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu', email: 'contact@sokoyakwetu.com', rccm: 'CD/BKV/RCCM/26-B-0000' }
+  // Identité d'exemple : aucune société ni numéro d'immatriculation inventés (la boutique se présente sous son nom).
+  legal: { company: '', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu (adresse d’exemple)', email: 'contact@sokoyakwetu.com' }
 };
 // [nom, téléphone, zone, adresse, articles, opérateur, paiement (payé, refusé, jamais reçu), étapes, âge en jours]
 const CLIENTS = [
@@ -114,9 +115,6 @@ document.addEventListener('click', (e) => {
   const a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
   if (a && new URL(a.href, location.href).origin === location.origin) a.removeAttribute('target');
 }, true);
-export function reinitialiserDemo() {
-  Object.keys(localStorage).filter((k) => k.startsWith('sokoyetu-demo:') || k.startsWith('sokoyetu:')).forEach((k) => localStorage.removeItem(k));
-}
 
 /* ---------- Ce que voient les visiteurs (comme le serveur) ---------- */
 
@@ -124,7 +122,7 @@ function commandePublique(doc) {
   const d = R.copie(doc);
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
-  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; }
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
@@ -268,7 +266,15 @@ async function serveur(chemin, method, corps) {
   if ((m = p.match(/^collections\/admins\/records\/(.+)$/))) { exigerGerant(); return Auth.compte; }
   if ((m = p.match(/^collections\/([a-z]+)\/records(?:\/([^/]+))?$/))) return routeRecords(b, m[1], m[2] && decodeURIComponent(m[2]), method, corps, q);
 
-  if (p === 'sokoyetu/etat') { exigerGerant(); return { version: __VERSION__ + ' · démo', ia: false, paiement: { fournisseur: 'simulation', pret: true, test: true }, codes: { pret: true, canaux: ['whatsapp', 'sms'], test: true } }; }
+  if (p === 'sokoyetu/etat') { exigerGerant(); return { version: __VERSION__ + ' · démo', ia: false, iaQuota: { utilises: 0, max: 60, restants: 60 }, paiement: { fournisseur: 'simulation', pret: true, test: true, panne: 0 }, codes: { pret: true, canaux: ['whatsapp', 'sms'], test: true } }; }
+  // Surveillance (comme serveur/pb_hooks/lib/journal.js) : la démo n'a ni sauvegarde ni journal réels.
+  if (p === 'sokoyetu/erreur') return null;
+  if (p === 'sokoyetu/sante') {
+    const r = { ok: true, version: __VERSION__ + ' · démo', heure: Date.now() };
+    if (gerant()) r.details = { sauvegardes: { nombre: 7, derniere: Date.now() - 5 * 3600e3, verification: { quand: Date.now() - 2 * JOUR, ok: true, fichier: '@auto_pb_backup_sokoyetu.zip', message: 'Restauration réussie (exemple de la démonstration).' } }, paiement: { fournisseur: 'simulation', pret: true, test: true, panne: 0 }, erreurs: { heure: 0, jour: 0 }, alerte: { configuree: false, dernier: 0 }, problemes: [{ grave: false, texte: 'Démonstration : sur votre serveur, cette page montre l’état réel des sauvegardes, du paiement et des erreurs.' }] };
+    return r;
+  }
+  if (p === 'sokoyetu/journal') { exigerGerant(); return { erreurs: [] }; }
 
   // Comptes clients (comme serveur/pb_hooks/lib/comptes.js) : code affiché à l'écran, comme en mode test.
   if (p === 'sokoyetu/compte/code') {
@@ -350,7 +356,7 @@ async function serveur(chemin, method, corps) {
     suivrePaiement(b, rec);
     if (!m[2]) return reponseClient(rec);
     const raison = R.relancePossible(rec.doc); if (raison) throw new ErreurApi(400, raison);
-    if (rec.doc.payment.status === 'pending' && Date.now() - Number(rec.doc.payment.startedAt || 0) < 30000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
+    if (rec.doc.payment.status === 'pending' && Date.now() - Number(rec.doc.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
     const moyen = R.moyensDePaiement(cfg()).find((x) => x.k === ((corps && corps.method) || rec.doc.payment.method));
     if (!moyen) throw new ErreurApi(400, 'Ce mode de paiement n’est pas disponible.', { champ: 'method' });
     const tel = R.valider.mobileMoney((corps && corps.phone) || rec.doc.payment.phone);

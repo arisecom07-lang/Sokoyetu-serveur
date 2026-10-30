@@ -57,7 +57,7 @@ function appel(url, autorisation, type, corps) {
   try {
     const res = $http.send({ url, method: 'POST', timeout: 20, body: corps, headers: { 'Content-Type': type, Accept: 'application/json', Authorization: autorisation } });
     return { statut: res.statusCode, j: res.json || {} };
-  } catch (err) { console.log('sokoyetu envoi réseau', String(err)); return { statut: 0, j: {} }; }
+  } catch (err) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Envoi du code : service injoignable', { module: 'codes', erreur: String(err) }); return { statut: 0, j: {} }; }
 }
 const ECHEC = 'Le code n’a pas pu être envoyé. Vérifiez le numéro, puis réessayez dans un instant.';
 const base = (variable, vraie) => (env(variable) || vraie).replace(/\/+$/, '');
@@ -105,7 +105,7 @@ function envoyer(canal, tel, code, texte) {
   if (!f) return { ok: false, message: canal === 'whatsapp' ? 'L’envoi du code par WhatsApp n’est pas ouvert.' : 'L’envoi du code par SMS n’est pas ouvert.' };
   try {
     const r = f.envoyer(tel, code, texte);
-    if (!r.ok) console.log('sokoyetu envoi', canal, fournisseur(canal), r.detail || '');
+    if (!r.ok) require(`${__hooks}/lib/serveur.js`).trace('warn', 'Code de connexion non envoyé', { module: 'codes', canal, fournisseur: fournisseur(canal), detail: r.detail || '' });
     return r;
   } catch (err) { return { ok: false, message: ECHEC }; }
 }

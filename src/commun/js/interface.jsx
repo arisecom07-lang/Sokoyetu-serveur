@@ -1,8 +1,26 @@
 // Sokoyetu — composants d'interface communs : messages, feuilles, confirmations, champs, états vides…
 import { signal, computed } from '@preact/signals';
-import { useEffect, useId, useRef } from 'preact/hooks';
+import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { Icone } from './icones.jsx';
-import { dollars, classes } from './outils.js';
+import { dollars, classes, pluriel } from './outils.js';
+
+/* ---------- Longues listes : affichées par pages (« Afficher plus »), pour rester rapides sur un petit téléphone ---------- */
+
+/* Les « parPage » premières lignes ; la liste revient à sa première page quand « cle » change (filtre, recherche). */
+export function useParPage(liste, parPage = 50, cle = '') {
+  const [etat, setEtat] = useState({ cle, n: parPage });
+  const n = etat.cle === cle ? etat.n : parPage;
+  return { n, visibles: liste.length > n ? liste.slice(0, n) : liste, reste: Math.max(0, liste.length - n), plus: () => setEtat({ cle, n: n + parPage }) };
+}
+export function AfficherPlus({ page, total, libelle, libelles }) {
+  if (!page.reste) return null;
+  return (
+    <div class="afficher-plus">
+      <p class="discret petit">{page.n} sur {pluriel(total, libelle, libelles)}</p>
+      <button class="btn btn-secondaire" onClick={page.plus}>Afficher plus<Icone n="bas" /></button>
+    </div>
+  );
+}
 
 /* ---------- Annonces pour lecteurs d'écran ---------- */
 const annonce = signal('');

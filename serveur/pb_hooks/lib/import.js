@@ -5,6 +5,7 @@
  */
 const SITES = ['1688.com', 'alibaba.com', 'aliexpress.com', 'aliexpress.us', 'taobao.com', 'tmall.com', 'temu.com', 'shein.com', 'made-in-china.com', 'dhgate.com'];
 const MAX_PHOTOS = 12;
+const MAX_OCTETS = 10 * 1048576; // photo copiée depuis un fournisseur : 10 Mo au plus
 
 const hoteDe = (url) => { const m = /^https?:\/\/([^/?#:]+)/i.exec(String(url || '').trim()); return m ? m[1].toLowerCase() : ''; };
 const surSite = (hote, sites) => sites.some((s) => hote === s || hote.slice(-(s.length + 1)) === '.' + s);
@@ -113,8 +114,15 @@ function lirePage(url) {
 function copierPhoto(app, url) {
   const u = adressePhoto(url);
   if (!u) throw { code: 'bad_url', status: 400 };
+  // Taille annoncée par le site avant de télécharger : une « photo » de plusieurs centaines de Mo ne passe pas.
+  try {
+    const tete = $http.send({ url: u, method: 'HEAD', timeout: 10 });
+    const taille = Number(tete.headers && (tete.headers['Content-Length'] || tete.headers['content-length']) && [].concat(tete.headers['Content-Length'] || tete.headers['content-length'])[0]);
+    if (taille > MAX_OCTETS) throw { code: 'too_big', status: 400 };
+  } catch (err) { if (err && err.code === 'too_big') throw err; /* certains sites refusent HEAD : on télécharge quand même */ }
   let fichier;
   try { fichier = $filesystem.fileFromURL(u, 30); } catch (err) { throw { code: 'network', status: 502 }; }
+  if (Number(fichier.size) > MAX_OCTETS) throw { code: 'too_big', status: 400 };
   const rec = new Record(app.findCollectionByNameOrId('media'));
   rec.set('file', fichier);
   try { app.save(rec); } catch (err) { throw { code: 'not_image', status: 400 }; }

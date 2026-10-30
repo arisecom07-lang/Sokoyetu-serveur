@@ -4,6 +4,7 @@ import { useEffect } from 'preact/hooks';
 import { appliquerTheme } from '../commun/js/theme.js';
 import { Icone } from '../commun/js/icones.jsx';
 import { Toasts, Feuilles, Annonceur } from '../commun/js/interface.jsx';
+import { Garde, surveillerErreurs } from '../commun/js/erreurs.jsx';
 import { route, sens, convertirAncienLien, lien } from './routeur.js';
 import { chargerCatalogue, suivreCatalogue, actualiserMesCommandes, suivreCommande, synchroniserCompte, cfg, horsLigne } from './etat.js';
 import { NavBas } from './composants/cadre.jsx';
@@ -47,7 +48,7 @@ function App() {
     <>
       <a class="lien-evitement" href="#contenu" onClick={(e) => { e.preventDefault(); const m = document.getElementById('contenu'); if (m) { m.setAttribute('tabindex', '-1'); m.focus(); } }}>Aller au contenu</a>
       {horsLigne.value ? <div class="bandeau-hors-ligne" role="status"><Icone n="info" />Hors connexion : vous voyez la dernière version enregistrée.</div> : null}
-      <div class={'appli' + (sens.value ? ' sens-' + sens.value : '')} key={r.cle}><Page /></div>
+      <div class={'appli' + (sens.value ? ' sens-' + sens.value : '')} key={r.cle}><Garde accueil={lien('/')}><Page /></Garde></div>
       {bas.includes('nav') ? <NavBas /> : null}
       <Consentement />
       <BarreMiseAJour />
@@ -59,6 +60,7 @@ function App() {
 }
 
 appliquerTheme();
+surveillerErreurs();
 if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('vt');
 const suivi = convertirAncienLien();
 if (suivi) suivreCommande(suivi.id, suivi.t);

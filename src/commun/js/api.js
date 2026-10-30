@@ -30,24 +30,52 @@ export const Auth = {
 
 /* ---------- Requêtes ---------- */
 
-export async function requete(chemin, { method = 'GET', corps, entetes = {}, delai = 25000 } = {}) {
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+// Messages par défaut du serveur (en anglais) : remplacés par une phrase claire en français.
+const ANGLAIS = /^(Something went wrong|Failed to|The requested resource|Only superusers|The authorized record|Missing or invalid|Request entity too large|Too Many Requests|Unauthorized|Forbidden|Not Found|Bad Request|Internal Server Error)/i;
+function messageErreur(status, j) {
+  const m = String((j && j.message) || '');
+  if (m && !ANGLAIS.test(m)) return m; // message du serveur Sokoyetu, déjà en français
+  if (status === 429) return 'Trop de demandes en peu de temps. Patientez une minute, puis réessayez.';
+  if (status === 413) return 'Envoi trop volumineux : réduisez la taille, puis réessayez.';
+  if (status >= 500) return 'Le serveur a rencontré un problème. Réessayez dans un instant.';
+  if (status === 401) return 'Session expirée : reconnectez-vous.';
+  if (status === 403) return 'Action non autorisée.';
+  if (status === 404) return 'Introuvable : cet élément a peut-être été supprimé.';
+  return 'La demande n’a pas pu être traitée. Vérifiez les informations, puis réessayez.';
+}
+
+/*
+ * Une requête au serveur, avec un délai maximal (delai, en ms) : un serveur qui ne répond pas donne une erreur claire
+ * au lieu d'une attente sans fin. Les lectures (GET) sont retentées deux fois, avec une pause croissante, si le réseau
+ * coupe ou si le serveur est momentanément indisponible ; les envois (POST…) jamais, pour ne rien faire deux fois.
+ */
+export async function requete(chemin, { method = 'GET', corps, entetes = {}, delai = 25000, essais } = {}) {
   const h = Object.assign({}, entetes);
   if (auth && auth.token) h.Authorization = auth.token;
   let body = corps;
   if (corps !== undefined && !(corps instanceof FormData)) { h['Content-Type'] = 'application/json'; body = JSON.stringify(corps); }
-  const ctl = new AbortController(); const minuteur = setTimeout(() => ctl.abort(), delai);
-  let res;
-  try { res = await fetch('/api/' + chemin, { method, headers: h, body, cache: 'no-store', signal: ctl.signal, credentials: 'same-origin' }); }
-  catch (e) {
-    throw new ErreurApi(0, navigator.onLine === false ? 'Pas de connexion internet. Réessayez une fois reconnecté.' : 'Le serveur ne répond pas. Vérifiez votre connexion et réessayez.', { code: 'reseau' });
-  } finally { clearTimeout(minuteur); }
-  if (res.status === 204 || res.status === 304) return null;
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new ErreurApi(res.status, res.status === 429 ? 'Trop de demandes en peu de temps. Patientez une minute, puis réessayez.' : (j.message || `Erreur ${res.status}`),
-      { code: res.status === 429 ? 'limite' : (j.code || 'http'), champ: j.champ || '', data: j.data || {} });
+  const reprises = essais !== undefined ? essais : method === 'GET' ? 2 : 0;
+  for (let n = 0; ; n++) {
+    const ctl = new AbortController(); const minuteur = setTimeout(() => ctl.abort(), delai);
+    let res;
+    try { res = await fetch('/api/' + chemin, { method, headers: h, body, cache: 'no-store', signal: ctl.signal, credentials: 'same-origin' }); }
+    catch (e) {
+      clearTimeout(minuteur);
+      if (n < reprises && navigator.onLine !== false) { await pause(n ? 4000 : 1500); continue; }
+      throw new ErreurApi(0, navigator.onLine === false ? 'Pas de connexion internet. Réessayez une fois reconnecté.' : 'Le serveur ne répond pas. Vérifiez votre connexion et réessayez.', { code: 'reseau' });
+    }
+    clearTimeout(minuteur);
+    if ([502, 503, 504].includes(res.status) && n < reprises) { await pause(n ? 4000 : 1500); continue; }
+    if (res.status === 204 || res.status === 304) return null;
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // Code précis du serveur Sokoyetu (« daily_limit »…) ; sinon « limite » pour un refus anti-abus (429) de PocketBase.
+      throw new ErreurApi(res.status, messageErreur(res.status, j),
+        { code: typeof j.code === 'string' && j.code ? j.code : res.status === 429 ? 'limite' : 'http', champ: j.champ || '', data: j.data || {} });
+    }
+    return j;
   }
-  return j;
 }
 
 const cheminRecords = (col, id, q) => `collections/${col}/records${id ? '/' + encodeURIComponent(id) : ''}${q ? '?' + new URLSearchParams(q) : ''}`;
@@ -87,14 +115,23 @@ export async function changerMotDePasse(ancien, nouveau) {
   await connexion(c.email, nouveau);
 }
 
-/* Catalogue public en une requête ; null si inchangé depuis la dernière fois (même empreinte). */
+/* Catalogue public en une requête ; null si inchangé depuis la dernière fois (même empreinte). 30 s au plus par essai. */
 export async function lireCatalogue(etag) {
-  let res;
-  try { res = await fetch('/api/sokoyetu/catalogue', { headers: etag ? { 'If-None-Match': etag } : {}, cache: 'no-store' }); }
-  catch (e) { throw new ErreurApi(0, 'Pas de connexion.', { code: 'reseau' }); }
-  if (res.status === 304) return null;
-  if (!res.ok) throw new ErreurApi(res.status, 'Catalogue indisponible.');
-  return { donnees: await res.json(), etag: res.headers.get('ETag') || '' };
+  for (let n = 0; ; n++) {
+    const ctl = new AbortController(); const minuteur = setTimeout(() => ctl.abort(), 30000);
+    let res;
+    try { res = await fetch('/api/sokoyetu/catalogue', { headers: etag ? { 'If-None-Match': etag } : {}, cache: 'no-store', signal: ctl.signal }); }
+    catch (e) {
+      clearTimeout(minuteur);
+      if (n < 1 && navigator.onLine !== false) { await pause(2000); continue; }
+      throw new ErreurApi(0, navigator.onLine === false ? 'Pas de connexion internet.' : 'Le serveur ne répond pas.', { code: 'reseau' });
+    }
+    clearTimeout(minuteur);
+    if ([502, 503, 504].includes(res.status) && n < 1) { await pause(2000); continue; }
+    if (res.status === 304) return null;
+    if (!res.ok) throw new ErreurApi(res.status, 'Catalogue indisponible pour le moment.', { code: 'http' });
+    return { donnees: await res.json(), etag: res.headers.get('ETag') || '' };
+  }
 }
 
 /* Photo envoyée au serveur → référence média { type: 'pb', id, f }. */

@@ -267,6 +267,14 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 .vide p { color: var(--encre-2); max-width: 36ch; }
 .vide .actions { display: flex; gap: var(--e2); flex-wrap: wrap; justify-content: center; margin-top: var(--e2); }
 
+/* ---------- Page en erreur, chargement impossible ---------- */
+.afficher-plus { display: grid; justify-items: center; gap: 8px; margin-top: var(--e4); }
+.ecran-erreur, .etat-erreur { display: grid; justify-items: center; text-align: center; gap: var(--e3); padding: var(--e10) var(--e5); }
+.ecran-erreur .vide-icone, .etat-erreur .vide-icone { background: var(--danger-doux, var(--surface-2)); color: var(--danger, var(--encre)); }
+.ecran-erreur h1, .etat-erreur h2 { font-size: var(--t-xl); font-weight: 780; }
+.ecran-erreur p, .etat-erreur p { color: var(--encre-2); max-width: 40ch; }
+.ecran-erreur .rangee-l, .etat-erreur .rangee-l { justify-content: center; margin-top: var(--e2); }
+
 /* ---------- Navigation du bas (téléphone) ---------- */
 .nav-bas {
   position: fixed; z-index: 40; left: 0; right: 0; bottom: 0;

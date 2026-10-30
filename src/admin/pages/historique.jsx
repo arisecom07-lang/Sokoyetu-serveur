@@ -2,7 +2,7 @@
 import { useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
-import { Vide, Pastille, Segment, toast } from '../../commun/js/interface.jsx';
+import { Vide, Pastille, Segment, toast, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { dollars, dateHeure, pluriel, telephone, normaliser, date } from '../../commun/js/outils.js';
 import { Local } from '../../commun/js/stockage.js';
 import { lien } from '../routeur.js';
@@ -92,6 +92,11 @@ export function Historique() {
     if (!m || m.cle !== cle) { m = { cle, titre: date(d, { month: 'long', year: 'numeric' }), l: [], total: 0 }; mois.push(m); }
     m.l.push(o); if (estVente(o)) m.total += R.num(o.total);
   });
+  // Affichage par pages : les totaux des mois restent ceux de toute la liste.
+  const page = useParPage(liste, 60, periode + '|' + etat + '|' + q);
+  let budget = page.n;
+  const affiches = [];
+  for (const m of mois) { if (budget <= 0) break; affiches.push({ ...m, visibles: m.l.slice(0, budget) }); budget -= m.l.length; }
   const nomFichier = `commandes-${R.slug(cfg.value.name || 'sokoyetu')}-${periode}-${new Date().toISOString().slice(0, 10)}.csv`;
 
   return (
@@ -113,12 +118,12 @@ export function Historique() {
               {ETATS.map(([k, t, f]) => { const n = dansPeriode.filter(f).length; return <button key={k} class="puce" aria-pressed={etat === k ? 'true' : 'false'} onClick={() => setEtat(k)}>{t}{k !== 'toutes' && n ? <span class="n">{n}</span> : null}</button>; })}
             </div>
           </div>
-          {mois.length ? mois.map((m) => (
+          {mois.length ? <>{affiches.map((m) => (
             <section key={m.cle} class="historique-mois" aria-label={m.titre}>
               <h2 class="historique-mois-tete"><span>{m.titre}</span><small>{pluriel(m.l.length, 'commande')} · <b class="num">{dollars(m.total)}</b></small></h2>
-              <div class="liste">{m.l.map((o) => <LigneHistorique key={o.id} o={o} />)}</div>
+              <div class="liste">{m.visibles.map((o) => <LigneHistorique key={o.id} o={o} />)}</div>
             </section>
-          )) : <div class="carte"><Vide icone="recu" titre={confirmees.length ? 'Aucune commande ici' : 'Pas encore de commande confirmée'} texte={confirmees.length ? 'Changez de période, de filtre ou de recherche.' : 'Dès qu’un client a payé, sa commande est rangée ici pour toujours, avec son reçu.'} /></div>}
+          ))}<AfficherPlus page={page} total={liste.length} libelle="commande" /></> : <div class="carte"><Vide icone="recu" titre={confirmees.length ? 'Aucune commande ici' : 'Pas encore de commande confirmée'} texte={confirmees.length ? 'Changez de période, de filtre ou de recherche.' : 'Dès qu’un client a payé, sa commande est rangée ici pour toujours, avec son reçu.'} /></div>}
         </div>
       )}
     </>

@@ -79,5 +79,3 @@ export function Icone({ n, taille, plein, titre, classe, style }) {
     </svg>
   );
 }
-
-export const ICONES = Object.keys(P);

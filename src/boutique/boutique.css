@@ -436,7 +436,8 @@ body[data-bas="barre"] .pied { padding-bottom: calc(96px + env(safe-area-inset-b
 .pied nav a:hover, .pied nav button:hover { color: var(--sur-ebene); text-decoration: underline; }
 .pied-bas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: var(--e8); padding-top: var(--e5); border-top: 1px solid rgba(255, 255, 255, .1); font-size: 13px; }
 :root[data-theme="dark"] .pied { background: #0F0C0A; color: rgba(246, 239, 232, .75); }
-:root[data-theme="dark"] .pied .marque, :root[data-theme="dark"] .pied nav a:hover { color: #F6EFE8; }
+:root[data-theme="dark"] .pied .marque, :root[data-theme="dark"] .pied nav a:hover, :root[data-theme="dark"] .pied nav button:hover { color: #F6EFE8; }
+:root[data-theme="dark"] .pied .marque-slogan { color: rgba(246, 239, 232, .7); }
 :root[data-theme="dark"] .pied nav a, :root[data-theme="dark"] .pied nav button { color: rgba(246, 239, 232, .82); }
 :root[data-theme="dark"] .pied .operateur { color: #F6EFE8; }
 

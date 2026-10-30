@@ -6,6 +6,10 @@ import { toast } from '../commun/js/interface.jsx';
 
 export const compte = signal(Auth.charger() ? Auth.compte : null);
 export const pret = signal(false);          // données chargées
+export const erreurChargement = signal(''); // premier chargement impossible : message affiché avec « Réessayer »
+// Santé du serveur (sauvegardes, paiement, erreurs) : lue à l'ouverture et sur la page « Santé et journal ».
+export const sante = signal(null);
+export const lireSante = () => requete('sokoyetu/sante', { essais: 0 }).then((r) => { sante.value = r; return r; });
 export const etatServeur = signal({ version: '', ia: false, paiement: { fournisseur: '', pret: false, test: false }, codes: { pret: false, canaux: [], test: false } });
 
 export const donnees = signal({ config: null, collections: [], banners: [], products: [], discounts: [], orders: [] });
@@ -27,7 +31,6 @@ export const aTraiter = computed(() => donnees.value.orders.filter(R.aTraiter).l
 /* Comptes clients (facultatifs) : panier, favoris et coordonnées gardés par le serveur. */
 export const comptes = signal([]);
 const versCompte = (r) => ({ id: r.id, phone: r.phone || '', name: r.name || '', created: Date.parse(String(r.created || '').replace(' ', 'T')) || 0, seen: R.num(r.seen), ...R.docCompte(r.doc) });
-export const comptesParTel = computed(() => new Map(comptes.value.map((c) => [R.chiffres(c.phone), c])));
 
 /* Clients : déduits des commandes (une fiche par numéro de téléphone), plus les comptes qui n'ont pas encore commandé. */
 export const clients = computed(() => {
@@ -64,15 +67,52 @@ function poser(col, ligne, retirer) {
 let surNouvelleCommande = () => { };
 export function quandNouvelleCommande(fn) { surNouvelleCommande = fn; }
 
+/*
+ * Charge toutes les données. Une liste qui n'arrive pas (réseau, serveur) n'est jamais remplacée par une liste vide :
+ * au premier chargement, l'écran affiche l'erreur et « Réessayer » ; ensuite, les données déjà affichées restent.
+ */
 export async function charger() {
-  const res = await Promise.all(COLLECTIONS.map((c) => tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => { if (e.status === 401 || e.status === 403) throw e; return []; })));
+  const echecs = [];
+  const res = await Promise.all(COLLECTIONS.map((c) => tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => {
+    if (e.status === 401 || e.status === 403) throw e;
+    if (e.status === 404) return []; // collection absente (serveur d'une ancienne version)
+    echecs.push(e); return null;
+  })));
+  if (echecs.length && !pret.value) throw echecs[0];
   chargerComptes();
   batch(() => {
-    const d = {}; COLLECTIONS.forEach((c, i) => { d[c] = res[i]; });
-    donnees.value = { config: d.config.find((x) => x.id === 'store') || null, collections: d.collections, banners: d.banners, products: d.products, discounts: d.discounts, orders: d.orders };
-    pret.value = true;
+    const avant = donnees.value; const d = {};
+    COLLECTIONS.forEach((c, i) => { d[c] = res[i] || (c === 'config' ? null : avant[c]); });
+    donnees.value = { config: d.config ? d.config.find((x) => x.id === 'store') || null : avant.config, collections: d.collections, banners: d.banners, products: d.products, discounts: d.discounts, orders: d.orders };
+    pret.value = true; erreurChargement.value = '';
   });
   requete('sokoyetu/etat').then((e) => { etatServeur.value = e || etatServeur.value; }).catch(() => { });
+  lireSante().catch(() => { });
+  if (echecs.length) throw echecs[0];
+}
+
+/* Ouverture de l'administration : les données, puis le temps réel. Sans connexion : message, et nouvel essai dès son retour. */
+export async function demarrer() {
+  try {
+    await charger();
+    erreurChargement.value = '';
+    suivreEnDirect();
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) { seDeconnecter(); return; }
+    erreurChargement.value = e.code === 'reseau' ? e.message : 'Le serveur n’a pas pu envoyer les données de la boutique. Réessayez dans un instant.';
+    if (!attenteReseau) { attenteReseau = true; window.addEventListener('online', () => { attenteReseau = false; if (!pret.value) demarrer(); }, { once: true }); }
+  }
+}
+let attenteReseau = false;
+
+/* Après une coupure du temps réel : on recharge (nouvel essai plus tard si le réseau est encore instable). */
+let relance = 0;
+function recharger(essai = 0) {
+  clearTimeout(relance);
+  charger().catch((e) => {
+    if (e.status === 401 || e.status === 403 || essai >= 3) return;
+    relance = setTimeout(() => recharger(essai + 1), [10, 30, 90][essai] * 1000);
+  });
 }
 
 async function chargerComptes() {
@@ -102,10 +142,13 @@ export function suivreEnDirect() {
     // Alerte quand une commande vient d'être payée (confirmée par l'opérateur), pas quand le client commence à payer.
     const avant = col === 'orders' ? donnees.value.orders.find((o) => o.id === ligne.id) : null;
     const payee = col === 'orders' && m.action !== 'delete' && R.estPayee(ligne) && !(avant && R.estPayee(avant)) && !(ligne.payment && ligne.payment.manual);
+    // Le client a payé deux fois la même commande : le vendeur doit le rembourser (Commandes → Points à vérifier).
+    const double = col === 'orders' && m.action !== 'delete' && R.doublonARembourser(ligne) && ((ligne.payment.duplicates || []).length > ((avant && avant.payment && avant.payment.duplicates) || []).length);
     poser(col, ligne, m.action === 'delete');
     if (payee) surNouvelleCommande(ligne);
+    if (double) toast(`Commande #${ligne.number} payée deux fois : remboursez le client`, { icone: 'alerte', ton: 'danger', duree: 9000 });
   }));
-  TempsReel.apresReconnexion(() => charger().catch(() => { }));
+  TempsReel.apresReconnexion(() => recharger());
 }
 
 export async function seConnecter(email, mdp) {
@@ -163,7 +206,7 @@ export async function etapeCommande(id, action, note) {
 }
 export async function effacerClient(tel) {
   const r = await requete('sokoyetu/clients/effacer', { method: 'POST', corps: { phone: tel } });
-  await charger();
+  await charger().catch(() => { }); // l'effacement est fait ; les fiches se mettent à jour en direct si la relecture échoue
   return r;
 }
 export async function ficheIA(image, mediaType, hint) {

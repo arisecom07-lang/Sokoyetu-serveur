@@ -7,6 +7,18 @@
  */
 const MODELE = 'claude-opus-5-5';
 const TYPES_IMAGE = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+/*
+ * Plafond des dépenses : chaque fiche rédigée coûte quelques centimes. Au plus SOKOYETU_IA_MAX_JOUR fiches par jour
+ * (60 par défaut) pour toute la boutique, et une réponse bornée (MAX_JETONS). Fixez aussi une limite de dépense
+ * mensuelle dans la console Anthropic (Settings → Limits) : c'est le plafond qui ne peut jamais être dépassé.
+ */
+const MAX_JETONS = 8000;
+const maxParJour = () => Math.max(1, parseInt(String($os.getenv('SOKOYETU_IA_MAX_JOUR') || ''), 10) || 60);
+function quota() {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  const utilises = S.compteurJour($app, 'ia');
+  return { utilises, max: maxParJour(), restants: Math.max(0, maxParJour() - utilises) };
+}
 
 const SCHEMA = {
   type: 'object',
@@ -73,6 +85,8 @@ function fiche(entree) {
   const type = TYPES_IMAGE.indexOf(entree.mediaType) >= 0 ? entree.mediaType : '';
   const image = String(entree.image || '');
   if (!adresse && (!type || !image || image.length > 7000000 || !/^[A-Za-z0-9+/=]+$/.test(image))) throw { code: 'image_rejected', status: 400 };
+  const S = require(`${__hooks}/lib/serveur.js`);
+  if (!quota().restants) throw { code: 'daily_limit', status: 429 };
   const ctx = {
     shop: String(entree.shop || 'Sokoyetu').slice(0, 40), city: String(entree.city || 'Bukavu').slice(0, 40),
     hint: String(entree.hint || '').replace(/\s+/g, ' ').trim().slice(0, 200),
@@ -81,6 +95,8 @@ function fiche(entree) {
       .map((c) => ({ id: String((c && c.id) || '').slice(0, 40), name: String((c && c.name) || '').slice(0, 40) })).filter((c) => c.id && c.name)
   };
   let res;
+  // Compté avant l'appel : une demande partie coûte, même si la réponse se perd.
+  S.ajouterCompteur($app, 'ia');
   try {
     res = $http.send({
       url: 'https://api.anthropic.com/v1/messages',
@@ -94,7 +110,7 @@ function fiche(entree) {
       },
       body: JSON.stringify({
         model: MODELE,
-        max_tokens: 16000,
+        max_tokens: MAX_JETONS,
         fallbacks: 'default',
         output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
         messages: [{
@@ -106,12 +122,14 @@ function fiche(entree) {
         }]
       })
     });
-  } catch (err) { throw { code: 'network', status: 502 }; }
+  } catch (err) { S.trace('warn', 'Assistant IA injoignable', { module: 'ia', erreur: String(err) }); throw { code: 'network', status: 502 }; }
   const j = res.json || {};
-  if (res.statusCode === 401 || res.statusCode === 403) throw { code: 'bad_key', status: 502 };
+  const detail = String((j.error && j.error.message) || '').slice(0, 300);
+  if (res.statusCode === 401 || res.statusCode === 403) { S.trace('error', 'Clé de l’assistant IA refusée (ia.sh)', { module: 'ia', statut: res.statusCode }); throw { code: 'bad_key', status: 502 }; }
   if (res.statusCode === 429 || res.statusCode === 529) throw { code: 'rate_limited', status: 503 };
-  if (res.statusCode === 400 && /image/i.test(String((j.error && j.error.message) || ''))) throw { code: 'image_rejected', status: 400 };
-  if (res.statusCode !== 200) throw { code: 'upstream_error', status: 502 };
+  if (res.statusCode === 400 && /image/i.test(detail)) throw { code: 'image_rejected', status: 400 };
+  if (res.statusCode === 400 && /credit|billing|spend|limit/i.test(detail)) { S.trace('error', 'Assistant IA : crédit épuisé ou limite de dépense atteinte', { module: 'ia', detail }); throw { code: 'no_credit', status: 503 }; }
+  if (res.statusCode !== 200) { S.trace('warn', 'Assistant IA : réponse inattendue', { module: 'ia', statut: res.statusCode, detail }); throw { code: 'upstream_error', status: 502 }; }
   if (j.stop_reason === 'refusal') throw { code: 'refused', status: 422 };
   if (j.stop_reason === 'max_tokens') throw { code: 'invalid_json', status: 502 };
   const texte = (j.content || []).filter((b) => b && b.type === 'text').map((b) => b.text).join('');
@@ -121,4 +139,4 @@ function fiche(entree) {
 
 const active = () => !!String($os.getenv('ANTHROPIC_API_KEY') || '').trim();
 
-module.exports = { fiche, active, consigne, nettoyerReponse, SCHEMA, MODELE };
+module.exports = { fiche, active, quota, consigne, nettoyerReponse, SCHEMA, MODELE, MAX_JETONS };

@@ -33,5 +33,29 @@ ReadWritePaths=$DIR
 [Install]
 WantedBy=multi-user.target
 UNIT
+# Chaque dimanche : la dernière sauvegarde est restaurée à part et contrôlée (résultat dans l'administration, Plus → Journal).
+cat > /etc/systemd/system/sokoyetu-sauvegarde.service <<UNIT
+[Unit]
+Description=Sokoyetu : vérification de la dernière sauvegarde (restauration d'essai)
+
+[Service]
+Type=oneshot
+ExecStart=$DIR/sauvegarde.sh verifier
+Nice=10
+IOSchedulingClass=idle
+UNIT
+cat > /etc/systemd/system/sokoyetu-sauvegarde.timer <<UNIT
+[Unit]
+Description=Sokoyetu : vérification hebdomadaire des sauvegardes
+
+[Timer]
+OnCalendar=Sun *-*-* 04:40:00
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
 systemctl daemon-reload
 systemctl enable sokoyetu >/dev/null 2>&1
+systemctl enable --now sokoyetu-sauvegarde.timer >/dev/null 2>&1 || true

@@ -25,6 +25,8 @@ self.addEventListener('fetch', (e) => {
   const u = new URL(r.url);
   if (u.origin !== location.origin) return;
   if (/^\/(_|\.well-known)\//.test(u.pathname)) return;
+  // Vidéos et lectures par morceaux (Range) : laissées au navigateur (une réponse partielle ne se met pas en cache).
+  if (r.headers.has('range') || /\.(mp4|webm|mov|m4v)$/i.test(u.pathname)) return;
 
   // Photos (les miniatures ne changent jamais d'adresse) : copie locale d'abord, 400 au plus.
   if (u.pathname.startsWith('/api/files/') || u.pathname.startsWith('/photos/')) {
@@ -33,7 +35,7 @@ self.addEventListener('fetch', (e) => {
       const deja = await c.match(r);
       if (deja) return deja;
       const res = await fetch(r);
-      if (res.ok) { c.put(r, res.clone()); limiter(PHOTOS, 400); }
+      if (res.status === 200) c.put(r, res.clone()).then(() => limiter(PHOTOS, 400)).catch(() => { }); // mémoire pleine : tant pis
       return res;
     }));
     return;
@@ -46,7 +48,7 @@ self.addEventListener('fetch', (e) => {
     e.respondWith((async () => {
       try {
         const res = await Promise.race([fetch(r), delai(4000)]);
-        if (res.ok) { const copie = res.clone(); caches.open(VERSION).then((c) => c.put('/', copie)); }
+        if (res.ok) { const copie = res.clone(); caches.open(VERSION).then((c) => c.put('/', copie)).catch(() => { }); }
         return res;
       } catch (err) {
         return (await caches.match('/')) || Response.error();
@@ -56,7 +58,7 @@ self.addEventListener('fetch', (e) => {
   }
   // Fichiers de l'application (noms uniques par version).
   e.respondWith(caches.match(r, { ignoreSearch: u.pathname.startsWith('/assets/') }).then((deja) => deja || fetch(r).then((res) => {
-    if (res.ok && (u.pathname.startsWith('/assets/') || /\.(png|svg|webmanifest)$/.test(u.pathname))) { const copie = res.clone(); caches.open(VERSION).then((c) => c.put(r, copie)); }
+    if (res.status === 200 && (u.pathname.startsWith('/assets/') || /\.(png|svg|webmanifest)$/.test(u.pathname))) { const copie = res.clone(); caches.open(VERSION).then((c) => c.put(r, copie)).catch(() => { }); }
     return res;
   })));
 });

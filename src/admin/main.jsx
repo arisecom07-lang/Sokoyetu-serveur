@@ -3,10 +3,11 @@ import { render } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { appliquerTheme } from '../commun/js/theme.js';
 import { Toasts, Feuilles, Annonceur, toast } from '../commun/js/interface.jsx';
+import { Garde, surveillerErreurs } from '../commun/js/erreurs.jsx';
 import { dollars } from '../commun/js/outils.js';
 import { Local } from '../commun/js/stockage.js';
 import { route, aller } from './routeur.js';
-import { compte, charger, suivreEnDirect, verifierSession, quandNouvelleCommande, aTraiter, cfg, seDeconnecter, gererErreur } from './etat.js';
+import { compte, demarrer, verifierSession, quandNouvelleCommande, aTraiter, cfg } from './etat.js';
 import { BarreLaterale, NavBasAdmin } from './composants/cadre.jsx';
 import { Connexion, Tableau } from './pages/accueil.jsx';
 import { Commandes, Commande } from './pages/commandes.jsx';
@@ -17,6 +18,7 @@ import { Rayons, Bannieres, Remises, FicheCatalogue } from './pages/catalogue.js
 import { Clients, Client, Plus, Compte } from './pages/clients.jsx';
 import { Reglages } from './pages/reglages.jsx';
 import { Audience, AudienceArticle } from './pages/audience.jsx';
+import { Journal } from './pages/journal.jsx';
 
 function page(segs) {
   const [a, b] = segs;
@@ -32,6 +34,7 @@ function page(segs) {
   if (a === 'reglages') return b ? Reglages : Plus;
   if (a === 'plus') return Plus;
   if (a === 'compte') return Compte;
+  if (a === 'journal') return Journal;
   return Tableau;
 }
 
@@ -65,7 +68,7 @@ function App() {
   useEffect(() => {
     if (!connecte) return;
     verifierSession();
-    charger().then(suivreEnDirect).catch((e) => { if (e.status === 401 || e.status === 403) seDeconnecter(); else gererErreur(e, 'Chargement impossible. Vérifiez votre connexion.'); });
+    demarrer();
   }, [connecte]);
   if (!connecte) return <><Connexion /><Toasts /><Annonceur /></>;
   const Page = page(route.value.segs);
@@ -74,7 +77,7 @@ function App() {
       <a class="lien-evitement" href="#contenu" onClick={(e) => { e.preventDefault(); document.getElementById('contenu')?.focus(); }}>Aller au contenu</a>
       <div class="admin">
         <BarreLaterale />
-        <main class="admin-contenu" id="contenu" tabIndex={-1}><div class="admin-in" key={route.value.cle}><Page /></div></main>
+        <main class="admin-contenu" id="contenu" tabIndex={-1}><div class="admin-in" key={route.value.cle}><Garde accueil="#/"><Page /></Garde></div></main>
       </div>
       <NavBasAdmin />
       <Feuilles />
@@ -85,6 +88,7 @@ function App() {
 }
 
 appliquerTheme();
+surveillerErreurs();
 const racine = document.getElementById('app');
 racine.textContent = '';
 render(<App />, racine);

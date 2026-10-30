@@ -17,6 +17,6 @@ for (const k of ['collections', 'products', 'banners', 'discounts']) {
 }
 const cfg = { name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir',
   payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true } }, serviceFeePct: 2,
-  legal: { company: 'Sokoyetu SARL', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu', email: 'contact@sokoyakwetu.com' } };
+  legal: { company: '', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu (adresse d’exemple)', email: 'contact@sokoyakwetu.com' } };
 if (process.env.CONFIG !== 'non') await ecrire('config', 'store', cfg);
 console.log('Catalogue d’exemple chargé.');

@@ -391,6 +391,22 @@ a.kpi:active { transform: scale(.985); }
 
 .saisie-code { text-transform: uppercase; letter-spacing: .08em; font-weight: 750; }
 
+/* ---------- Santé et journal ---------- */
+.journal { display: grid; border: 1px solid var(--ligne); border-radius: var(--r-m); overflow: hidden; }
+.entree-journal + .entree-journal { border-top: 1px solid var(--ligne); }
+.entree-journal summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e3); align-items: start; min-height: var(--cible); padding: 12px var(--e3); cursor: pointer; list-style: none; transition: background-color var(--rapide); }
+.entree-journal summary::-webkit-details-marker { display: none; }
+.entree-journal summary:hover { background: var(--surface-2); }
+.entree-journal summary:focus-visible { outline: 2px solid var(--marque); outline-offset: -2px; }
+.ej-texte { display: grid; gap: 2px; min-width: 0; }
+.ej-texte b { font-weight: 650; overflow-wrap: anywhere; }
+.ej-texte small { color: var(--encre-3); font-size: var(--t-s); overflow-wrap: anywhere; }
+.ej-detail { display: grid; gap: var(--e3); padding: 0 var(--e3) var(--e3); }
+.ej-detail .infos { font-size: var(--t-s); }
+.ej-detail .infos dd { font-weight: 500; text-align: left; }
+.ej-detail .btn { justify-self: start; }
+.ej-pile { margin: 0; max-height: 220px; overflow: auto; padding: 10px 12px; border-radius: var(--r-s); background: var(--surface-2); font: 12px/1.45 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- Réglages ---------- */
 .operateur-tete { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e3); align-items: center; }
 .commande-serveur { display: block; padding: 12px 14px; border-radius: var(--r-m); background: var(--ebene); color: var(--sur-ebene); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }

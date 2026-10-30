@@ -24,6 +24,7 @@ export const catalogue = signal(enCache && Array.isArray(enCache.products) ? enC
 export const catalogueDisponible = signal(!!enCache);   // des articles peuvent être affichés
 export const catalogueAJour = signal(false);            // reçu du serveur pendant cette visite
 export const horsLigne = signal(typeof navigator !== 'undefined' && navigator.onLine === false);
+export const catalogueErreur = signal('');              // premier chargement impossible et rien de gardé sur l'appareil
 
 const parOrdre = (a, b) => (R.num(a.order) || 0) - (R.num(b.order) || 0);
 export const cfg = computed(() => R.config(catalogue.value.config || {}));
@@ -43,9 +44,17 @@ function memoriser() {
 }
 
 let etag = Local.lire('catalogueEtag', '');
+let reprise = 0; let essai = 0;
+/*
+ * Catalogue : la copie gardée sur l'appareil s'affiche tout de suite, puis la version du serveur la remplace.
+ * Si le serveur ne répond pas, la copie reste affichée (bandeau « hors connexion ») ; s'il n'y en a pas, un message
+ * « Réessayer » remplace le chargement. Nouvel essai automatique après 5 s, 15 s, 45 s, puis chaque minute,
+ * et dès que le téléphone retrouve sa connexion.
+ */
 export async function chargerCatalogue() {
+  clearTimeout(reprise);
   try {
-    const r = await lireCatalogue(enCache ? etag : '');
+    const r = await lireCatalogue(catalogueDisponible.value ? etag : '');
     if (r) {
       const d = r.donnees || {};
       batch(() => {
@@ -54,10 +63,14 @@ export async function chargerCatalogue() {
       });
       etag = r.etag; Local.ecrire('catalogueEtag', etag); memoriser();
     }
-    catalogueAJour.value = true; horsLigne.value = false;
+    batch(() => { catalogueAJour.value = true; horsLigne.value = false; catalogueErreur.value = ''; });
+    essai = 0;
+    return true;
   } catch (e) {
-    if (e.code === 'reseau') horsLigne.value = true;
-    catalogueDisponible.value = true; // on montre ce que l'appareil a gardé
+    horsLigne.value = e.code === 'reseau' && !!enCache;
+    if (!catalogueDisponible.value) catalogueErreur.value = e.code === 'reseau' ? (navigator.onLine === false ? 'Pas de connexion internet.' : 'Le serveur ne répond pas.') : 'La boutique est momentanément indisponible.';
+    reprise = setTimeout(chargerCatalogue, [5000, 15000, 45000][essai++] || 60000);
+    return false;
   }
 }
 
@@ -147,7 +160,6 @@ export function changerQuantite(cle, qty) {
   panier.value = qty <= 0 ? panier.value.filter((l) => l.cle !== cle) : panier.value.map((l) => (l.cle === cle ? { ...l, qty: Math.min(R.MAX_QTE, qty) } : l));
   sauverPanier();
 }
-export function viderPanier() { panier.value = []; sauverPanier(); }
 /* Commande passée : seuls les articles cochés quittent le panier, les autres y restent, cochés pour la prochaine commande. */
 export function retirerCommandes(items) {
   const parties = new Set(items.map((l) => cleLigne(l.productId, l.color, l.size)));

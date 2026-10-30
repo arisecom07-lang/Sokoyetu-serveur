@@ -229,5 +229,3 @@ export function Reglages() {
   if (!TITRES[section]) { setTimeout(() => aller('/plus', { remplacer: true, forcer: true }), 0); return null; }
   return <Formulaire key={section} section={section} />;
 }
-
-export const lienReglages = (s) => lien('/reglages/' + s);

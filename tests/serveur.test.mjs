@@ -240,6 +240,89 @@ test('paiement confirmé à la main par la boutique (secours)', async () => {
 });
 
 let compteJeton = '', compteId = '';
+let doublon = null;
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+test('double appui sur « Payer » : une seule commande, stock réservé une seule fois', async () => {
+  const t = secret();
+  const avant = (await produit('t-montre')).sold;
+  const corps = saisie({ token: t, customer: { name: 'Client Doublon', phone: '0812345678' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0812345678' } });
+  const rs = await Promise.all([1, 2, 3].map(() => api('/api/sokoyetu/commander', { method: 'POST', body: corps })));
+  rs.forEach((r) => assert.equal(r.status, 200, r.texte));
+  assert.equal(new Set(rs.map((r) => r.json.id)).size, 1, 'une seule commande pour trois envois simultanés');
+  assert.equal((await produit('t-montre')).sold, avant + 1);
+  const liste = await api(`/api/collections/orders/records?filter=${encodeURIComponent(`token="${t}"`)}`, { auth: true });
+  assert.equal(liste.json.totalItems, 1);
+  doublon = { id: rs[0].json.id, t, numero: rs[0].json.order.number };
+});
+
+test('paiement reçu deux fois pour la même commande : signalé à rembourser, puis noté remboursé', async () => {
+  const { id, t, numero } = doublon;
+  await attendre(id, t, 'paid');
+  const notifier = () => api('/api/sokoyetu/notification/simulation', { method: 'POST', body: { orderNumber: `SIM-${numero}-9`, reference: `${numero}-9` } });
+  assert.equal((await notifier()).status, 200);
+  const rec = await enregistrement(id);
+  assert.equal(rec.doc.payment.duplicates.length, 1);
+  assert.match(rec.doc.issues.join(' '), /Paiement reçu deux fois/);
+  assert.match(rec.doc.timeline.map((e) => e.text).join(' | '), /à rembourser/);
+  await notifier();
+  assert.equal((await enregistrement(id)).doc.payment.duplicates.length, 1, 'la même notification ne compte qu’une fois');
+  const client = await etatPaiement(id, t);
+  assert.deepEqual([client.json.order.payment.duplicates, client.json.order.payment.previous, client.json.order.issues], [undefined, undefined, undefined]);
+  const r = await api(`/api/sokoyetu/commandes/${id}`, { method: 'POST', auth: true, body: { action: 'doublon' } });
+  assert.equal(r.status, 200, r.texte);
+  assert.ok(r.json.doc.payment.duplicatesRefundedAt > 0);
+  assert.doesNotMatch((r.json.doc.issues || []).join(' '), /deux fois/);
+  assert.equal((await api(`/api/sokoyetu/commandes/${id}`, { method: 'POST', auth: true, body: { action: 'doublon' } })).status, 400);
+});
+
+test('nouvelle demande de paiement : une seule à la fois, même avec deux appuis', async () => {
+  const t = secret();
+  const r = await api('/api/sokoyetu/commander', { method: 'POST', body: saisie({ token: t, customer: { name: 'Client Relance', phone: '0812345679' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'airtel', phone: '0970000000' } }) });
+  assert.equal(r.status, 200, r.texte);
+  await attendre(r.json.id, t, 'failed');
+  const rs = await Promise.all([1, 2].map(() => api(`/api/sokoyetu/paiement/${r.json.id}/relancer?t=${t}`, { method: 'POST', body: { method: 'mpesa', phone: '0991112233' } })));
+  const statuts = rs.map((x) => x.status);
+  assert.equal(statuts.filter((x) => x === 200).length, 1, statuts.join(', '));
+  assert.ok(statuts.every((x) => [200, 400, 409].includes(x)), statuts.join(', '));
+  assert.equal((await etatPaiement(r.json.id, t)).json.paiement.tentatives, 2, 'une seule nouvelle demande envoyée');
+});
+
+test('surveillance : état du serveur, erreurs des navigateurs gardées au journal', async () => {
+  const s = await api('/api/sokoyetu/sante');
+  assert.deepEqual([s.status, s.json.ok, s.json.details], [200, true, undefined]);
+  assert.equal(s.headers.get('cache-control'), 'no-store');
+  const d = await api('/api/sokoyetu/sante', { auth: true });
+  assert.ok(Array.isArray(d.json.details.problemes) && d.json.details.erreurs.jour >= 0);
+  const marque = 'essai-' + secret().slice(0, 8);
+  assert.equal((await api('/api/sokoyetu/erreur', { method: 'POST', body: { app: 'boutique', genre: 'erreur', message: 'TypeError ' + marque, page: '/suivi/abc?t=SECRET123', pile: 'at x (/assets/b.js:1:2)', version: '2.3.0' } })).status, 204);
+  assert.equal((await api('/api/sokoyetu/erreur', { method: 'POST', body: { message: 'ResizeObserver loop completed with undelivered notifications.' } })).status, 204);
+  assert.equal((await api('/api/sokoyetu/journal')).status, 403);
+  // Le journal du serveur est écrit par lots, environ 3 secondes après la dernière entrée.
+  let trouve = null, dernier = null;
+  for (let i = 0; i < 6 && !trouve; i++) { await pause(3500); dernier = await api('/api/sokoyetu/journal?jours=1', { auth: true }); trouve = ((dernier.json && dernier.json.erreurs) || []).find((x) => x.message.includes(marque)); }
+  assert.ok(trouve, 'erreur du navigateur visible dans le journal : ' + dernier.status + ' ' + dernier.texte.slice(0, 300));
+  assert.deepEqual([trouve.details.page, trouve.details.app, trouve.niveau], ['/suivi/abc', 'boutique', 'alerte']);
+  const journal = (await api('/api/sokoyetu/journal?jours=1', { auth: true })).json.erreurs;
+  assert.ok(!journal.some((x) => /ResizeObserver/.test(x.message)), 'bruit des navigateurs ignoré');
+});
+
+test('limites : requête trop lourde refusée, photo de plus de 10 Mo refusée', async () => {
+  const gros = await api('/api/sokoyetu/retrouver', { method: 'POST', body: { numero: 'x'.repeat(20000), telephone: '' } });
+  assert.equal(gros.status, 413);
+  const { readFile } = await import('node:fs/promises');
+  const photo = await readFile(new URL('../medias/photos/' + (await import('node:fs')).readdirSync(new URL('../medias/photos/', import.meta.url)).find((f) => /\.webp$/.test(f)), import.meta.url));
+  const fd = new FormData();
+  fd.append('file', new Blob([photo, new Uint8Array(11 * 1048576)], { type: 'image/webp' }), 'tres-grande.webp');
+  const r = await fetch(BASE + '/api/collections/media/records', { method: 'POST', headers: { Authorization: jeton }, body: fd });
+  const j = await r.json();
+  assert.equal(r.status, 400);
+  assert.match(j.message, /trop lourde/);
+  const fd2 = new FormData(); fd2.append('file', new Blob([photo], { type: 'image/webp' }), 'normale.webp');
+  const ok = await fetch(BASE + '/api/collections/media/records', { method: 'POST', headers: { Authorization: jeton }, body: fd2 });
+  assert.equal(ok.status, 200);
+});
+
 test('compte client : code sur WhatsApp ou par SMS (mode test), connexion, panier et favoris gardés, commandes retrouvées', async () => {
   const cat = await api('/api/sokoyetu/catalogue');
   assert.deepEqual(cat.json.config.accounts, { open: true, test: true, channels: ['whatsapp', 'sms'] });
@@ -308,7 +391,8 @@ test('assistant IA : réservé à l’administration, clé absente signalée', a
   assert.equal(r.json.code, process.env.ANTHROPIC_API_KEY ? r.json.code : 'no_key');
   const etat = await api('/api/sokoyetu/etat', { auth: true });
   assert.equal(typeof etat.json.version, 'string');
-  assert.deepEqual(etat.json.paiement, { fournisseur: 'simulation', pret: true, test: true });
+  assert.deepEqual(etat.json.paiement, { fournisseur: 'simulation', pret: true, test: true, panne: 0 });
+  assert.equal(etat.json.iaQuota.max > 0, true);
 });
 
 test('pages partageables : aperçu WhatsApp d’un article, plan du site', async () => {

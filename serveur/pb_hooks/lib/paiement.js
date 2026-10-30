@@ -22,8 +22,32 @@ function pret() {
   if (f === 'flexpay') return !!(env('FLEXPAY_MARCHAND') && env('FLEXPAY_JETON'));
   return false;
 }
-/* Ce que l'administration et la boutique ont le droit de savoir (aucune clé). */
-const etat = () => ({ fournisseur: fournisseur(), pret: pret(), test: fournisseur() === 'simulation' });
+/*
+ * Disjoncteur : si le fournisseur ne répond plus (réseau coupé, panne chez lui), le serveur arrête de l'appeler
+ * pendant PAUSE ms après ECHECS échecs de suite, au lieu de faire attendre chaque client et de bloquer le serveur.
+ * L'état est partagé par tout le serveur (mémoire, $app.store()) et revient à la normale au premier appel réussi.
+ */
+const ECHECS = 3;
+const PAUSE = 60000;
+function enPanne(detail) {
+  const st = $app.store();
+  const n = (Number(st.get('paiement:echecs')) || 0) + 1;
+  st.set('paiement:echecs', n);
+  if (!st.get('paiement:panne')) st.set('paiement:panne', Date.now());
+  if (n >= ECHECS) {
+    st.set('paiement:coupe', Date.now() + PAUSE);
+    if (n === ECHECS) require(`${__hooks}/lib/serveur.js`).trace('error', 'Le service de paiement ne répond pas : appels suspendus une minute', { module: 'paiement', fournisseur: fournisseur(), detail });
+  }
+}
+function retabli() {
+  const st = $app.store();
+  if (st.get('paiement:panne')) require(`${__hooks}/lib/serveur.js`).trace('warn', 'Le service de paiement répond de nouveau', { module: 'paiement', fournisseur: fournisseur(), duree: Math.round((Date.now() - Number(st.get('paiement:panne'))) / 1000) + ' s' });
+  ['paiement:echecs', 'paiement:panne', 'paiement:coupe'].forEach((k) => st.remove(k));
+}
+const coupe = () => (Number($app.store().get('paiement:coupe')) || 0) > Date.now();
+
+/* Ce que l'administration et la boutique ont le droit de savoir (aucune clé). panne : depuis quand le fournisseur ne répond plus. */
+const etat = () => ({ fournisseur: fournisseur(), pret: pret(), test: fournisseur() === 'simulation', panne: Number($app.store().get('paiement:panne')) || 0 });
 
 /* ---------- Simulation ---------- */
 
@@ -36,6 +60,10 @@ const simulation = {
     if (Date.now() - Number(o.payment.startedAt || 0) < delai) return { etat: 'en_attente' };
     if (/0000$/.test(String(o.payment.phone || ''))) return { etat: 'echec', message: 'Solde insuffisant (simulation).' };
     return { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) };
+  },
+  /* Notifications d'essai (même forme que FlexPay) : pour tester la revérification et les doubles paiements. */
+  commandeConcernee(corps) {
+    return { providerId: String(corps.orderNumber || ''), numero: String(corps.reference || '').split('-')[0] };
   }
 };
 
@@ -43,15 +71,18 @@ const simulation = {
 
 const flexpay = {
   base: () => (env('FLEXPAY_URL') || 'https://backend.flexpay.cd/api/rest/v1').replace(/\/+$/, ''),
-  appel(chemin, methode, corps) {
+  // delai : secondes d'attente au plus (une demande de paiement peut être lente à partir, une vérification non).
+  appel(chemin, methode, corps, delai) {
+    if (coupe()) return { erreurReseau: true, coupe: true };
     let res;
     try {
       res = $http.send({
-        url: flexpay.base() + chemin, method: methode, timeout: 30,
+        url: flexpay.base() + chemin, method: methode, timeout: delai || 30,
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: 'Bearer ' + env('FLEXPAY_JETON') },
         body: corps ? JSON.stringify(corps) : ''
       });
-    } catch (err) { return { erreurReseau: true }; }
+    } catch (err) { enPanne(String(err).slice(0, 200)); return { erreurReseau: true }; }
+    if (res.statusCode >= 500) enPanne('HTTP ' + res.statusCode); else retabli();
     return { statut: res.statusCode, j: res.json || {} };
   },
   demarrer(o, opts) {
@@ -61,14 +92,17 @@ const flexpay = {
       reference: `${o.number}-${(o.payment.attempts || 0) + 1}`,
       amount: Number(o.total).toFixed(2), currency: 'USD', callbackUrl: opts.callbackUrl
     });
-    if (r.erreurReseau) return { etat: 'echec', message: 'Le service de paiement ne répond pas. Réessayez dans un instant.' };
-    if (r.statut === 401 || r.statut === 403) return { etat: 'echec', message: 'Paiement momentanément indisponible (configuration du service de paiement).' };
+    if (r.erreurReseau) return { etat: 'echec', message: r.coupe ? 'Le service de paiement ne répond pas pour le moment. Réessayez dans une minute.' : 'Le service de paiement ne répond pas. Réessayez dans un instant.' };
+    if (r.statut === 401 || r.statut === 403) {
+      require(`${__hooks}/lib/serveur.js`).trace('error', 'FlexPay refuse le jeton du marchand (paiement.sh)', { module: 'paiement', statut: r.statut });
+      return { etat: 'echec', message: 'Paiement momentanément indisponible (configuration du service de paiement).' };
+    }
     if (String(r.j.code) === '0' && r.j.orderNumber) return { etat: 'en_attente', id: String(r.j.orderNumber) };
     return { etat: 'echec', message: String(r.j.message || 'La demande de paiement a été refusée.').slice(0, 160) };
   },
   verifier(o) {
     if (!o.payment.providerId) return { etat: 'en_attente' };
-    const r = flexpay.appel('/check/' + encodeURIComponent(o.payment.providerId), 'GET');
+    const r = flexpay.appel('/check/' + encodeURIComponent(o.payment.providerId), 'GET', null, 15);
     if (r.erreurReseau || r.statut >= 500) return { etat: 'en_attente' };
     const t = r.j.transaction || {};
     if (String(r.j.code) !== '0' || r.j.transaction === undefined) return { etat: 'en_attente' };

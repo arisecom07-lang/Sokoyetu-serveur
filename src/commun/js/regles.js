@@ -67,6 +67,9 @@ const MAX_LIGNES = 50;
 const MAX_QTE = 20;
 const ALPHABET_NUMERO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const MAX_TENTATIVES = 5;
+/* Secondes à attendre avant une nouvelle demande de paiement quand la précédente est encore en attente sur le téléphone
+   (deux demandes valides en même temps = risque d'être débité deux fois). */
+const RELANCE_APRES_S = 45;
 const JOUR = 864e5;
 
 /* ---------- Outils ---------- */
@@ -469,7 +472,8 @@ const nonAboutie = (o) => o.status === 'cancelled' && !!o.payment && o.payment.s
 const aVerifier = enAttentePaiement;
 const aPreparer = (o) => o.status === 'open' && estPayee(o) && (o.fulfillment === 'unfulfilled' || o.fulfillment === 'preparing' || !o.fulfillment);
 const aExpedier = (o) => o.status === 'open' && estPayee(o) && o.fulfillment === 'shipped';
-const aTraiter = (o) => aPreparer(o);
+// À traiter par le vendeur : commande payée à préparer, ou client qui a payé deux fois et attend son remboursement.
+const aTraiter = (o) => aPreparer(o) || doublonARembourser(o);
 
 function statutClient(o) {
   const r = estRetraitCmd(o);
@@ -516,10 +520,30 @@ function paiementEnvoye(o, opts) {
   c.timeline.push({ at: now, text: `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
   return c;
 }
-/* Le fournisseur confirme le paiement. Renvoie { commande, stock, entrees } : un paiement arrivé après l'annulation automatique rouvre la commande. */
+/* Double paiement signalé et pas encore remboursé (deux demandes de la même commande validées par le client). */
+const doublonARembourser = (o) => !!o && !!o.payment && Array.isArray(o.payment.duplicates) && o.payment.duplicates.length > 0 && !o.payment.duplicatesRefundedAt;
+const TEXTE_DOUBLON = 'Paiement reçu deux fois';
+
+/*
+ * Le fournisseur confirme le paiement (opts.id : la demande payée). Renvoie { commande, stock, entrees, double } :
+ * un paiement arrivé après l'annulation automatique rouvre la commande ; une deuxième demande payée pour une commande
+ * déjà payée est notée « à rembourser » (double = true), jamais ignorée.
+ */
 function paiementConfirme(o, opts) {
   const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
-  if (estPayee(c)) return { commande: c, stock: '', entrees: [] };
+  const id = String(opts.id || c.payment.providerId || '');
+  if (estPayee(c)) {
+    const payee = c.payment.paidId || c.payment.providerId || '';
+    const doubles = Array.isArray(c.payment.duplicates) ? c.payment.duplicates : [];
+    if (!id || id === payee || doubles.some((x) => x && x.id === id)) return { commande: c, stock: '', entrees: [], double: false };
+    const ref = String(opts.reference || id).slice(0, 80);
+    c.payment.duplicates = doubles.concat([{ id, reference: ref, at: now }]).slice(-MAX_TENTATIVES);
+    delete c.payment.duplicatesRefundedAt;
+    c.issues = (Array.isArray(c.issues) ? c.issues : []).concat([`${TEXTE_DOUBLON} (référence ${ref}) : remboursez ${dollars(c.total)} au client sur son numéro ${c.payment.label || 'Mobile Money'}, puis notez-le.`]);
+    c.timeline.push({ at: now, text: `Deuxième paiement ${c.payment.label || ''} reçu (référence ${ref}) : à rembourser au client` });
+    return { commande: c, stock: '', entrees: [], double: true };
+  }
+  c.payment.paidId = id;
   let stock = ''; let entrees = [];
   if (c.status === 'cancelled') {
     c.status = 'open'; delete c.cancelledAt; delete c.cancelReason;
@@ -555,7 +579,7 @@ function paiementExpire(o, opts) {
 
 const ACTIONS = {
   paid: 'Paiement confirmé manuellement par la boutique', preparing: 'Préparation commencée', shipped: 'Commande expédiée', delivered: 'Commande livrée',
-  cancel: 'Commande annulée', reopen: 'Commande rouverte', refund: 'Remboursement effectué', note: 'Note enregistrée'
+  cancel: 'Commande annulée', reopen: 'Commande rouverte', refund: 'Remboursement effectué', doublon: 'Double paiement remboursé au client', note: 'Note enregistrée'
 };
 
 /* Réservations d'une ancienne commande, enregistrée avant que le stock ne soit réservé à la commande. */
@@ -613,6 +637,10 @@ function etapeCommande(o, action, opts) {
   } else if (action === 'refund') {
     if (ouverte || c.payment.status !== 'paid') stop('Seule une commande annulée et payée peut être remboursée.');
     c.payment.status = 'refunded'; c.payment.refundedAt = now;
+  } else if (action === 'doublon') {
+    if (!doublonARembourser(c)) stop('Aucun double paiement à rembourser pour cette commande.');
+    c.payment.duplicatesRefundedAt = now;
+    c.issues = (Array.isArray(c.issues) ? c.issues : []).filter((t) => String(t).indexOf(TEXTE_DOUBLON) !== 0);
   } else if (action === 'note') {
     c.adminNote = nettoyer(opts.note, 1000);
     return { commande: c, stock: '', entrees: [] };
@@ -705,7 +733,7 @@ function fusionCompte(compte, appareil) {
 }
 
 module.exports = {
-  OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, ACTIONS, JOUR,
+  OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
   config, zoneDe, estRetrait, moyensDePaiement, fraisService,
   cleVariante, couleursDe, taillesDe, aDesOptions, estImport, estEnVente, clesVariantes, stockDe, stockTotal, prixBarre, pourcentRemise, imagePrincipale, ajusterStock,
@@ -713,7 +741,7 @@ module.exports = {
   montantRemise, verifierRemise, devis,
   ErreurCommande, reservations, livraisonEstimee, preparerCommande, numeroCommande, numeroValide, numeroNettoye,
   estAnnulee, estPayee, estRetraitCmd, enAttentePaiement, nonAboutie, aVerifier, aPreparer, aExpedier, aTraiter, statutClient, etapesSuivi,
-  relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire,
+  relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire, doublonARembourser, TEXTE_DOUBLON,
   etapeCommande, reservationsAnciennes, incoherences, margeCommande,
   MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte
 };

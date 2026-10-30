@@ -6,7 +6,7 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { dollars, slug, date, JOUR, pluriel } from '../../commun/js/outils.js';
 import { toast, LogoOperateur } from '../../commun/js/interface.jsx';
 import { lien } from '../routeur.js';
-import { cfg, favoris, basculerFavori, produits, rayonsParId } from '../etat.js';
+import { cfg, favoris, basculerFavori, produits, rayonsParId, catalogueErreur, chargerCatalogue } from '../etat.js';
 
 export const lienProduit = (p) => lien(`/p/${encodeURIComponent(p.id)}/${slug(p.title)}`);
 export const lienRayon = (c) => lien(`/c/${encodeURIComponent(c.id)}/${slug(c.name)}`);
@@ -83,7 +83,21 @@ export function CarteProduit({ p, prioritaire, rang = 0 }) {
   );
 }
 
+/* Le catalogue n'a pas pu être chargé (et rien n'est gardé sur ce téléphone) : un message et « Réessayer ». */
+export function ErreurCatalogue() {
+  const [essai, setEssai] = useState(false);
+  return (
+    <div class="etat-erreur" role="alert">
+      <div class="vide-icone" aria-hidden="true"><Icone n="alerte" /></div>
+      <h2>Impossible d’afficher les articles</h2>
+      <p>{catalogueErreur.value} Vérifiez votre connexion : nous réessayons tout seuls.</p>
+      <div class="rangee-l"><button class={'btn btn-primaire' + (essai ? ' charge' : '')} disabled={essai} onClick={async () => { setEssai(true); await chargerCatalogue(); setEssai(false); }}><Icone n="actualiser" />Réessayer</button></div>
+    </div>
+  );
+}
+
 export function SqueletteGrille({ n = 8 }) {
+  if (catalogueErreur.value) return <ErreurCatalogue />;
   return (
     <div class="grille-produits" aria-busy="true" aria-label="Chargement des articles">
       {Array.from({ length: n }, (_, i) => <div key={i} class="cp-squelette"><div class="squelette" style={{ aspectRatio: '4 / 5' }} /><div class="squelette" style={{ height: 14, width: '80%', marginTop: 12 }} /><div class="squelette" style={{ height: 16, width: '40%', marginTop: 8 }} /></div>)}

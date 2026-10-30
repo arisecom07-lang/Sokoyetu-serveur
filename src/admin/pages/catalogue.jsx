@@ -5,8 +5,8 @@ import { Icone } from '../../commun/js/icones.jsx';
 import { Cabas } from '../../commun/js/logo.jsx';
 import { Photo, compresser } from '../../commun/js/medias.jsx';
 import { envoyerPhoto } from '../../commun/js/api.js';
-import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer } from '../../commun/js/interface.jsx';
-import { dollars, pluriel, uid, slug, copie, classes, date } from '../../commun/js/outils.js';
+import { Champ, Vide, Pastille, Bascule, Segment, toast, confirmer } from '../../commun/js/interface.jsx';
+import { dollars, pluriel, uid, copie, classes, date } from '../../commun/js/outils.js';
 import { lien, route, aller, garder } from '../routeur.js';
 import { cfg, produits, rayons, bannieres, remises, commandes, pret, sauver, retirer, gererErreur } from '../etat.js';
 import { TetePage, BarreEnregistrer } from '../composants/cadre.jsx';
@@ -228,5 +228,3 @@ export function FicheCatalogue({ type }) {
   const F = { rayons: FormRayon, bannieres: FormBanniere, remises: FormRemise }[type];
   return <F key={route.value.cle} id={id} source={source ? (({ id: _, ...r }) => r)(source) : null} />;
 }
-
-export const slugRayon = (nom) => slug(nom);

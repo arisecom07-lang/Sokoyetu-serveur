@@ -99,30 +99,52 @@ function planDuSite(e) {
 }
 
 /* Le catalogue public complet en une seule réponse (au lieu de quatre), avec validation de cache. */
+/*
+ * Catalogue public, gardé en mémoire : reconstruit au plus une fois toutes les 30 secondes, et dès la première visite
+ * qui suit un changement (article, stock, rayon, bannière, réglages : voir catalogueChange, appelé par sokoyetu.pb.js).
+ * Quand beaucoup de visiteurs arrivent ensemble, un seul le reconstruit ; les autres reçoivent aussitôt la version
+ * d'avant (vieille de quelques instants : prix et stock sont de toute façon revérifiés au devis et à la commande).
+ */
+const VIE_CATALOGUE = 30000;
 function catalogue(e) {
-  const liste = (col, filtre) => e.app.findRecordsByFilter(col, filtre, '', 10000, 0).map(S.versRecord);
+  const st = $app.store();
+  let json = st.get('catalogue:json'), etag = st.get('catalogue:etag');
+  if (!json || Date.now() - Number(st.get('catalogue:t') || 0) > VIE_CATALOGUE) {
+    const moi = $security.randomString(16);
+    const seul = st.getOrSet('catalogue:verrou', () => moi) === moi;
+    if (seul || !json) {
+      try {
+        json = JSON.stringify(construireCatalogue(e.app)); etag = '"' + $security.md5(json) + '"';
+        st.set('catalogue:json', json); st.set('catalogue:etag', etag); st.set('catalogue:t', Date.now());
+      } finally { if (seul) st.remove('catalogue:verrou'); }
+    }
+  }
+  e.response.header().set('ETag', etag);
+  e.response.header().set('Cache-Control', 'no-cache');
+  if (String(e.request.header.get('If-None-Match') || '') === etag) return e.noContent(304);
+  return e.blob(200, 'application/json; charset=utf-8', json);
+}
+/* Un article, un rayon, une bannière ou les réglages ont changé : le catalogue sera reconstruit à la prochaine visite. */
+function catalogueChange() { $app.store().set('catalogue:t', 0); }
+
+function construireCatalogue(app) {
+  const liste = (col, filtre) => app.findRecordsByFilter(col, filtre, '', 10000, 0).map(S.versRecord);
   let config = null;
-  try { config = S.versRecord(e.app.findRecordById('config', 'store')); } catch (err) { }
+  try { config = S.versRecord(app.findRecordById('config', 'store')); } catch (err) { }
   // Le fournisseur de paiement (sans aucune clé) : la boutique n'affiche que les moyens réellement encaissables.
-  const cfg = S.configuration(e.app);
+  const cfg = S.configuration(app);
   // Comptes clients : proposés seulement si l'envoi des codes (WhatsApp ou SMS) est prêt ; sinon, commande sans compte.
   const codes = require(`${__hooks}/lib/envoi.js`).etat();
   config = Object.assign({ id: 'store' }, config || {}, {
     payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.provider === 'simulation' },
     accounts: { open: codes.pret, test: codes.test, channels: codes.canaux }
   });
-  const donnees = {
+  return {
     config,
     collections: liste('collections', 'id != ""'),
     banners: liste('banners', 'id != ""'),
     products: liste('products', 'active = true').map(S.produitPublic)
   };
-  const json = JSON.stringify(donnees);
-  const etag = '"' + $security.md5(json) + '"';
-  e.response.header().set('ETag', etag);
-  e.response.header().set('Cache-Control', 'no-cache');
-  if (String(e.request.header.get('If-None-Match') || '') === etag) return e.noContent(304);
-  return e.blob(200, 'application/json; charset=utf-8', json);
 }
 
-module.exports = { pageArticle, pageRayon, planDuSite, catalogue, avecSeo, urlImage };
+module.exports = { pageArticle, pageRayon, planDuSite, catalogue, catalogueChange, avecSeo, urlImage };
