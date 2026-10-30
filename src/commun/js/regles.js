@@ -812,6 +812,54 @@ function etapePermise(role, action) {
 /* Commandes montrées au livreur : payées, ouvertes, à livrer (pas les retraits en boutique). */
 const pourLivreur = (o) => !!o && o.status === 'open' && estPayee(o) && !estRetraitCmd(o);
 
+/* ---------- Notifications du client : centre de notifications de la boutique et notifications du téléphone (gratuites) ---------- */
+
+/*
+ * Ce que le client apprend quand sa commande change : [{ type, details }]. avant : document enregistré (vide pour une
+ * nouvelle commande). Une commande n'est annoncée qu'une fois payée ; celle dont le paiement n'est jamais arrivé l'est
+ * à son annulation (« expiree »).
+ */
+function evenementsCommande(avant, apres) {
+  const a = avant || {}, b = apres || {};
+  if (!b.number) return [];
+  const details = { numero: b.number, zone: (b.shipping && b.shipping.zoneName) || '', moyen: (b.payment && b.payment.label) || '' };
+  const ev = (type) => ({ type, details });
+  const l = [];
+  const ouverte = b.status !== 'cancelled';
+  if (ouverte && estPayee(b) && !estPayee(a) && (!a.payment || a.payment.status !== 'refunded')) l.push(ev('payee'));
+  if (ouverte && estPayee(b) && a.fulfillment !== b.fulfillment) {
+    if (b.fulfillment === 'preparing') l.push(ev('preparation'));
+    if (b.fulfillment === 'shipped') l.push(ev(estRetraitCmd(b) ? 'prete' : 'expediee'));
+    if (b.fulfillment === 'delivered') l.push(ev(estRetraitCmd(b) ? 'retiree' : 'livree'));
+  }
+  if (a.status && a.status !== 'cancelled' && b.status === 'cancelled') l.push(ev(nonAboutie(b) ? 'expiree' : 'annulee'));
+  if (a.payment && a.payment.status !== 'refunded' && b.payment && b.payment.status === 'refunded') l.push(ev('remboursee'));
+  return l;
+}
+
+/* Textes des notifications : [titre, texte], {clé} remplacée par le détail de la notification. */
+const TEXTES_NOTIFICATIONS = {
+  fr: {
+    payee: ['Paiement reçu', 'Commande #{numero} confirmée. Nous préparons vos articles.'],
+    preparation: ['Commande en préparation', 'Commande #{numero} : vos articles sont en cours de préparation.'],
+    expediee: ['Commande en route', 'Commande #{numero} : le livreur est en route ({zone}).'],
+    prete: ['Commande prête', 'Commande #{numero} : vos articles vous attendent en boutique.'],
+    livree: ['Commande livrée', 'Commande #{numero} remise. Merci pour votre confiance !'],
+    retiree: ['Commande retirée', 'Commande #{numero} remise en boutique. Merci pour votre confiance !'],
+    annulee: ['Commande annulée', 'Commande #{numero} annulée par la boutique.'],
+    expiree: ['Paiement non reçu', 'Commande #{numero} annulée : le paiement n’est pas arrivé à temps.'],
+    remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).']
+  }
+};
+/* Une notification ({ type, details }) en { titre, texte } dans la langue demandée (le français à défaut) ; null si type inconnu. */
+function texteNotification(n, langue) {
+  const t = ((TEXTES_NOTIFICATIONS[langue] || {})[n && n.type]) || (TEXTES_NOTIFICATIONS.fr[n && n.type]);
+  if (!t) return null;
+  const d = (n && n.details) || {};
+  const remplir = (x) => x.replace(/\{(\w+)\}/g, (_, k) => (d[k] === undefined || d[k] === null ? '' : String(d[k]))).replace(/ \(\)/g, '');
+  return { titre: remplir(t[0]), texte: remplir(t[1]) };
+}
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
@@ -825,5 +873,6 @@ module.exports = {
   relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire, doublonARembourser, TEXTE_DOUBLON,
   etapeCommande, reservationsAnciennes, incoherences, margeCommande,
   MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte,
-  MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage
+  MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage,
+  evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification
 };

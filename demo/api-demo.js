@@ -9,7 +9,7 @@ import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 6;
+const VERSION_BASE = 7;
 const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
@@ -372,7 +372,7 @@ async function serveur(chemin, method, corps) {
     const modifies = stock(b, prep.reserve, -1);
     const id = 'cmd' + uid().slice(0, 12); const now = Date.now();
     const cl = clientConnecte(b);
-    b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now, client: cl ? cl.id : '' };
+    b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now, client: cl ? cl.id : '', appareil: R.valider.jeton(corps.appareil) };
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
     diffuser('orders', id, 'create');
@@ -393,6 +393,14 @@ async function serveur(chemin, method, corps) {
     demanderPaiement(b, rec, { methode: moyen.k, label: moyen.label, telephone: tel });
     return reponseClient(rec);
   }
+  // Notifications (comme lib/notifications.js) : centre de notifications ; la démo n'a pas de service de notification du téléphone.
+  if (p === 'sokoyetu/notifications') {
+    const l = notificationsPour(b, corps).sort((x, y) => y.cree - x.cree || y.id - x.id).slice(0, 50)
+      .map((x) => ({ id: x.id, type: x.type, ...R.texteNotification(x, corps.langue), url: x.url, cree: x.cree, lu: !!x.lu }));
+    return { notifications: l, nonLues: l.filter((x) => !x.lu).length };
+  }
+  if (p === 'sokoyetu/notifications/lues') { notificationsPour(b, corps).forEach((x) => { x.lu = x.lu || Date.now(); }); enregistrer(b); return { ok: true }; }
+  if (p.startsWith('sokoyetu/push/')) throw new ErreurApi(503, 'Les notifications du téléphone passent par le serveur de la boutique : indisponibles dans la démonstration.');
   if (p === 'sokoyetu/retrouver') {
     const n = R.numeroNettoye(corps.numero); const tel = R.chiffres(R.valider.telephone(corps.telephone));
     if (!R.numeroValide(n) || !tel) throw new ErreurApi(400, 'Indiquez le numéro de commande (6 caractères) et votre numéro de téléphone.');
@@ -409,6 +417,7 @@ async function serveur(chemin, method, corps) {
     try { r = R.etapeCommande(rec.doc, String(corps.action || ''), { maintenant: Date.now(), note: corps.note, produit }); }
     catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
     const modifies = r.stock === 'reserver' ? stock(b, r.entrees, -1) : r.stock === 'restituer' ? stock(b, r.entrees, 1) : [];
+    notifierCommande(b, rec, rec.doc, r.commande);
     rec.doc = r.commande; rec.status = r.commande.status; rec.updated = Date.now();
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
@@ -461,6 +470,8 @@ async function serveur(chemin, method, corps) {
       rec.phone = ''; rec.updated = Date.now();
     });
     const comptes = Object.values(b.cols.clients).filter((c) => R.chiffres(c.phone) === tel);
+    const appareils = l.map((rec) => rec.appareil).filter(Boolean); l.forEach((rec) => { rec.appareil = ''; });
+    b.notifications = (b.notifications || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
     comptes.forEach((c) => { delete b.cols.clients[c.id]; });
     enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update')); comptes.forEach((c) => diffuser('clients', c.id, 'delete', c));
     return { effacees: l.length, comptes: comptes.length };
@@ -566,6 +577,24 @@ function articleDemo(id, jours, graphe) {
   };
 }
 
+/* ---------- Notifications (comme serveur/pb_hooks/lib/notifications.js) ---------- */
+
+/* Commande changée : le client est prévenu (son appareil et son compte, ou le compte de son téléphone), une fois par étape. */
+function notifierCommande(b, rec, avant, apres) {
+  const l = R.evenementsCommande(avant, apres); if (!l.length) return;
+  const n = (b.notifications = Array.isArray(b.notifications) ? b.notifications : []);
+  const client = rec.client || (Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === rec.phone) || {}).id || '';
+  l.forEach((ev) => {
+    const cle = rec.id + ':' + ev.type; if (n.some((x) => x.cle === cle)) return;
+    n.push({ id: n.reduce((m, x) => Math.max(m, x.id), 0) + 1, client, appareil: rec.appareil || '', type: ev.type, details: ev.details, url: '/suivi/' + rec.id, cle, cree: Date.now(), lu: 0 });
+  });
+  if (n.length > 300) b.notifications = n.slice(-300);
+}
+function notificationsPour(b, corps) {
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  return (b.notifications || []).filter((x) => (c && x.client === c.id) || (a && x.appareil === a));
+}
+
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
 
 function verifierSimulation(d) {
@@ -574,11 +603,13 @@ function verifierSimulation(d) {
   return { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) };
 }
 function appliquerPaiement(b, rec, r) {
+  const avant = R.copie(rec.doc);
   let d = rec.doc; const now = Date.now(); let modifies = [];
   d.payment.checkedAt = now;
   if (r && r.etat === 'paye') { const x = R.paiementConfirme(d, { maintenant: now, reference: r.reference }); if (x.stock === 'reserver') modifies = stock(b, x.entrees, -1); d = x.commande; }
   else if (r && r.etat === 'echec' && d.payment.status === 'pending') d = R.paiementEchoue(d, { maintenant: now, raison: r.message });
   if (R.enAttentePaiement(d) && Number(d.expiresAt) && now > Number(d.expiresAt)) { const x = R.paiementExpire(d, { maintenant: now }); if (x.stock === 'restituer') modifies = modifies.concat(stock(b, x.entrees, 1)); d = x.commande; }
+  notifierCommande(b, rec, avant, d);
   rec.doc = d; rec.status = d.status; rec.updated = now;
   enregistrer(b);
   modifies.forEach((pid) => diffuser('products', pid, 'update'));

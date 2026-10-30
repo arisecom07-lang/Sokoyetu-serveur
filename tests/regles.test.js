@@ -326,3 +326,27 @@ test('équipe : rôles, droits et étapes permises', () => {
   assert.equal(R.pourLivreur(R.etapeCommande(payee, 'cancel').commande), false, 'annulée');
   assert.equal(R.pourLivreur({ ...payee, shipping: { ...payee.shipping, pickup: true } }), false, 'retrait en boutique');
 });
+
+test('notifications : chaque étape d’une commande payée prévient le client, une seule fois', () => {
+  const t0 = Date.UTC(2026, 9, 30, 9);
+  const { commande } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'NOTIF2', maintenant: t0 });
+  assert.deepEqual(R.evenementsCommande({}, commande), [], 'commande non payée : rien');
+  const payee = R.paiementConfirme(commande, { reference: 'X' }).commande;
+  assert.deepEqual(R.evenementsCommande(commande, payee).map((e) => e.type), ['payee']);
+  assert.deepEqual(R.evenementsCommande(payee, payee), [], 'rien de nouveau : rien');
+  const prep = R.etapeCommande(payee, 'preparing').commande;
+  const route = R.etapeCommande(prep, 'shipped').commande;
+  assert.deepEqual([R.evenementsCommande(payee, prep), R.evenementsCommande(prep, route)].map((l) => l.map((e) => e.type)), [['preparation'], ['expediee']]);
+  assert.deepEqual(R.evenementsCommande(route, R.etapeCommande(route, 'note', { note: 'x' }).commande), [], 'note interne : rien');
+  const annulee = R.etapeCommande(route, 'cancel').commande;
+  assert.deepEqual(R.evenementsCommande(route, annulee).map((e) => e.type), ['annulee']);
+  assert.deepEqual(R.evenementsCommande(annulee, R.etapeCommande(annulee, 'refund').commande).map((e) => e.type), ['remboursee']);
+  const retrait = { ...payee, shipping: { ...payee.shipping, pickup: true } };
+  assert.deepEqual(R.evenementsCommande(retrait, R.etapeCommande(retrait, 'shipped').commande).map((e) => e.type), ['prete']);
+  const expiree = R.paiementExpire(commande, { maintenant: t0 + 3600e3 }).commande;
+  assert.deepEqual(R.evenementsCommande(commande, expiree).map((e) => e.type), ['expiree']);
+  const ev = R.evenementsCommande(prep, route)[0];
+  assert.deepEqual(R.texteNotification(ev, 'fr'), { titre: 'Commande en route', texte: 'Commande #NOTIF2 : le livreur est en route (Bukavu).' });
+  assert.equal(R.texteNotification({ type: 'expediee', details: { numero: 'A' } }, 'xx').texte, 'Commande #A : le livreur est en route.', 'langue inconnue : français, détail absent retiré');
+  assert.equal(R.texteNotification({ type: 'inconnu' }, 'fr'), null);
+});

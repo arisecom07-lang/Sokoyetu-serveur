@@ -14,6 +14,7 @@ import { cfg, lignesACommander, aCommander, moyensPaiement, profil, enregistrerP
 import { InvitationCompte } from './connexion.jsx';
 import { EntetePage, BarreAction } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
+import { jetonAppareil } from '../notifications.js';
 import { devisLocal, prixPieces } from './panier.jsx';
 import { useSeo } from './commun.jsx';
 
@@ -185,7 +186,8 @@ export function Commander() {
       token: f.jeton, termsAccepted: true, website: document.getElementById('site-web')?.value || '',
       customer: { name: f.nom, phone: f.tel }, shipping: { zoneId: f.zoneId, address: f.adresse, landmark: f.repere }, note: f.note,
       items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })),
-      discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: telDebite }, total: devis.total
+      discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: telDebite }, total: devis.total,
+      appareil: jetonAppareil()
     };
     mesurerEvenement('add_payment_info', { value: devis.total, currency: 'USD', payment_type: moyen.label });
     try {

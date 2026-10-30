@@ -118,9 +118,13 @@ function champsCommande(rec, doc) {
   rec.set('etape', doc.fulfillment || 'unfulfilled');
 }
 function enregistrerCommande(app, rec, doc) {
+  const avant = rec.isNew() ? {} : lire(rec);
   rec.set('doc', doc);
   champsCommande(rec, doc);
   app.save(rec);
+  // Le client est prévenu de chaque étape (centre de notifications, téléphone), dans la même transaction.
+  try { require(`${__hooks}/lib/notifications.js`).apresCommande(app, rec, avant, doc); }
+  catch (e) { trace('error', 'Notification de commande impossible', { module: 'notifications', commande: doc.number, erreur: String(e) }); }
 }
 
 /* Numéro de commande jamais déjà attribué (6 caractères tirés au sort, sans 0/O ni 1/I). */

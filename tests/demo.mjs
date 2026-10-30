@@ -51,6 +51,11 @@ await client.click('a:has-text("Suivre ma commande")'); await client.waitForSele
 await admin.click(`.liste .ligne:has-text("#${numero}")`); await admin.click('button:has-text("Commencer la préparation")');
 await client.waitForSelector('.page-suivi .pastille:has-text("En préparation")', { timeout: 8000 });
 etape('préparation commencée : suivi du client mis à jour en direct');
+await client.waitForSelector('.entete a[href="#/notifications"] .pastille-compte:text("2")', { state: 'attached', timeout: 8000 });
+await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.liste-notifs');
+assert.deepEqual(await client.locator('.notif-texte b').allInnerTexts(), ['Commande en préparation', 'Paiement reçu']);
+await client.waitForSelector('.entete a[href="#/notifications"] .pastille-compte', { state: 'detached', timeout: 8000 });
+etape('notifications gratuites : « Paiement reçu » puis « Commande en préparation », lues dans le centre de notifications');
 
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.

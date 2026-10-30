@@ -63,3 +63,43 @@ self.addEventListener('fetch', (e) => {
     return res;
   })));
 });
+
+/* ---------- Notifications du téléphone (gratuites) ---------- */
+// Le serveur envoie un signal sans contenu ; le texte est demandé ici, au serveur de la boutique.
+const cle64 = (sub, k) => { try { return btoa(String.fromCharCode(...new Uint8Array(sub.getKey(k)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch (e) { return ''; } };
+async function aMontrer() {
+  const sub = await self.registration.pushManager.getSubscription();
+  if (!sub) return [];
+  const r = await fetch('/api/sokoyetu/push/attente', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint, auth: cle64(sub, 'auth') }), cache: 'no-store' });
+  return r.ok ? ((await r.json()).notifications || []) : [];
+}
+self.addEventListener('push', (e) => {
+  e.waitUntil((async () => {
+    let l = [];
+    try { l = await aMontrer(); } catch (err) { }
+    const deja = await self.registration.getNotifications();
+    // Le navigateur exige une notification visible à chaque signal : à défaut de texte (réseau coupé), un rappel simple.
+    if (!l.length && !deja.length) l = [{ titre: 'Du nouveau pour vous', texte: 'Touchez pour voir vos notifications.', url: '/notifications', tag: 'notifications' }];
+    for (const n of l) await self.registration.showNotification(n.titre, { body: n.texte, icon: '/icone-192.png', badge: '/badge-96.png', tag: n.tag, renotify: true, data: { url: n.url || '/notifications' } });
+    for (const c of await self.clients.matchAll({ type: 'window' })) c.postMessage('notifications');
+  })());
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || '/notifications', location.origin).href;
+  e.waitUntil((async () => {
+    for (const c of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) {
+      if (new URL(c.url).origin === location.origin && 'focus' in c) { await c.focus(); if ('navigate' in c) await c.navigate(url).catch(() => { }); return; }
+    }
+    await self.clients.openWindow(url);
+  })());
+});
+// Abonnement renouvelé par le navigateur : le serveur remplace l'ancien par le nouveau.
+self.addEventListener('pushsubscriptionchange', (e) => {
+  e.waitUntil((async () => {
+    const ancien = e.oldSubscription;
+    const nouveau = e.newSubscription || (ancien && await self.registration.pushManager.subscribe(ancien.options).catch(() => null));
+    if (!ancien || !nouveau) return;
+    await fetch('/api/sokoyetu/push/renouveler', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ancien: { endpoint: ancien.endpoint, auth: cle64(ancien, 'auth') }, nouveau: nouveau.toJSON() }) }).catch(() => { });
+  })());
+});

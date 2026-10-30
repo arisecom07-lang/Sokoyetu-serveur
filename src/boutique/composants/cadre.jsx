@@ -7,6 +7,7 @@ import { ouvrirFeuille } from '../../commun/js/interface.jsx';
 import { dollars, lienWhatsApp, classes } from '../../commun/js/outils.js';
 import { lien, route, retour, naviguer } from '../routeur.js';
 import { cfg, nbArticles, favoris, moyensPaiement } from '../etat.js';
+import { nonLues } from '../notifications.js';
 import { PuceOperateur } from './produits.jsx';
 import { PAGES_LEGALES } from '../../commun/js/legal.js';
 
@@ -50,7 +51,17 @@ function RechercheOrdi() {
   );
 }
 
-/* En-tête principal : marque, navigation (ordinateur), recherche, favoris, compte, panier. */
+/* Cloche du centre de notifications, avec le nombre de notifications non lues. */
+export function BoutonNotifications() {
+  const n = nonLues.value;
+  return (
+    <a href={lien('/notifications')} class="btn-icone" aria-label={n ? `Notifications, ${n} non lue${n > 1 ? 's' : ''}` : 'Notifications'}>
+      <Icone n="cloche" />{n ? <span class="pastille-compte" key={n}>{n > 9 ? '9+' : n}</span> : null}
+    </a>
+  );
+}
+
+/* En-tête principal : marque, navigation (ordinateur), recherche, notifications, favoris, compte, panier. */
 export function EnteteBoutique({ classe, accueil }) {
   const defile = useDefilement();
   const nom = route.value.nom;
@@ -66,6 +77,7 @@ export function EnteteBoutique({ classe, accueil }) {
         <div class="entete-actions">
           <div class="seulement-ordi"><RechercheOrdi /></div>
           <a href={lien('/recherche')} class="btn-icone seulement-mobile" aria-label="Rechercher"><Icone n="recherche" /></a>
+          <BoutonNotifications />
           <a href={lien('/favoris')} class="btn-icone" aria-label={nf ? `Favoris, ${nf}` : 'Favoris'}><Icone n="coeur" />{nf ? <span class="pastille-compte">{nf}</span> : null}</a>
           <a href={lien('/compte')} class="btn-icone seulement-ordi" aria-label="Mon compte"><Icone n="personne" /></a>
           <span class="seulement-ordi"><BoutonPanier /></span>
@@ -94,7 +106,7 @@ export function EntetePage({ titre, sous, repli = '/', actions, cacherTitreOrdi,
 }
 
 const ONGLETS = [['/', 'accueil', 'Accueil', 'accueil'], ['/categories', 'rayons', 'Rayons', 'rayons'], ['/nouveautes', 'nouveautes', 'Nouveautés', 'etincelle'], ['/panier', 'panier', 'Panier', 'sac'], ['/compte', 'compte', 'Compte', 'personne']];
-const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte' };
+const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte', notifications: 'compte' };
 
 export function NavBas() {
   const nom = route.value.nom; const actif = DANS_ONGLET[nom] || nom; const n = nbArticles.value;

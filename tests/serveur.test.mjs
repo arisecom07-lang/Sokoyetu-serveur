@@ -242,6 +242,14 @@ test('paiement confirmé à la main par la boutique (secours)', async () => {
 let compteJeton = '', compteId = '';
 let doublon = null;
 const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+/* Commande de test : la limite de 20 commandes par minute peut répondre 429 en fin de série, on patiente alors. */
+async function commander(corps, headers = {}) {
+  for (let i = 0; ; i++) {
+    const r = await api('/api/sokoyetu/commander', { method: 'POST', headers, body: corps });
+    if (r.status !== 429 || i === 15) return r;
+    await pause(5000);
+  }
+}
 
 test('double appui sur « Payer » : une seule commande, stock réservé une seule fois', async () => {
   const t = secret();
@@ -509,7 +517,7 @@ test('équipe : vendeur et livreur ajoutés par le propriétaire, chacun limité
   // Trois commandes : payée à livrer, payée à retirer en boutique, paiement refusé.
   const nouvelle = async (extra = {}) => {
     const t = secret();
-    const r = await api('/api/sokoyetu/commander', { method: 'POST', body: saisie({ token: t, customer: { name: 'Client Équipe', phone: '0851112233' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0851112233' }, ...extra }) });
+    const r = await commander(saisie({ token: t, customer: { name: 'Client Équipe', phone: '0851112233' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0851112233' }, ...extra }));
     assert.equal(r.status, 200, r.texte);
     return { id: r.json.id, t };
   };
@@ -582,4 +590,65 @@ test('équipe : vendeur et livreur ajoutés par le propriétaire, chacun limité
   assert.equal((await equipe('/' + l.json.membre.id, { method: 'DELETE' })).status, 200);
   assert.equal((await api('/api/collections/orders/records', { headers: livreur })).json.items.length, 0, 'membre retiré : plus aucun accès');
   assert.deepEqual((await equipe()).json.membres.map((m) => m.role), ['proprietaire', 'proprietaire']);
+});
+
+test('notifications gratuites : chaque étape prévient l’appareil qui a commandé et le compte, puis le téléphone', async () => {
+  const appareil = secret();
+  const centre = (a, headers = {}) => api('/api/sokoyetu/notifications', { method: 'POST', headers, body: a ? { appareil: a } : {} });
+  const t = secret();
+  const r = await commander(saisie({ token: t, customer: { name: 'Client Notifié', phone: '0861234567' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0861234567' }, appareil }));
+  assert.equal(r.status, 200, r.texte);
+  const id = r.json.id, numero = r.json.order.number;
+  assert.deepEqual((await centre(appareil)).json, { notifications: [], nonLues: 0 }, 'pas encore payée : rien');
+  await attendre(id, t, 'paid');
+  let c = (await centre(appareil)).json;
+  assert.deepEqual(c.notifications.map((n) => [n.type, n.titre, n.url, n.lu]), [['payee', 'Paiement reçu', `/suivi/${id}`, false]]);
+  assert.equal(c.notifications[0].texte, `Commande #${numero} confirmée. Nous préparons vos articles.`);
+  const etape = (action) => api(`/api/sokoyetu/commandes/${id}`, { method: 'POST', auth: true, body: { action, note: 'x' } });
+  await etape('preparing'); await etape('note'); await etape('shipped');
+  c = (await centre(appareil)).json;
+  assert.deepEqual([c.notifications.map((n) => n.type), c.nonLues], [['expediee', 'preparation', 'payee'], 3]);
+  assert.deepEqual((await centre(secret())).json.notifications, [], 'un autre appareil ne voit rien');
+  assert.deepEqual((await centre('court')).json.notifications, []);
+  assert.equal((await api('/api/sokoyetu/notifications/lues', { method: 'POST', body: { appareil } })).status, 200);
+  assert.equal((await centre(appareil)).json.nonLues, 0);
+  // Une étape déjà annoncée ne l'est pas deux fois (annulée, rouverte, expédiée de nouveau).
+  await etape('cancel'); await etape('reopen'); await etape('shipped');
+  assert.deepEqual((await centre(appareil)).json.notifications.map((n) => n.type), ['annulee', 'expediee', 'preparation', 'payee']);
+  assert.equal((await enregistrement(id)).appareil, undefined, 'empreinte de l’appareil jamais renvoyée');
+
+  // Notifications du téléphone : clé publique du serveur, services de notification reconnus seulement.
+  const cle = (await api('/api/sokoyetu/push/cle')).json.cle;
+  assert.equal(Buffer.from(cle, 'base64url').length, 65);
+  assert.equal((await api('/api/sokoyetu/push/cle')).json.cle, cle, 'clé stable');
+  const abonnement = (endpoint) => ({ endpoint, keys: { auth: Buffer.alloc(16, 1).toString('base64url'), p256dh: Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 2)]).toString('base64url') } });
+  const abonner = (ab, a = appareil) => api('/api/sokoyetu/push/abonner', { method: 'POST', body: { abonnement: ab, appareil: a } });
+  assert.equal((await abonner(abonnement('http://169.254.169.254/latest/meta-data'))).status, 400, 'adresse interne refusée');
+  assert.equal((await abonner(abonnement('https://fcm.googleapis.com.exemple.cd/x'))).status, 400);
+  const fcm = abonnement('https://fcm.googleapis.com/fcm/send/essai-' + secret());
+  assert.equal((await abonner(fcm, 'court')).status, 400, 'appareil inconnu');
+  assert.equal((await abonner(fcm)).status, 200);
+  const attente = (auth = fcm.keys.auth) => api('/api/sokoyetu/push/attente', { method: 'POST', body: { endpoint: fcm.endpoint, auth } });
+  assert.equal((await attente('faux')).status, 404, 'seulement avec la clé de l’abonnement');
+  assert.deepEqual((await attente()).json, { notifications: [] }, 'rien de nouveau depuis l’abonnement');
+  await etape('delivered');
+  const a = (await attente()).json;
+  assert.deepEqual(a.notifications, [{ titre: 'Commande livrée', texte: `Commande #${numero} remise. Merci pour votre confiance !`, url: `/suivi/${id}`, tag: `commande-${id}` }]);
+  assert.deepEqual((await attente()).json.notifications, [], 'montrée une seule fois');
+  assert.equal((await api('/api/sokoyetu/push/desabonner', { method: 'POST', body: { endpoint: fcm.endpoint, auth: fcm.keys.auth } })).status, 200);
+  assert.equal((await attente()).status, 404);
+
+  // Le compte du même téléphone : prévenu des commandes passées connecté, sur tous ses appareils.
+  const code = (await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone: '0861234567' } })).json.code;
+  const cx = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '0861234567', code } });
+  assert.equal(cx.status, 200, cx.texte);
+  const moi = { Authorization: cx.json.token };
+  const t2 = secret();
+  const r2 = await commander(saisie({ token: t2, customer: { name: 'Client Notifié', phone: '0861234567' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0861234567' } }), moi);
+  assert.equal(r2.status, 200, r2.texte);
+  await attendre(r2.json.id, t2, 'paid');
+  assert.deepEqual((await centre('', moi)).json.notifications.map((n) => [n.type, n.url]), [['payee', `/suivi/${r2.json.id}`]]);
+  // Effacement des données du client : ses notifications aussi.
+  assert.equal((await api('/api/sokoyetu/clients/effacer', { method: 'POST', auth: true, body: { phone: '0861234567' } })).status, 200);
+  assert.deepEqual((await centre(appareil)).json.notifications, []);
 });

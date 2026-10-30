@@ -119,6 +119,8 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     // Client connecté à son compte : la commande s'y rattache (sinon, commande sans compte).
     const compte = require(`${__hooks}/lib/comptes.js`).compteDe(e);
     if (compte) rec.set('client', compte.id);
+    // Appareil qui commande (empreinte de son jeton) : il reçoit les notifications de la commande, même sans compte.
+    rec.set('appareil', require(`${__hooks}/lib/notifications.js`).empreinte(b.appareil));
     S.enregistrerCommande(tx, rec, prep.commande);
     id = rec.id;
   });
@@ -232,6 +234,38 @@ routerAdd('POST', '/api/sokoyetu/compte/supprimer', (e) => {
   return e.json(200, { ok: true });
 }, LIMITE.petite);
 
+/* ---------- Boutique : notifications gratuites du client (voir lib/notifications.js et lib/push.js) ---------- */
+
+// Centre de notifications : celles du compte connecté et de cet appareil ({ appareil, langue }), les plus récentes d'abord.
+routerAdd('POST', '/api/sokoyetu/notifications', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, N.liste(e.app, N.destinataire(e, b), b.langue));
+}, LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/notifications/lues', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, N.marquerLues(e.app, N.destinataire(e, b), b.ids));
+}, LIMITE.petite);
+
+// Notifications du téléphone : clé publique du serveur, abonnement du navigateur, désabonnement.
+routerAdd('GET', '/api/sokoyetu/push/cle', (e) => e.json(200, { cle: require(`${__hooks}/lib/push.js`).clePublique(e.app) }));
+routerAdd('POST', '/api/sokoyetu/push/abonner', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, N.abonner(e.app, N.destinataire(e, b), b));
+}, LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/push/desabonner', (e) => e.json(200, require(`${__hooks}/lib/notifications.js`).desabonner(e.app, require(`${__hooks}/lib/serveur.js`).corps(e))), LIMITE.petite);
+// Appelées par le service worker du téléphone : ce qu'il doit afficher, et son abonnement renouvelé par le navigateur.
+routerAdd('POST', '/api/sokoyetu/push/attente', (e) => e.json(200, require(`${__hooks}/lib/notifications.js`).attente(e.app, require(`${__hooks}/lib/serveur.js`).corps(e))), LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/push/renouveler', (e) => e.json(200, require(`${__hooks}/lib/notifications.js`).renouveler(e.app, require(`${__hooks}/lib/serveur.js`).corps(e))), LIMITE.petite);
+
+// Chaque minute : chaque téléphone abonné qui a du nouveau reçoit un signal (gratuit).
+cronAdd('sokoyetu-notifications', '* * * * *', () => {
+  try { require(`${__hooks}/lib/notifications.js`).pousser($app); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Tournée des notifications impossible', { module: 'push', erreur: String(err) }); }
+});
+
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
 
 // La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
@@ -245,6 +279,7 @@ routerAdd('POST', '/api/sokoyetu/visite', (e) => {
 cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/audience.js`).purger($app);
   require(`${__hooks}/lib/comptes.js`).purger($app);
+  require(`${__hooks}/lib/notifications.js`).purger($app);
   require(`${__hooks}/lib/serveur.js`).purgerCompteurs($app);
 });
 
@@ -298,9 +333,11 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
   S.exigerGerant(e, 'effacer');
   const tel = R.chiffres(S.corps(e).phone);
   if (tel.length < 6) return e.json(400, { message: 'Numéro de téléphone manquant.' });
-  let n = 0;
+  let n = 0; const appareils = [];
   e.app.runInTransaction((tx) => {
     tx.findRecordsByFilter('orders', 'phone = {:p}', '', 10000, 0, { p: tel }).forEach((rec) => {
+      if (rec.getString('appareil')) appareils.push(rec.getString('appareil'));
+      rec.set('appareil', '');
       const d = S.lire(rec);
       d.phone = ''; d.customer = { name: 'Client effacé', phone: '' };
       d.shipping = Object.assign({}, d.shipping || {}, { address: '', landmark: '' });
@@ -311,7 +348,10 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
       S.enregistrerCommande(tx, rec, d); n++;
     });
   });
+  // Notifications et abonnements du compte et des appareils de ces commandes : effacés aussi.
+  const clients = e.app.findRecordsByFilter('clients', 'phone = {:a} || phone = {:b}', '', 10, 0, { a: tel, b: '+' + tel }).map((c) => c.id);
   const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
+  require(`${__hooks}/lib/notifications.js`).effacer(e.app, clients, appareils);
   return e.json(200, { effacees: n, comptes });
 }, LIMITE.petite);
 

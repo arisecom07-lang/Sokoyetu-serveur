@@ -13,6 +13,8 @@ import { EnteteBoutique, EntetePage, Pied, Marque, ouvrirLivraisonPaiement } fro
 import { installable, installer, estIOS } from '../installation.jsx';
 import { Montants as MontantsDevis } from './commander.jsx';
 import { useSeo } from './commun.jsx';
+import { ActiverNotifications } from './notifications.jsx';
+import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos } from '../notifications.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
@@ -127,6 +129,7 @@ export function Merci() {
             </div>
             <a class="btn btn-fantome btn-bloc" href={lien('/')}>Continuer mes achats</a>
           </div>
+          <div class="non-imprime"><ActiverNotifications discret titre="Suivez votre commande sur ce téléphone" /></div>
           {comptesOuverts.value && !client.value ? <InvitationCompte classe="non-imprime" titre="Retrouvez cette commande sur tous vos appareils" texte={`Créez votre compte avec le ${telephone(o.customer.phone) || 'même numéro'} : cette commande et les prochaines y seront rangées.`} retour={'/merci/' + o.id} tel={o.customer.phone} /> : null}
         </div>
       </main>
@@ -166,6 +169,26 @@ function ouvrirInstallationIOS() {
       </ol>
     )
   });
+}
+
+/* Notifications du téléphone (gratuites) et annonces de la boutique, réglées depuis « Mon compte ». */
+function ReglagesNotifications() {
+  const e = pushEtat.value;
+  if (e === 'indisponible') return null;
+  const basculer = async () => {
+    try {
+      if (e === 'actif') { await desactiverPush(); toast('Notifications désactivées sur ce téléphone', { icone: 'cloche' }); }
+      else if (await activerPush()) toast('Notifications activées sur ce téléphone', { icone: 'cloche' });
+      else if (pushEtat.value === 'bloque') toast('Notifications bloquées : autorisez-les dans les réglages du navigateur', { icone: 'alerte', ton: 'danger', duree: 5000 });
+    } catch (err) { toast('Réglage impossible pour le moment. Réessayez plus tard.', { icone: 'alerte', ton: 'danger' }); }
+  };
+  const sous = { actif: 'Chaque étape de vos commandes', bloque: 'Bloquées dans les réglages du navigateur', ios: 'Sur iPhone : installez d’abord l’application' }[e] || 'Désactivées';
+  return (
+    <>
+      <Bascule actif={e === 'actif'} onClick={basculer} desactive={e === 'bloque' || e === 'ios'} libelle="Notifications sur ce téléphone" sous={sous} />
+      {e === 'actif' ? <Bascule actif={promos.value} onClick={() => changerPromos(!promos.value).catch(() => { })} libelle="Promotions et nouveautés" sous={promos.value ? 'Annonces de la boutique, de temps en temps' : 'Seulement vos commandes'} /> : null}
+    </>
+  );
 }
 
 async function confirmerDeconnexion() {
@@ -213,6 +236,7 @@ export function Compte() {
         <div class="compte-grille">
           <div class="menu">
             {item({ href: lien('/compte/commandes'), icone: 'recu', titre: 'Mes commandes', sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : 'Reçus, suivi et historique' })}
+            {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
             {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: 'Retrouver une commande', sous: 'Avec le numéro de votre reçu' })}
             {item({ href: lien('/favoris'), icone: 'coeur', titre: 'Mes favoris', sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : 'Vos coups de cœur' })}
             {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: 'Livraison et paiement', sous: 'Zones, délais, Mobile Money' })}
@@ -220,6 +244,7 @@ export function Compte() {
           </div>
           <div class="menu">
             <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur ce téléphone' : 'Désactivé : thème clair'} />
+            <ReglagesNotifications />
             {installable.value ? item({ onClick: () => (estIOS ? ouvrirInstallationIOS() : installer()), icone: 'mobile', titre: 'Installer l’application', sous: 'Sur l’écran d’accueil, même avec une connexion faible' }) : null}
             {item({ href: lien('/infos/conditions'), icone: 'recu', titre: 'Conditions et confidentialité', sous: 'Vente, retours, données personnelles' })}
             {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: 'Se déconnecter', sous: 'Panier, favoris et commandes restent dans votre compte' }) : null}
@@ -346,7 +371,8 @@ export function Suivi() {
     // Lien de suivi partagé : /suivi/<id>#<jeton>
     const t = (location.hash || '').replace(/^#\/?/, '').split('#').pop();
     if (R.valider.jeton(t)) { suivreCommande(id, t); try { history.replaceState(history.state, '', location.pathname); } catch (e) { } }
-    actualiserMesCommandes().then(() => setVerif(true));
+    // Ouverte depuis une notification sur un autre appareil du compte : les commandes du compte d'abord.
+    Promise.resolve(chargerCompte()).then(actualiserMesCommandes).then(() => setVerif(true));
   }, [id]);
   useSeo(() => ({ titre: 'Suivi de commande', noindex: true }), []);
   const o = commandes.value.get(id);
@@ -378,6 +404,7 @@ export function Suivi() {
                 <Icone n="droite" classe="chevron" />
               </a>
             ) : null}
+            {payee && estEnCours(o) ? <ActiverNotifications discret /> : null}
             <section class="carte">
               <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="camion" />Suivi</h2><Pastille ton={s.ton} point>{s.label}</Pastille></div>
               {s.etape < 0 ? (
