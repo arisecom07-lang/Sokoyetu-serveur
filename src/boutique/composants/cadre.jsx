@@ -188,11 +188,12 @@ export function ouvrirLivraisonPaiement() {
   });
 }
 
+// [icône, titre, explication, titre court, détail court] : les deux derniers pour les petites tuiles de l'accueil.
 export const ETAPES_IMPORT = [
-  ['etiquette', 'Vous choisissez', 'Articles en stock à Bukavu ou importés de Chine sur commande.'],
-  ['portefeuille', 'Vous payez par Mobile Money', 'M-Pesa, Airtel Money, Orange Money : vous validez le paiement sur votre téléphone et recevez votre reçu.'],
-  ['douane', 'Nous importons et dédouanons', 'Transport par conteneur et formalités de douane pris en charge.'],
-  ['camion', 'Vous êtes livré', 'À Bukavu et à Goma, avec un suivi de commande à chaque étape.']
+  ['etiquette', 'Vous choisissez', 'Articles en stock à Bukavu ou importés de Chine sur commande.', 'Commande', 'Stock ou import'],
+  ['portefeuille', 'Vous payez par Mobile Money', 'M-Pesa, Airtel Money, Orange Money : vous validez le paiement sur votre téléphone et recevez votre reçu.', 'Paiement', 'Mobile Money'],
+  ['douane', 'Nous importons et dédouanons', 'Transport par conteneur et formalités de douane pris en charge.', 'Import', 'Douane incluse'],
+  ['camion', 'Vous êtes livré', 'À Bukavu et à Goma, avec un suivi de commande à chaque étape.', 'Livraison', 'Bukavu et Goma']
 ];
 
 export function ouvrirCommentCaMarche() {

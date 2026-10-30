@@ -32,8 +32,10 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .puces-sep { flex: none; width: 1px; align-self: stretch; margin: 6px 2px; background: var(--ligne-2); }
 
 /* ---------- Bandeaux ---------- */
-.annonce { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 6px var(--gouttiere); background: var(--ebene); color: var(--sur-ebene); font-size: 13px; font-weight: 650; text-align: center; padding-top: max(6px, env(safe-area-inset-top, 0px)); }
-.annonce .ic { --ic: 16px; color: var(--or); }
+.annonce { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; padding: 6px var(--gouttiere); background: var(--ebene); color: var(--sur-ebene); font-size: clamp(11.5px, 3.3vw, 13px); font-weight: 650; text-align: center; padding-top: max(6px, env(safe-area-inset-top, 0px)); }
+.annonce span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.annonce .ic { --ic: 16px; flex: none; color: var(--or); }
+@media (max-width: 380px) { .annonce .ic { display: none; } }
 .bandeau-hors-ligne { position: sticky; top: 0; z-index: 45; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; background: var(--alerte-doux); color: var(--encre); font-size: 13.5px; font-weight: 650; }
 .bandeau-hors-ligne .ic { --ic: 16px; color: var(--alerte); }
 
@@ -122,6 +124,25 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .ei-icone .ic { --ic: 21px; }
 .etapes-import.verticales { grid-template-columns: 1fr; overflow: visible; margin: 0; padding: 0; }
 .etapes-import.verticales li { box-shadow: none; }
+/* Accueil : les quatre étapes en petites tuiles, 2 × 2 sur téléphone, sur une ligne sur grand écran. */
+.etapes-accueil { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e2); }
+.etapes-accueil li { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px 10px 10px 9px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--ligne); }
+.etapes-accueil .ei-icone { flex: none; width: 31px; height: 31px; border-radius: 10px; }
+.etapes-accueil .ei-icone .ic { --ic: 17px; }
+.ea-texte { display: grid; min-width: 0; line-height: 1.25; }
+.ea-texte b { font-size: 13.5px; font-weight: 750; }
+.ea-texte small { font-size: 12px; color: var(--encre-3); }
+.ea-texte b, .ea-texte small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.confiance .confiance-plus { margin-top: 2px; min-height: 40px; font-size: 13.5px; }
+/* Petits téléphones : un peu plus serré ; les tout petits écrans passent le texte à la ligne plutôt que de le couper. */
+@media (max-width: 370px) {
+  .etapes-accueil li { gap: 8px; padding: 9px 8px; }
+  .etapes-accueil .ei-icone { width: 28px; height: 28px; border-radius: 9px; }
+  .etapes-accueil .ei-icone .ic { --ic: 16px; }
+  .ea-texte b { font-size: 13px; }
+  .ea-texte small { font-size: 11.5px; }
+}
+@media (max-width: 340px) { .ea-texte b, .ea-texte small { white-space: normal; } }
 .confiance .lien-tout { margin-top: 4px; }
 
 /* ---------- Rayons ---------- */
@@ -464,6 +485,27 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
   .compte-grille { grid-template-columns: 1fr 1fr; align-items: start; }
 }
 
+/* ---------- Téléphone : proportions resserrées (bannière, titres, sélecteur) ---------- */
+@media (max-width: 899.98px) {
+  .heros { height: clamp(400px, 58svh, 520px); }
+  .heros-contenu { gap: 4px; padding: var(--e6) var(--gouttiere) 72px; }
+  .heros-kicker { height: 28px; padding: 0 12px; font-size: 11.5px; }
+  .heros-kicker .ic { --ic: 14px; }
+  .heros-marque { margin: 6px 0 4px; }
+  .heros-marque .marque { gap: 8px; font-size: clamp(46px, 14vw, 64px); }
+  .heros-legende { margin-top: var(--e4); min-height: 58px; }
+  .heros-surtitre { font-size: 11.5px; }
+  .heros-titre { font-size: clamp(16px, 4.4vw, 19px); }
+  .heros-actions { margin-top: var(--e3); }
+  .heros-controles { bottom: 14px; }
+  .titre-section { font-size: clamp(20px, 5.6vw, 22px); }
+  .titre-lien .ic { --ic: 19px; vertical-align: -2px; }
+  .section-tete { margin-bottom: var(--e3); }
+  /* Sélecteur « Pour vous / Nouveautés / Promos » : trois parts égales, sur toute la largeur. */
+  .puces.puces-egales { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); overflow: visible; margin: 0; padding: 0; }
+  .puces-egales .puce { justify-content: center; height: 36px; padding: 0 8px; font-size: 13.5px; }
+}
+
 /* ---------- Ordinateur ---------- */
 @media (min-width: 900px) {
   :root { --h-entete: 72px; --gouttiere: 32px; --gouttiere-d: 32px; }
@@ -495,7 +537,12 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
   .heros { border-radius: var(--r-xl); height: 560px; }
   .heros-contenu { padding-bottom: 96px; }
 
-  .etapes-import { grid-template-columns: repeat(4, 1fr); overflow: visible; margin: 0; padding: 0; }
+  .etapes-accueil { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--e3); }
+  .etapes-accueil li { padding: 14px 16px 14px 14px; gap: 12px; }
+  .etapes-accueil .ei-icone { width: 40px; height: 40px; border-radius: 12px; }
+  .etapes-accueil .ei-icone .ic { --ic: 20px; }
+  .ea-texte b { font-size: 15px; }
+  .ea-texte small { font-size: 13px; }
   .section { margin-top: var(--e12); }
   .titre-section { font-size: 30px; }
   .rayons-rangee { margin: 0; padding: 0 0 4px; gap: var(--e5); }

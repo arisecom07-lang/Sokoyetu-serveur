@@ -52,10 +52,10 @@ export function Accueil() {
         <div class="conteneur-heros"><Banniere /></div>
 
         <section class="conteneur section confiance" aria-label="Comment ça marche">
-          <ol class="etapes-import" tabIndex={0} aria-label="Les quatre étapes, de la Chine jusqu’à chez vous">
-            {ETAPES_IMPORT.map(([ic, t, s], i) => <li key={i}><span class="ei-icone"><Icone n={ic} /></span><div><b>{t}</b><p>{s}</p></div></li>)}
+          <ol class="etapes-accueil" aria-label="Les quatre étapes, de la commande à la livraison">
+            {ETAPES_IMPORT.map(([ic, , , t, s], i) => <li key={i}><span class="ei-icone" aria-hidden="true"><Icone n={ic} /></span><span class="ea-texte"><b>{t}</b><small>{s}</small></span></li>)}
           </ol>
-          <button class="lien-tout seulement-mobile" onClick={ouvrirCommentCaMarche}>En savoir plus<Icone n="droite" /></button>
+          <button class="lien-tout confiance-plus" onClick={ouvrirCommentCaMarche}>Comment ça marche<Icone n="droite" /></button>
         </section>
 
         {rs.length ? (
@@ -82,8 +82,8 @@ export function Accueil() {
 
         <section class="conteneur section" id="selection">
           <div class="section-tete"><h2 class="titre-section">Toute la boutique</h2></div>
-          <div class="puces" role="group" aria-label="Trier la sélection">
-            {[['pour-vous', 'Pour vous'], ['nouveautes', 'Nouveautés'], ...(nbPromos ? [['promos', 'Promotions']] : [])].map(([k, t]) => (
+          <div class="puces puces-egales" role="group" aria-label="Trier la sélection">
+            {[['pour-vous', 'Pour vous'], ['nouveautes', 'Nouveautés'], ...(nbPromos ? [['promos', 'Promos']] : [])].map(([k, t]) => (
               <button key={k} class="puce" aria-pressed={flux === k ? 'true' : 'false'} onClick={() => setFlux(k)}>{t}{k === 'promos' ? <span class="n">{nbPromos}</span> : null}</button>
             ))}
           </div>

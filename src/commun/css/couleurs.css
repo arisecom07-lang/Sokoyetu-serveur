@@ -47,6 +47,11 @@
 :root:not([data-theme="dark"]) .etapes-import li:nth-child(4n+4) { --c: var(--c4); --c-doux: var(--c4-doux); }
 :root:not([data-theme="dark"]) .etapes-import li { border-top: 3px solid var(--c); }
 :root:not([data-theme="dark"]) .etapes-import .ei-icone { background: var(--c-doux); color: var(--c); }
+:root:not([data-theme="dark"]) .etapes-accueil li:nth-child(4n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
+:root:not([data-theme="dark"]) .etapes-accueil li:nth-child(4n+2) { --c: var(--c2); --c-doux: var(--c2-doux); }
+:root:not([data-theme="dark"]) .etapes-accueil li:nth-child(4n+3) { --c: var(--c3); --c-doux: var(--c3-doux); }
+:root:not([data-theme="dark"]) .etapes-accueil li:nth-child(4n+4) { --c: var(--c4); --c-doux: var(--c4-doux); }
+:root:not([data-theme="dark"]) .etapes-accueil .ei-icone { background: var(--c-doux); color: var(--c); }
 
 /* ---- Suivi de commande : chaque étape garde sa couleur ---- */
 :root:not([data-theme="dark"]) .suivi-etape:nth-child(5n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }
