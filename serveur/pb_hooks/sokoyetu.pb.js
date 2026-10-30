@@ -53,6 +53,7 @@ routerUse((e) => {
 
 routerAdd('GET', '/p/{chemin...}', (e) => require(`${__hooks}/lib/pages.js`).pageArticle(e));
 routerAdd('GET', '/c/{chemin...}', (e) => require(`${__hooks}/lib/pages.js`).pageRayon(e));
+routerAdd('GET', '/panier/partage', (e) => require(`${__hooks}/lib/pages.js`).pagePanier(e));
 routerAdd('GET', '/sitemap.xml', (e) => require(`${__hooks}/lib/pages.js`).planDuSite(e));
 routerAdd('GET', '/api/sokoyetu/catalogue', (e) => require(`${__hooks}/lib/pages.js`).catalogue(e));
 

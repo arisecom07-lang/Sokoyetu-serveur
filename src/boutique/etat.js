@@ -160,6 +160,26 @@ export function changerQuantite(cle, qty) {
   panier.value = qty <= 0 ? panier.value.filter((l) => l.cle !== cle) : panier.value.map((l) => (l.cle === cle ? { ...l, qty: Math.min(R.MAX_QTE, qty) } : l));
   sauverPanier();
 }
+/*
+ * Panier partagé : ses articles rejoignent le panier, cochés. Un article déjà présent garde la plus grande des deux quantités
+ * (ouvrir deux fois le même lien ne double rien) ; un article en stock à Bukavu est borné à ce qui reste.
+ * Renvoie le nombre de pièces de ces articles maintenant dans le panier.
+ */
+export function mettreDansLePanier(lignes) {
+  const m = produitsParId.value; let liste = panier.value; let n = 0; const cles = new Set();
+  for (const l of lignes) {
+    const p = m.get(l.productId); if (!p) continue;
+    const max = R.estImport(p) ? R.MAX_QTE : Math.min(R.MAX_QTE, R.stockDe(p, l.color, l.size));
+    const q = Math.min(max, R.int(l.qty)); if (q <= 0) continue;
+    const cle = cleLigne(p.id, l.color, l.size); cles.add(cle);
+    const ex = liste.find((x) => x.cle === cle);
+    if (ex) { if (q > ex.qty) liste = liste.map((x) => (x.cle === cle ? { ...x, qty: q } : x)); n += Math.max(q, ex.qty); }
+    else { liste = [...liste, { cle, productId: p.id, color: l.color || '', size: l.size || '', qty: q }]; n += q; }
+  }
+  panier.value = liste; sauverPanier();
+  if ([...decoches.value].some((k) => cles.has(k))) { decoches.value = new Set([...decoches.value].filter((k) => !cles.has(k))); sauverDecoches(); }
+  return n;
+}
 /* Commande passée : seuls les articles cochés quittent le panier, les autres y restent, cochés pour la prochaine commande. */
 export function retirerCommandes(items) {
   const parties = new Set(items.map((l) => cleLigne(l.productId, l.color, l.size)));

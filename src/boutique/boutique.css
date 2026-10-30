@@ -224,6 +224,8 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .fil a:hover { color: var(--encre); text-decoration: underline; }
 .fil .ic { --ic: 14px; }
 .produit-entete { display: grid; gap: 8px; }
+.produit-haut { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); }
+.produit-haut .fil { margin: 0; }
 .produit-prix { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .produit-prix .prix { font-size: 26px; letter-spacing: -.02em; }
 .produit-prix .prix-barre { font-size: 15px; }
@@ -301,6 +303,30 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .pl-plus-tard { font-size: 12.5px; font-weight: 650; color: var(--encre-3); }
 .case[data-coche="partiel"] .case-boite { background: var(--ebene); border-color: var(--ebene); }
 .case[data-coche="partiel"] .case-boite .ic { opacity: 1; transform: none; }
+/* Fenêtre « Partager » (ordinateur, ou téléphone sans feuille de partage) : WhatsApp, Facebook, lien à copier. */
+.partage { display: grid; gap: var(--e4); padding-top: var(--e1); }
+.partage-choix { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e2); }
+.partage-option { display: grid; justify-items: center; align-content: center; gap: 8px; min-height: 96px; padding: 12px 6px; border: 1px solid var(--ligne); border-radius: var(--r-l); background: var(--surface); color: var(--encre); font: inherit; font-size: 13.5px; font-weight: 650; text-align: center; cursor: pointer; transition: background-color var(--rapide), border-color var(--rapide), transform var(--rapide); }
+.partage-option:hover { background: var(--surface-2); border-color: var(--ligne-2); }
+.partage-option:active { transform: scale(.98); }
+.partage-icone { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--marque-doux); color: var(--marque-texte); }
+.partage-icone .ic { --ic: 22px; }
+.partage-option[data-app="whatsapp"] .partage-icone { background: var(--ok-doux); color: var(--ok); }
+.partage-option[data-app="facebook"] .partage-icone { background: var(--info-doux); color: var(--info); }
+.partage-lien { font-size: 13px; color: var(--encre-2); }
+
+/* Titre de page avec une action à droite (Partager le panier). */
+.titre-avec-action { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--e3); }
+.titre-avec-action > div { min-width: 0; }
+.titre-avec-action .btn { flex: none; }
+/* Panier partagé : pas de case à cocher ; les articles indisponibles restent visibles, en retrait. */
+.panier-ligne.ligne-recue { grid-template-columns: 96px minmax(0, 1fr); }
+.panier-ligne[data-indisponible] { background: var(--surface-2); box-shadow: none; }
+.panier-ligne[data-indisponible] .pl-photo { opacity: .55; }
+.panier-ligne[data-indisponible] .pl-titre { color: var(--encre-3); }
+.note-ligne { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--encre-2); }
+.note-ligne .ic { --ic: 14px; color: var(--info, var(--encre-3)); }
+.pl-quantite { font-size: 13px; font-weight: 650; color: var(--encre-2); }
 .panier-choix { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e3); padding: 4px 12px; }
 .panier-choix .case { align-items: center; font-weight: 650; }
 .panier-filtres { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -566,6 +592,7 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
   .panier-grille, .commande-grille { grid-template-columns: minmax(0, 1fr) 380px; gap: var(--e8); align-items: start; }
   .panier-resume, .commande-resume { position: sticky; top: calc(var(--h-entete) + 20px); }
   .panier-ligne { grid-template-columns: auto 120px minmax(0, 1fr); padding: 14px; }
+  .panier-ligne.ligne-recue { grid-template-columns: 120px minmax(0, 1fr); }
   .panier-choix { padding: 4px 14px; }
   .pl-photo { width: 120px; height: 150px; }
   .commande-tete { grid-template-columns: 1fr auto; align-items: center; padding: var(--e8) 0 var(--e6); }

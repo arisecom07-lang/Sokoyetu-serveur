@@ -16,11 +16,11 @@ Projet de Kabamba Aristote (« Messir »), Bukavu (RDC). Il travaille **depuis s
 
 ```
 src/commun/js/regles.js     règles métier PARTAGÉES (CommonJS, sans dépendance) : serveur, boutique, admin, démo
-src/commun/js/              api.js (client PocketBase + temps réel), interface.jsx, erreurs.jsx (écran d'erreur, signalement), icones.jsx, medias.jsx, outils.js, legal.js, theme.js, stockage.js
+src/commun/js/              api.js (client PocketBase + temps réel), interface.jsx, erreurs.jsx (écran d'erreur, signalement), icones.jsx, medias.jsx, outils.js, legal.js, theme.js, stockage.js, logo.jsx + cabas.js (tracés du logo)
 src/commun/css/             jetons.css (couleurs, typo, espacements ; thème sombre), base.css, composants.css
 src/commun/polices/         Fraunces + Plus Jakarta Sans (woff2 variables, licence OFL)
-src/boutique/               main.jsx, routeur.js (vraies adresses /p/…, /c/…), etat.js, seo.js, mesure.js, installation.jsx, pages/, composants/, boutique.css, public/
-src/admin/                  main.jsx, routeur.js (#/…), etat.js, cadrage.js (photos cadrées), pages/, composants/ (cadre, graphique), admin.css, public/
+src/boutique/               main.jsx, routeur.js (vraies adresses /p/…, /c/…), etat.js, seo.js, mesure.js, installation.jsx, partage.jsx (partager un article ou le panier), pages/, composants/, boutique.css, public/
+src/admin/                  main.jsx, routeur.js (#/…), etat.js, cadrage.js (photos cadrées), carte-partage.js (image d'aperçu des liens), pages/, composants/ (cadre, graphique), admin.css, public/
 serveur/pb_hooks/           sokoyetu.pb.js (routes, hôtes, sécurité) + lib/serveur.js, lib/pages.js (SEO, catalogue, sitemap), lib/ia.js,
                             lib/paiement.js (fournisseurs : flexpay, simulation), lib/commandes.js (suivi des paiements, échéances, notifications),
                             lib/audience.js, lib/comptes.js (comptes clients), lib/envoi.js (codes : WhatsApp, SMS),
@@ -30,7 +30,7 @@ serveur/scripts/            installer.sh, mise-a-jour.sh, service.sh, mot-de-pas
 demo/                       api-demo.js (serveur simulé dans le navigateur), index.html (page d'accueil de la démo)
 medias/photos/              photos d'exemple (ban-*, cat-*, pNN-* ; -s = petite taille), medias/marque/ (SVG des icônes), medias/marque/operateurs/ (logos d’origine des opérateurs ; versions web 144 px en WebP dans src/commun/marque/operateurs/, composant LogoOperateur)
 outils/                     construire.mjs, serveur-local.sh, charger-exemple.mjs, captures-manifeste.mjs, images-marque.mjs
-tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, comptes.mjs, accessibilite.mjs, captures.mjs, demo.mjs, charge.mjs, sauvegarde.mjs,
+tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, comptes.mjs, partage.mjs, accessibilite.mjs, captures.mjs, demo.mjs, charge.mjs, sauvegarde.mjs,
                             faux services : flexpay-simule.mjs, codes-simule.mjs (WhatsApp, Twilio, Plivo), claude-simule.mjs
 ```
 
@@ -51,6 +51,7 @@ node tests/commandes-exemple.mjs # 6 commandes de test réparties sur 10 jours
 BASE=http://127.0.0.1:8091 node --test tests/serveur.test.mjs   # sur une base NEUVE (PORT=8091 SOKOYETU_SIMULATION_DELAI=1 DATA=.local/pb_test bash outils/serveur-local.sh)
 node tests/flexpay-simule.mjs    # faux FlexPay sur :8099, puis SOKOYETU_PAIEMENT=flexpay FLEXPAY_URL=http://127.0.0.1:8099/api/rest/v1 FLEXPAY_MARCHAND=SOKOYETU FLEXPAY_JETON=jeton-de-test-flexpay-0123456789 bash outils/serveur-local.sh
 node tests/parcours.mjs          # client (téléphone) + gérante (ordinateur), temps réel, stock
+node tests/partage.mjs           # partage du panier et d'un article : message, aperçu lu sans JavaScript, page, ajout au panier
 node tests/accessibilite.mjs [clair|sombre]
 node tests/captures.mjs [boutique|admin] [clair|sombre]   # captures dans le dossier SORTIE (dossier temporaire du système par défaut)
 (cd dist/demo && python3 -m http.server 8095) ; node tests/demo.mjs
@@ -71,6 +72,8 @@ Pour arrêter un serveur local : `ps -eo pid,args | awk '$2 ~ /pocketbase$/ {pri
 **Commandes.** Uniquement par `POST /api/sokoyetu/commander` : `regles.preparerCommande` recalcule tout (frais de service compris) et refuse tout écart (stock, prix, remise, total annoncé : champ `total`), le stock est réservé dans la même transaction (`appliquerStock`), le jeton client rend l'envoi idempotent. La commande naît « en attente de paiement », puis la demande part chez le fournisseur. La règle de mise à jour de `orders` est fermée : seules les routes du serveur la modifient (`S.enregistrerCommande` tient aussi à jour les colonnes `status`, `phone`, `number`, `pay_status`, `pay_ref`, `expires`). Le client lit sa commande avec `?t=<jeton>` ; `onRecordEnrich` retire coûts, notes internes, `issues`, `reserved` et le jeton pour tout visiteur. Les étapes admin passent par `POST /api/sokoyetu/commandes/{id}` (`regles.etapeCommande`, stock réservé ou rendu). Avant de payer, la boutique demande `POST /api/sokoyetu/devis`.
 
 **Paiement.** Fournisseur choisi sur le serveur seulement (`/opt/sokoyetu/sokoyetu.env` posé par `paiement.sh` : `SOKOYETU_PAIEMENT=flexpay|simulation`, `FLEXPAY_MARCHAND`, `FLEXPAY_JETON`, `FLEXPAY_URL` pour l'environnement de test), injecté dans la configuration publique (`payment.provider`, `holdMinutes`, `test`) ; sans fournisseur prêt, `moyensDePaiement` est vide et la boutique ne prend pas de commande. `lib/paiement.js` : `demarrer` / `verifier` renvoient `{ etat: en_attente | paye | echec }` ; FlexPay = `POST /paymentService` puis `GET /check/{orderNumber}` (`transaction.status` 0 payé, 1 refusé), référence envoyée `NUMERO-tentative`. Cycle dans `regles.js` : `paiementEnvoye`, `paiementConfirme` (idempotent ; rouvre une commande expirée avec un point à vérifier), `paiementEchoue`, `paiementExpire` (annulation + stock rendu), `relancePossible` (5 tentatives). Routes : `GET paiement/{id}?t=` (revérifie au plus toutes les 3 s), `POST paiement/{id}/relancer` (30 s après la demande précédente), `POST notification/{fournisseur}` (toujours 200, revérifie toujours chez le fournisseur), `POST retrouver` (numéro + téléphone → id et jeton), tâche `sokoyetu-paiements` chaque minute. Le délai de livraison prévu (`delivery`) est recalculé au paiement.
+
+**Partage.** Lien d'un panier : `/panier/partage?a=article:quantité:couleur:taille&a=…` (`regles.lienPanier` / `panierDepuisLien`, lu sur la chaîne brute `route.recherche` côté boutique, `e.request.url.rawQuery` côté serveur). `regles.apercuPartage` fait le seul calcul (prix et stock du jour, frais de service) pour le message, l'aperçu serveur (`pages.pagePanier`, `noindex`) et la page `PanierPartage`. Image d'aperçu d'un article : `doc.share = { type: 'pb', id, f, w: 1200, h: 630, sig }`, dessinée par l'administration (`carte-partage.js`) et envoyée dans `media` à l'enregistrement (`carteProduit` dans `admin/etat.js`, refaite seulement quand `sig` change : photo principale, nom, slogan, villes) ; servie en `og:image` par `pages.imageArticle`, retirée du public par `produitPublic`.
 
 **Temps réel.** Une seule connexion SSE par onglet (`TempsReel` dans `api.js`). Admin : `col/*`. Boutique : catalogue + `orders/<id>?options={"query":{"t":…}}` pour le suivi.
 

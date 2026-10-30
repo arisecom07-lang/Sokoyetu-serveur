@@ -732,6 +732,58 @@ function fusionCompte(compte, appareil) {
   return docCompte({ panier, favoris: c.favoris.concat(favorisCompte(a.favoris)), profil, dates });
 }
 
+/* ---------- Panier partagé : le lien contient les articles, rien d'autre (ni nom, ni téléphone) ---------- */
+
+/*
+ * « a=montre-curren:2:Noir&a=sac-cuir&a=robe:1::M » : une ligne par « a » (article:quantité:couleur:taille), champs vides
+ * de fin omis. Couleur et taille sont encodées (un « : » y devient %3A) : le lien reste court, lisible et sans ambiguïté.
+ * Les prix n'y figurent pas : celui qui ouvre le lien voit toujours les prix et le stock du jour.
+ */
+const MAX_LIGNES_PARTAGE = 30;
+function lienPanier(lignes) {
+  return panierCompte(lignes).slice(0, MAX_LIGNES_PARTAGE).map((l) => {
+    const champs = [l.productId, l.qty > 1 || l.color || l.size ? String(l.qty) : '', l.color, l.size].map((v) => encodeURIComponent(v || ''));
+    while (champs.length > 1 && !champs[champs.length - 1]) champs.pop();
+    return 'a=' + champs.join(':');
+  }).join('&');
+}
+/* Lignes d'un lien de panier partagé (« ?a=… », tel quel, sans décodage préalable) ; les lignes invalides sont ignorées. */
+function panierDepuisLien(recherche) {
+  const lignes = [];
+  String(recherche || '').replace(/^\?/, '').split('&').forEach((morceau) => {
+    if (morceau.indexOf('a=') !== 0 || lignes.length >= MAX_LIGNES_PARTAGE * 2) return;
+    let brut = morceau.slice(2);
+    // Lien réencodé par une application en chemin (« : » devenu %3A) : on retrouve les séparateurs.
+    if (brut.indexOf(':') < 0 && /%3A/i.test(brut)) brut = brut.replace(/%3A/gi, ':');
+    const c = brut.split(':').map((v) => { try { return decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { return ''; } });
+    lignes.push({ productId: c[0], qty: c[1] ? int(c[1]) : 1, color: c[2] || '', size: c[3] || '' });
+  });
+  return panierCompte(lignes).slice(0, MAX_LIGNES_PARTAGE);
+}
+
+/*
+ * Ce que montre un panier partagé, aux prix et au stock du jour : le même calcul pour le message envoyé, l'aperçu du lien
+ * (serveur) et la page qui s'ouvre. Chaque ligne garde la quantité demandée (demandee) et prend la quantité disponible (qty) ;
+ * probleme : 'retiré' (plus en vente), 'option' (couleur ou taille plus proposée), 'prix', 'epuise', ou ''.
+ * total : articles disponibles et frais de service, livraison non comprise (choisie à la commande).
+ */
+function apercuPartage(opts) {
+  const cfg = opts.cfg; const maintenant = opts.maintenant || Date.now();
+  const zoneId = ((cfg.zones || [])[0] || {}).id;
+  const recues = panierCompte(opts.lignes).slice(0, MAX_LIGNES_PARTAGE); // les lignes que porte le lien
+  const dv = devis({ cfg, produit: opts.produit, lignes: recues, zoneId, maintenant });
+  const lignes = recues.map((l, i) => {
+    const d = dv.lignes[i] || {}; const p = opts.produit(l.productId);
+    const stock = !p ? 0 : estImport(p) ? MAX_QTE : stockDe(p, d.color, d.size);
+    const probleme = !p || d.issue === 'retiré' ? 'retiré' : d.issue === 'option' || d.issue === 'prix' ? d.issue : stock <= 0 ? 'epuise' : '';
+    return { productId: l.productId, title: d.title || '', color: d.color || '', size: d.size || '', demandee: l.qty, qty: probleme ? l.qty : Math.min(l.qty, stock), probleme };
+  });
+  const disponibles = lignes.filter((l) => !l.probleme);
+  const sousTotal = devis({ cfg, produit: opts.produit, lignes: disponibles, zoneId, maintenant }).sousTotal;
+  const frais = fraisService(cfg, sousTotal);
+  return { lignes, disponibles, n: disponibles.reduce((a, l) => a + l.qty, 0), sousTotal, frais, total: arrondi(sousTotal + frais) };
+}
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
@@ -743,5 +795,6 @@ module.exports = {
   estAnnulee, estPayee, estRetraitCmd, enAttentePaiement, nonAboutie, aVerifier, aPreparer, aExpedier, aTraiter, statutClient, etapesSuivi,
   relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire, doublonARembourser, TEXTE_DOUBLON,
   etapeCommande, reservationsAnciennes, incoherences, margeCommande,
-  MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte
+  MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte,
+  MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage
 };

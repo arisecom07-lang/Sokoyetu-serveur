@@ -1,3 +1,36 @@
+# Sokoyetu 2.4.0 — partager un article ou tout son panier (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Partager tout son panier** : dans le panier, le bouton **Partager** envoie un lien qui contient les articles, les quantités, les couleurs et les tailles. Le message dit ce que verra la personne : « Voici mon panier Sokoyetu : 4 articles, $126.48. ».
+- **La personne qui ouvre le lien** voit la page **Panier partagé** : les articles avec leur photo, les prix et le stock du jour, le total estimé. Elle touche **Ajouter au panier** et peut commander aussitôt. Un article vendu entre-temps est signalé (« Épuisé », « Plus que 1 exemplaire », « Plus en vente »). Ouvrir deux fois le même lien ne double rien.
+- **Partager un article** : le bouton existe toujours sur téléphone (en haut de la fiche), et il apparaît maintenant aussi **sur ordinateur**, à côté du fil d'Ariane.
+- **Un bel aperçu dans WhatsApp et Facebook** : chaque article reçoit une **image d'aperçu** avec le logo de la boutique, son nom, son slogan, les villes livrées et la photo de l'article en grand. Elle est faite **toute seule** quand vous enregistrez l'article dans l'administration (et à l'import), en JPEG léger, environ 60 Ko. Le titre de l'aperçu donne le prix du jour ; le lien d'un panier annonce le nombre d'articles et le total.
+- Sur un téléphone, le bouton ouvre la **feuille de partage du téléphone** (WhatsApp, SMS, Facebook, Telegram…). Sur ordinateur, une petite fenêtre propose **WhatsApp**, **Facebook** ou **Copier le lien**.
+- Le lien ne contient **aucune donnée personnelle** (ni nom, ni téléphone, ni adresse) : seulement des articles et des quantités. Les liens de panier ne sont jamais référencés par Google.
+
+## Bon à savoir
+
+- L'image d'aperçu est refaite **seulement** quand la photo principale change, ou quand le nom, le slogan ou les villes de la boutique changent. Un changement de prix ou de stock ne la refait pas : elle ne montre ni prix ni stock.
+- Les articles enregistrés **avant** cette version gardent leur photo comme aperçu, jusqu'à leur prochain enregistrement.
+- Après un changement du nom ou du slogan de la boutique, l'image de chaque article se refait au prochain enregistrement de cet article.
+- WhatsApp garde un aperçu en mémoire quelque temps : un lien déjà envoyé peut montrer l'ancien aperçu.
+
+## Après la fusion
+
+Dans la console du Droplet : `sudo /opt/sokoyetu/mise-a-jour.sh`.
+
+## Détails techniques
+
+- Lien de panier : `/panier/partage?a=article:quantité:couleur:taille&a=…` (champs vides de fin omis, couleur et taille encodées : `:` devient `%3A`). `regles.lienPanier`, `regles.panierDepuisLien` (30 lignes au plus, lignes invalides écartées, lien réencodé par une application toléré).
+- `regles.apercuPartage` : un seul calcul (prix et stock du jour, quantité ramenée au stock, frais de service compris, livraison non) pour le message envoyé, l'aperçu rendu par le serveur et la page `PanierPartage` (panier.jsx). `mettreDansLePanier` (etat.js) garde la plus grande des deux quantités.
+- Serveur : route `GET /panier/partage` (`pages.pagePanier`, `noindex`). `pages.imageArticle` : `doc.share` (image d'aperçu, 1200 × 630), sinon photo principale, sinon `og-image.png`. `og:image:width` / `og:image:height` annoncés seulement quand la taille est connue (déplacés dans le bloc `<!--seo-->` d'index.html). `produitPublic` retire `share` du catalogue et des lectures publiques.
+- Administration : `src/admin/carte-partage.js` dessine l'image sur un canevas (marque à gauche, photo entière à droite, bords prolongés) ; `carteProduit` (etat.js) l'envoie comme une photo (`media`) avant l'enregistrement, avec une empreinte (`sig`) qui évite de la refaire ; en cas d'échec ou après 20 s, l'article est enregistré sans elle. Les tracés du logo passent dans `src/commun/js/cabas.js` (partagés par logo.jsx et le canevas).
+- Boutique : `src/boutique/partage.jsx` (`partager`, feuille de partage du téléphone sinon fenêtre WhatsApp / Facebook / lien ; mesure `share`), `adresseComplete` (adresses complètes, démo comprise). Route `panier-partage` ; `route.recherche` (chaîne de recherche brute, lue sans décodage).
+- Essais : `tests/regles.test.js` (format du lien, aperçu), `tests/serveur.test.mjs` (image d'aperçu annoncée, panier partagé, rien dans le catalogue public), `tests/partage.mjs` (nouveau, vrais navigateurs : message, aperçu lu sans JavaScript, page, ajout, ordinateur), `tests/accessibilite.mjs` (panier partagé, fenêtre de partage).
+
+---
+
 # Sokoyetu 2.3.1 — accueil plus compact et soigné sur téléphone (octobre 2026)
 
 ## Ce qui change pour vous
