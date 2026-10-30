@@ -1,13 +1,15 @@
-// Sokoyetu (administration) — produits : liste et fiche (photos, vidéo, assistant IA, import par lien, prix et marge, variantes, stock, rayons).
+// Sokoyetu (administration) — produits : liste et fiche (photos cadrées par l'assistant, vidéo, assistant IA, import par lien, prix et marge, variantes, stock, rayons).
 import { useEffect, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo, compresser, taille } from '../../commun/js/medias.jsx';
-import { envoyerPhoto } from '../../commun/js/api.js';
+import { envoyerPhoto, urlFichierServeur } from '../../commun/js/api.js';
+import { Local } from '../../commun/js/stockage.js';
 import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
 import { dollars, pluriel, uid, classes, normaliser, copie, slug } from '../../commun/js/outils.js';
 import { lien, route, aller, garder } from '../routeur.js';
-import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, gererErreur } from '../etat.js';
+import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, cadreIA, gererErreur } from '../etat.js';
+import { cadrerPhoto } from '../cadrage.js';
 import { TetePage, BarreEnregistrer, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement } from './accueil.jsx';
 import { CarteLien, TableauVariantes, PrixGros, CarteFlash, CarteGuide, CarteColis, CarteVideo, nettoyerComplements, prixFournisseur } from './produits-plus.jsx';
@@ -71,6 +73,12 @@ export function Produits() {
 const nouveau = () => ({ title: '', description: '', details: '', price: '', compareAt: '', cost: '', source: 'local', status: 'active', collectionIds: [], tags: '', featured: false, images: [], options: { colors: [], sizes: [] }, variants: {}, stock: 0, sku: '', sold: 0,
   variantPrices: {}, wholesale: [], flash: null, sizeGuide: null, weight: '', dims: null, video: null, supplier: null });
 const lireFichier = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = ko; r.readAsDataURL(blob); });
+const media = ({ type, id, f, w, h }) => ({ type, id, f, w, h });
+/* Photo retouchée ⇄ photo d'origine : les deux restent sur la fiche, la description et la couleur suivent. */
+const basculerRetouche = (m) => {
+  const { orig, retouche, ...reste } = m;
+  return orig ? { ...reste, ...media(orig), retouche: media(m) } : { ...reste, ...media(retouche), orig: media(m) };
+};
 const MESSAGES_IA = {
   no_key: 'L’assistant n’est pas encore activé sur le serveur : console du serveur → sudo /opt/sokoyetu/ia.sh VOTRE_CLE',
   bad_key: 'La clé de l’assistant est refusée. Enregistrez-en une nouvelle avec ia.sh.',
@@ -95,6 +103,8 @@ function FormulaireProduit() {
   const [envois, setEnvois] = useState(0);
   const [occupe, setOccupe] = useState(false);
   const [ia, setIa] = useState({ occupe: false, message: '', erreur: false, rayon: '', indice: '' });
+  const [cadrage, setCadrage] = useState(() => Local.lire('cadrage-auto', true) !== false);
+  const [enRetouche, setEnRetouche] = useState(null);
   const [rayonLien, setRayonLien] = useState('');
   const [couleur, setCouleur] = useState({ nom: '', hex: NUANCIER[0] });
   const [tailleNouvelle, setTailleNouvelle] = useState('');
@@ -112,36 +122,67 @@ function FormulaireProduit() {
   const champ = (k) => (e) => { maj({ [k]: e.currentTarget.value }); if (erreurs[k]) setErreurs({ ...erreurs, [k]: '' }); };
   const cles = R.clesVariantes(f);
 
-  async function ajouterPhotos(fichiers, couleurPhoto) {
+  /* Cadre de l'article demandé à l'assistant (sauf s'il est déjà connu), puis photo recadrée et éclairée ; null si rien à faire. */
+  async function retoucher(fichier, cadreConnu) {
+    let cadre = cadreConnu;
+    if (cadre === undefined) { const a = await compresser(fichier, 1024, 0.8); cadre = (await cadreIA(await lireFichier(a.blob), a.blob.type, f.title)).cadre; }
+    return cadre ? cadrerPhoto(fichier, cadre) : null;
+  }
+
+  async function ajouterPhotos(fichiers, couleurPhoto, cadreConnu) {
     const l = [...fichiers].filter((x) => /^image\//.test(x.type)).slice(0, 10);
+    const auto = etatServeur.value.ia && cadrage;
     for (const fichier of l) {
       setEnvois((n) => n + 1);
       try {
         const c = await compresser(fichier, 1600, 0.82);
-        const m = await envoyerPhoto(c.blob);
-        setF((x) => ({ ...x, images: [...(x.images || []), { ...m, w: c.w, h: c.h, ...(couleurPhoto ? { color: couleurPhoto } : {}) }] }));
-        toast(`Photo ajoutée (${taille(c.avant)} → ${taille(c.apres)})`, { icone: 'image' });
+        const envoi = envoyerPhoto(c.blob);
+        let r = null;
+        if (auto) { try { r = await retoucher(fichier, cadreConnu); } catch (e) { r = null; } }
+        let m = { ...(await envoi), w: c.w, h: c.h };
+        if (r) m = { ...(await envoyerPhoto(r.blob)), w: r.w, h: r.h, orig: m };
+        setF((x) => ({ ...x, images: [...(x.images || []), { ...m, ...(couleurPhoto ? { color: couleurPhoto } : {}) }] }));
+        toast(r ? 'Photo cadrée et éclairée par l’assistant' : auto ? 'Photo ajoutée telle quelle (l’assistant n’a pas pu la cadrer)' : `Photo ajoutée (${taille(c.avant)} → ${taille(c.apres)})`, { icone: r ? 'ia' : 'image' });
       } catch (e) { gererErreur(e, 'Cette photo n’a pas pu être ajoutée'); }
       setEnvois((n) => n - 1);
     }
   }
 
+  /* Photo déjà sur la fiche (ajoutée avant le cadrage automatique) : l'assistant la cadre, l'originale reste disponible. */
+  async function retoucherExistante(i) {
+    const m0 = f.images[i]; if (!m0 || m0.type !== 'pb' || enRetouche) return;
+    setEnRetouche(m0);
+    try {
+      const rep = await fetch(urlFichierServeur(m0)); if (!rep.ok) throw new Error('photo');
+      const r = await retoucher(await rep.blob());
+      if (!r) toast('L’assistant n’a pas trouvé d’article à cadrer sur cette photo', { icone: 'alerte' });
+      else {
+        const m = { ...(await envoyerPhoto(r.blob)), w: r.w, h: r.h };
+        setF((x) => ({ ...x, images: x.images.map((y) => (y === m0 ? { ...y, ...m, orig: media(y) } : y)) }));
+        toast('Photo cadrée et éclairée par l’assistant', { icone: 'ia' });
+      }
+    } catch (e) { gererErreur(e, 'L’assistant n’a pas pu cadrer cette photo'); }
+    setEnRetouche(null);
+  }
+
   async function remplirIA(fichier) {
     if (!fichier || ia.occupe) return;
     setIa({ ...ia, occupe: true, message: '', erreur: false, rayon: '' });
+    let photoAjoutee = false;
     try {
       const c = await compresser(fichier, 1280, 0.85);
-      const envoi = ajouterPhotos([fichier]);
       const r = await ficheIA(await lireFichier(c.blob), c.blob.type, ia.indice);
       setF((x) => ({
         ...x, title: r.title || x.title, description: r.description || x.description, details: r.details || x.details, tags: r.tags || x.tags,
         options: { colors: x.options.colors.length ? x.options.colors : r.colors, sizes: x.options.sizes.length ? x.options.sizes : r.sizes },
         collectionIds: [...new Set([...(x.collectionIds || []), ...(r.collectionIds || [])])]
       }));
-      await envoi;
+      // Le cadre vient avec la fiche : un seul appel à l'assistant pour le texte et la photo.
+      photoAjoutee = true; await ajouterPhotos([fichier], undefined, r.cadre || null);
       if (r.alt) setF((x) => ({ ...x, images: x.images.map((m, i) => (i === x.images.length - 1 && !m.alt ? { ...m, alt: r.alt } : m)) }));
       setIa((s) => ({ ...s, occupe: false, erreur: false, rayon: r.collectionIds && r.collectionIds.length ? '' : r.newCollection, message: `Fiche remplie par l’assistant. Relisez-la, puis indiquez le prix${f.source === 'import' ? '' : ' et le stock'}.` }));
     } catch (e) {
+      if (!photoAjoutee) ajouterPhotos([fichier], undefined, null);
       setIa((s) => ({ ...s, occupe: false, erreur: true, message: MESSAGES_IA[e.code] || (e.status === 403 ? 'Session expirée : reconnectez-vous.' : 'L’assistant n’a pas répondu. Réessayez dans un instant.') }));
     }
   }
@@ -226,7 +267,13 @@ function FormulaireProduit() {
               {f.images.map((m, i) => (
                 <div key={(m.id || m.src || '') + i} class={classes('tuile-photo', i === 0 && 'principale')}>
                   <Photo m={m} alt={f.title} tailles="160px" />
+                  {enRetouche === m ? <span class="tp-retouche" role="status" aria-label="L’assistant cadre la photo"><span class="rouet" /></span> : null}
                   {i === 0 ? <span class="tp-badge">Principale</span> : <button class="tp-badge bouton" aria-label={`Mettre la photo ${i + 1} en premier`} onClick={() => { const l = [...f.images]; const [x] = l.splice(i, 1); l.unshift(x); maj({ images: l }); }}>En premier</button>}
+                  {m.orig || m.retouche ? (
+                    <button class={classes('btn-icone mini tp-ia', m.orig && 'retouchee')} aria-pressed={m.orig ? 'true' : 'false'} aria-label={`Retouche de l’assistant sur la photo ${i + 1}`} title={m.orig ? 'Retouchée : toucher pour revoir l’originale' : 'Originale : toucher pour reprendre la retouche'} onClick={() => maj({ images: f.images.map((x, j) => (j === i ? basculerRetouche(x) : x)) })}><Icone n="ia" /></button>
+                  ) : etatServeur.value.ia && m.type === 'pb' ? (
+                    <button class="btn-icone mini tp-ia" aria-label={`Cadrer la photo ${i + 1} avec l’assistant`} title="Cadrer avec l’assistant" disabled={!!enRetouche} onClick={() => retoucherExistante(i)}><Icone n="ia" /></button>
+                  ) : null}
                   <div class="tp-actions">
                     <button class="btn-icone mini" aria-label={`Décrire la photo ${i + 1}`} onClick={() => decrirePhoto(i)} title="Description"><Icone n="crayon" /></button>
                     <button class="btn-icone mini" aria-label={`Retirer la photo ${i + 1}`} onClick={() => maj({ images: f.images.filter((_, j) => j !== i) })}><Icone n="poubelle" /></button>
@@ -241,6 +288,7 @@ function FormulaireProduit() {
               {Array.from({ length: envois }, (_, i) => <div key={'e' + i} class="tuile-photo envoi"><span class="rouet" /></div>)}
               <label class="tuile-photo ajout"><Icone n="envoyer" /><span>Ajouter des photos</span><input type="file" accept="image/*" multiple hidden onChange={(e) => { const l = e.currentTarget.files; ajouterPhotos(l); e.currentTarget.value = ''; }} /></label>
             </div>
+            {etatServeur.value.ia ? <div class="espace-haut"><Bascule actif={cadrage} onClick={() => { Local.ecrire('cadrage-auto', !cadrage); setCadrage(!cadrage); }} libelle="Cadrage automatique par l’assistant" sous="L’article est centré en grand au format de la boutique, la lumière est corrigée. La photo d’origine reste disponible sur chaque photo." /></div> : null}
             <p class="champ-aide espace-haut">Les photos sont redimensionnées et compressées automatiquement. Présentez l’article seul, sur un fond clair. Associez une photo à une couleur : elle s’affiche quand le client choisit cette couleur.</p>
           </section>
 
