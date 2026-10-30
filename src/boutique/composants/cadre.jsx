@@ -4,7 +4,7 @@ import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Cabas } from '../../commun/js/logo.jsx';
 import { ouvrirFeuille } from '../../commun/js/interface.jsx';
-import { dollars, telephone, lienWhatsApp, classes } from '../../commun/js/outils.js';
+import { dollars, lienWhatsApp, classes } from '../../commun/js/outils.js';
 import { lien, route, retour, naviguer } from '../routeur.js';
 import { cfg, nbArticles, favoris, moyensPaiement } from '../etat.js';
 import { PuceOperateur } from './produits.jsx';
@@ -59,7 +59,7 @@ export function EnteteBoutique({ classe, accueil }) {
   return (
     <header class={classes('entete', defile && 'defile', accueil && 'sur-accueil', classe)}>
       <div class="entete-in conteneur">
-        <a href={lien('/')} class="entete-marque" aria-label={`${cfg.value.name}, accueil`}><Marque slogan /></a>
+        <a href={lien('/')} class="entete-marque"><Marque slogan /><span class="sr">, accueil</span></a>
         <nav class="entete-nav seulement-ordi" aria-label="Navigation principale">
           {lienNav('/', 'Accueil', nom === 'accueil')}{lienNav('/categories', 'Rayons', nom === 'rayons' || nom === 'rayon')}{lienNav('/nouveautes', 'Nouveautés', nom === 'nouveautes')}
         </nav>
@@ -205,6 +205,3 @@ export function ouvrirCommentCaMarche() {
     )
   });
 }
-
-export function lienWhatsAppBoutique(texte) { return lienWhatsApp(cfg.value.whatsapp, texte); }
-export const numeroWhatsApp = () => telephone(cfg.value.whatsapp);

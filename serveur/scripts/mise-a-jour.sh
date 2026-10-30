@@ -29,7 +29,8 @@ for d in pb_hooks pb_migrations pb_admin; do rm -rf "${DIR:?}/$d"; cp -r "$T/s/$
 [ -d "$DIR/pb_public/.well-known" ] && mv "$DIR/pb_public/.well-known" "$T/wk"
 rm -rf "${DIR:?}/pb_public"; cp -r "$T/s/pb_public" "$DIR/pb_public"
 [ -d "$T/wk" ] && mv "$T/wk" "$DIR/pb_public/.well-known"
-for f in mise-a-jour.sh mot-de-passe.sh android.sh ia.sh paiement.sh codes.sh service.sh; do [ -f "$T/s/$f" ] && cp "$T/s/$f" "$DIR/$f" && chmod 700 "$DIR/$f"; done
+# Scripts d'entretien (y compris celui-ci, en cours d'exécution : remplacé par renommage, jamais réécrit sur place)
+for f in "$T"/s/*.sh; do n=$(basename "$f"); [ "$n" = installer.sh ] && continue; install -m 700 "$f" "$DIR/.$n.nouveau" && mv -f "$DIR/.$n.nouveau" "$DIR/$n"; done
 cp "$T/s/LISEZMOI.md" "$DIR/LISEZMOI.md" 2>/dev/null || true
 echo "$PAQUET" > "$DIR/.paquet"
 chown -R sokoyetu:sokoyetu "$DIR"

@@ -4,11 +4,16 @@
 //   npm run build && bash outils/serveur-local.sh   (autre terminal, catalogue d'exemple chargé)   puis   node tests/comptes.mjs
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 const BASE = process.env.BASE || 'http://localhost:8090';
 const ADMIN = process.env.ADMIN || 'http://admin.localhost:8090';
-const SORTIE = process.env.SORTIE || '/tmp/claude-0/captures/';
+// Captures d'écran : dossier temporaire du système, ou SORTIE=… pour un autre dossier.
+const SORTIE = process.env.SORTIE || join(tmpdir(), 'sokoyetu-captures') + '/';
+mkdirSync(SORTIE, { recursive: true });
 const TEL = process.env.TEL || '0995' + String(Date.now()).slice(-6);
 const erreurs = [];
 const etape = (t) => console.log('✓ ' + t);

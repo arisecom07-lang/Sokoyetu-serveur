@@ -8,7 +8,7 @@ import { dollars, pluriel, uid, classes, normaliser, slug } from '../../commun/j
 import { aller } from '../routeur.js';
 import { rayons, etatServeur, sauver, lireFournisseur, copierPhoto, gererErreur } from '../etat.js';
 import { TetePage } from '../composants/cadre.jsx';
-import { MESSAGES_IMPORT, MAX_PHOTOS_IMPORT, prixFournisseur } from './produits-plus.jsx';
+import { MESSAGES_IMPORT, IA_IMPORT, MAX_PHOTOS_IMPORT, prixFournisseur } from './produits-plus.jsx';
 
 const MAX_LIGNES = 300;
 const MAX_LIENS = 30;
@@ -190,7 +190,7 @@ export function ImportProduits() {
           variantPrices: {}, wholesale: [], flash: null, sizeGuide: null, weight: 0, dims: null, video: null,
           supplier: { url: r.url, price: R.arrondi(r.price), currency: r.currency || '' }
         };
-        const alertes = [!r.fiche ? 'titre à traduire' : '', !cout ? 'prix à indiquer' : '', !r.images.length ? 'aucune photo' : ''].filter(Boolean);
+        const alertes = [!r.fiche ? (ia && avecIA && IA_IMPORT[r.ia] ? `titre à traduire (${IA_IMPORT[r.ia]})` : 'titre à traduire') : '', !cout ? 'prix à indiquer' : '', !r.images.length ? 'aucune photo' : ''].filter(Boolean);
         out.push({ doc, photos: r.images.slice(0, MAX_PHOTOS_IMPORT), rayons: fi.newCollection && !(fi.collectionIds || []).length ? [fi.newCollection] : [], alertes, choisi: true, etat: '', alt: fi.alt || '' });
       } catch (e) {
         if (e.status === 401) { gererErreur(e); setTravail(null); return; }

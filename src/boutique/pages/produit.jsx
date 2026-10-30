@@ -5,10 +5,10 @@ import { Icone } from '../../commun/js/icones.jsx';
 import { Photo, urlMedia } from '../../commun/js/medias.jsx';
 import { toast, Quantite, Note, ouvrirFeuille } from '../../commun/js/interface.jsx';
 import { dollars, francs, pluriel, copier, classes, date, JOUR } from '../../commun/js/outils.js';
-import { lien, route, retour, naviguer } from '../routeur.js';
-import { cfg, produitsParId, produits, catalogueAJour, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement, panier } from '../etat.js';
+import { lien, route, retour } from '../routeur.js';
+import { cfg, produitsParId, produits, catalogueAJour, catalogueErreur, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement, panier } from '../etat.js';
 import { EnteteBoutique, BarreAction, Pied, ouvrirLivraisonPaiement } from '../composants/cadre.jsx';
-import { BoutonFavori, CompteARebours, GrilleProduits, delai, epuise, lienProduit, lienRayon, nomRayon, PuceOperateur, trier } from '../composants/produits.jsx';
+import { BoutonFavori, CompteARebours, ErreurCatalogue, GrilleProduits, delai, epuise, lienProduit, lienRayon, nomRayon, PuceOperateur, trier } from '../composants/produits.jsx';
 import { mesurerEvenement } from '../mesure.js';
 import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
@@ -193,6 +193,7 @@ export function Produit() {
 
   if (!p) {
     if (catalogueAJour.value) return <Introuvable texte="Cet article n’est plus en vente, ou le lien est incomplet." />;
+    if (catalogueErreur.value) return <><EnteteBoutique classe="seulement-ordi" /><main id="contenu" class="page conteneur"><ErreurCatalogue /></main></>;
     return <><EnteteBoutique classe="seulement-ordi" /><main id="contenu" class="page conteneur"><div class="produit-grille"><div class="squelette" style={{ aspectRatio: '4 / 5' }} /><div class="pile"><div class="squelette" style={{ height: 34, width: '40%' }} /><div class="squelette" style={{ height: 22, width: '80%' }} /></div></div></main></>;
   }
 
@@ -307,5 +308,3 @@ export function Produit() {
     </>
   );
 }
-
-export const voirProduit = (p) => naviguer(lienProduit(p).replace(/^#/, ''));

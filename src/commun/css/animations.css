@@ -1,0 +1,52 @@
+/* Sokoyetu — mouvements : courbes, transitions entre pages, retours après un geste. Importé en tête de base.css.
+   Règles : seulement transform et opacity (fluide sur les petits téléphones), entrées amorties, sorties courtes.
+   Quand le téléphone demande moins d'animations, la règle globale de base.css arrête tout. */
+
+:root {
+  --part: cubic-bezier(.4, 0, 1, 1);              /* sortie : accélère puis disparaît */
+  --ressort-doux: cubic-bezier(.3, 1.3, .5, 1);   /* léger rebond : fenêtres, messages, boutons qui apparaissent */
+}
+
+/* ---------- Transitions entre pages (navigateurs récents) ----------
+   L'ancienne page s'efface vite, la nouvelle glisse du côté où l'on va : pas de double image.
+   Le sens (avant / arrière) est posé sur <html data-sens> par src/boutique/animations.js. */
+::view-transition-old(root) { animation: vt-sort 130ms var(--part) both; }
+::view-transition-new(root) { animation: vt-entre 260ms var(--sortie) 80ms both; }
+:root[data-sens="avant"]::view-transition-old(root) { animation-name: vt-sort-g; }
+:root[data-sens="avant"]::view-transition-new(root) { animation-name: vt-entre-d; animation-duration: 300ms; }
+:root[data-sens="arriere"]::view-transition-old(root) { animation-name: vt-sort-d; }
+:root[data-sens="arriere"]::view-transition-new(root) { animation-name: vt-entre-g; animation-duration: 300ms; }
+::view-transition-group(photo-produit) { animation-duration: 380ms; animation-timing-function: var(--sortie); }
+/* La barre d'onglets du bas ne bouge pas d'une page à l'autre ; seul l'onglet actif change. */
+.nav-bas { view-transition-name: nav-bas; }
+::view-transition-group(nav-bas) { animation-duration: 200ms; }
+@keyframes vt-sort { to { opacity: 0; } }
+@keyframes vt-entre { from { opacity: 0; } }
+@keyframes vt-sort-g { to { opacity: 0; transform: translateX(-14px); } }
+@keyframes vt-sort-d { to { opacity: 0; transform: translateX(14px); } }
+@keyframes vt-entre-d { from { opacity: 0; transform: translateX(28px); } }
+@keyframes vt-entre-g { from { opacity: 0; transform: translateX(-28px); } }
+
+/* ---------- Panier : l'icône « reçoit » l'article, la pastille rebondit ---------- */
+[data-cible-panier].recoit .ic { animation: recoit 480ms var(--sortie); }
+@keyframes recoit { 0% { transform: none; } 28% { transform: scale(.8) rotate(-8deg); } 62% { transform: scale(1.14) rotate(5deg); } 100% { transform: none; } }
+
+/* Bouton « Panier (n) » qui apparaît à côté de « Ajouter au panier » */
+.barre-action-in > a.btn-secondaire[href$="panier"] { animation: bouton-entre 340ms var(--ressort-doux) both; }
+@keyframes bouton-entre { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+
+/* ---------- Listes : une ligne nouvelle (commande reçue en direct, recherche) entre en douceur, en cascade au chargement ---------- */
+.liste > .ligne { animation: apparait var(--moyen) var(--sortie) both; }
+.liste > .ligne:nth-child(2) { animation-delay: 30ms; }
+.liste > .ligne:nth-child(3) { animation-delay: 60ms; }
+.liste > .ligne:nth-child(4) { animation-delay: 90ms; }
+.liste > .ligne:nth-child(5) { animation-delay: 120ms; }
+.liste > .ligne:nth-child(6) { animation-delay: 150ms; }
+.liste > .ligne:nth-child(n+7) { animation-delay: 180ms; }
+
+/* ---------- Volets dépliants (<details>) : ouverture et fermeture en douceur là où le navigateur sait le faire ---------- */
+@supports selector(::details-content) {
+  details { interpolate-size: allow-keywords; }
+  details::details-content { block-size: 0; overflow: clip; transition: block-size var(--moyen) var(--sortie), content-visibility var(--moyen) allow-discrete; }
+  details[open]::details-content { block-size: auto; }
+}

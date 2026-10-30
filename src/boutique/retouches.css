@@ -1,0 +1,56 @@
+/*
+ * Sokoyetu — retouches du design choisies par messir dans l'Atelier (plan de travail), 2026-10-28, puis ajustées pour la lisibilité.
+ * Idée : pages plus compactes, cases teintées, titres de cartes en pastilles, reçu plus sobre. Les coins plus ronds sont dans jetons.css.
+ * Toutes les couleurs passent par les jetons : le thème sombre suit tout seul.
+ * Ce fichier est importé avant les règles de boutique.css, d'où les !important.
+ */
+
+/* ---------- Accueil ---------- */
+/* Cases « Vous choisissez / Vous payez… » plus compactes */
+.etapes-import { grid-template-columns: repeat(4, minmax(190px, 1fr)) !important; gap: var(--e2) !important; }
+.etapes-import li { padding: 11px 12px !important; gap: 10px !important; }
+.etapes-import b { font-size: 13px !important; }
+.etapes-import p { font-size: 12.5px !important; line-height: 1.35 !important; }
+
+/* Rayons : photos rondes plus petites, noms un peu plus fins */
+.rr-photo { width: 70px !important; height: 70px !important; }
+.rayon-rond { width: 82px !important; }
+.rayon-rond b { font-size: 13px !important; }
+@media (min-width: 900px) {
+  .rr-photo { width: 96px !important; height: 96px !important; }
+  .rayon-rond { width: 110px !important; }
+}
+
+/* Bannière : slogan un cran plus petit */
+.heros-slogan { font-size: clamp(15px, 4.1vw, 20px) !important; }
+
+/* ---------- Choix du compte (avant la commande) ---------- */
+.invitation-compte { background: var(--marque-doux) !important; border-color: var(--marque-doux-2) !important; }
+.invitation-compte h2.titre-serif { font-size: 22px !important; text-align: center; }
+.invitation-compte p.attenue { text-align: center; max-width: 36ch; margin-left: auto !important; margin-right: auto !important; }
+.invitation-compte .btn-secondaire { background: var(--marque) !important; color: var(--sur-ebene) !important; border-color: var(--marque) !important; }
+
+/* ---------- Commande ---------- */
+.page-commande .commande-tete { padding-bottom: var(--e3) !important; gap: var(--e3) !important; }
+.page-commande .pile-l > section.carte { background: var(--surface-2) !important; }
+/* Titres des cartes en pastille claire sur la case teintée */
+.page-commande .carte-titre { background: var(--surface); border-radius: var(--r-rond); padding: 6px 14px 6px 6px; font-weight: 750 !important; width: fit-content; max-width: 100%; box-shadow: var(--ombre-1); }
+.page-commande .carte-titre .fin { margin-left: var(--e3) !important; }
+.page-commande .champ-libelle { font-weight: 720 !important; }
+/* Note « Mode test » retirée de la commande (le paiement de test reste expliqué sur l'écran d'attente) */
+.page-commande .pile-l > .note.ton-info { display: none !important; }
+
+/* ---------- Reçu (après le paiement) ---------- */
+.merci-tete { padding-top: var(--e6) !important; }
+.merci-tete h1.titre-serif { font-size: 24px !important; }
+.merci-tete p.attenue { font-size: 14px !important; }
+.merci-coche { background: var(--ebene) !important; color: var(--sur-ebene) !important; box-shadow: 0 0 0 10px var(--marque-doux) !important; }
+.merci-coche .ic { --ic: 48px; }
+
+.recu { background: var(--surface-2) !important; padding: var(--e6) !important; }
+.recu .marque-slogan { font-size: max(9.5px, .32em) !important; font-weight: 600 !important; }
+.recu .recu-numero { background: var(--surface) !important; }
+.recu .recu-numero b { font-size: 23px !important; font-weight: 800 !important; }
+.recu .recap-articles { background: var(--surface); border-radius: var(--r-m); padding: 10px 12px; }
+.recu .recu-cachet b { color: var(--encre) !important; }
+.recu .recu-pied b { color: var(--encre) !important; }

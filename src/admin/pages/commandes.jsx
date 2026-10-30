@@ -3,9 +3,9 @@ import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
-import { LogoOperateur, Note, Vide, Pastille, toast, confirmer } from '../../commun/js/interface.jsx';
-import { dollars, dateHeure, ilya, pluriel, telephone, lienWhatsApp, lienAppel, copier, classes, normaliser, date } from '../../commun/js/outils.js';
-import { lien, route, aller } from '../routeur.js';
+import { LogoOperateur, Note, Vide, Pastille, toast, confirmer, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
+import { dollars, dateHeure, pluriel, telephone, lienWhatsApp, lienAppel, copier, classes, normaliser } from '../../commun/js/outils.js';
+import { lien, route } from '../routeur.js';
 import { cfg, commandes, produitsParId, pret, etapeCommande, gererErreur } from '../etat.js';
 import { TetePage, adresseBoutique } from '../composants/cadre.jsx';
 import { LigneCommandeCourte, Chargement } from './accueil.jsx';
@@ -24,8 +24,9 @@ export function statutPreparation(o) {
   const r = R.estRetraitCmd(o);
   return ({ unfulfilled: { label: 'À préparer', ton: 'neutre' }, preparing: { label: 'En préparation', ton: 'info' }, shipped: { label: r ? 'Prête au retrait' : 'En route', ton: 'info' }, delivered: { label: r ? 'Retirée' : 'Livrée', ton: 'ok' } })[o.fulfillment || 'unfulfilled'] || null;
 }
-// Commande payée avec une remarque du serveur (paiement arrivé après l'annulation automatique…), pas encore préparée.
-export const avecPoints = (o) => o.status === 'open' && R.estPayee(o) && Array.isArray(o.issues) && o.issues.length > 0 && (!o.fulfillment || o.fulfillment === 'unfulfilled');
+// Commande payée avec une remarque du serveur (paiement arrivé après l'annulation automatique…), pas encore préparée ;
+// ou client qui a payé deux fois, à rembourser quelle que soit l'étape de la commande.
+export const avecPoints = (o) => R.doublonARembourser(o) || (o.status === 'open' && R.estPayee(o) && Array.isArray(o.issues) && o.issues.length > 0 && (!o.fulfillment || o.fulfillment === 'unfulfilled'));
 
 const FILTRES = [
   ['toutes', 'Toutes', () => true], ['points', 'Points à vérifier', avecPoints], ['preparer', 'À préparer', R.aPreparer],
@@ -43,6 +44,7 @@ export function Commandes() {
   const mots = normaliser(q).split(/\s+/).filter(Boolean);
   const liste = os.filter(fn).filter((o) => !mots.length || mots.every((m) => normaliser([o.number, o.customer && o.customer.name, o.phone, o.customer && o.customer.phone, o.payment && o.payment.phone, o.payment && o.payment.reference, o.payment && o.payment.ref].join(' ')).includes(m)));
   const aTraiter = os.filter(R.aTraiter).length;
+  const page = useParPage(liste, 50, filtre + '|' + q);
   return (
     <>
       <TetePage titre="Commandes" sous={`${pluriel(os.length, 'commande')}${aTraiter ? ` · ${aTraiter} à traiter` : ''}`}
@@ -53,7 +55,7 @@ export function Commandes() {
           {FILTRES.map(([k, t, f]) => { const n = os.filter(f).length; if (k === 'points' && !n) return null; return <button key={k} class="puce" aria-pressed={filtre === k ? 'true' : 'false'} onClick={() => setFiltre(k)}>{t}{k !== 'toutes' && n ? <span class="n">{n}</span> : null}</button>; })}
         </div>
       </div>
-      {!pret.value ? <Chargement /> : liste.length ? <div class="liste">{liste.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div>
+      {!pret.value ? <Chargement /> : liste.length ? <><div class="liste">{page.visibles.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div><AfficherPlus page={page} total={liste.length} libelle="commande" /></>
         : <div class="carte"><Vide icone="recu" titre={os.length ? 'Aucune commande ici' : 'Pas encore de commande'} texte={os.length ? 'Changez de filtre ou de recherche.' : 'Les commandes de la boutique arrivent ici en direct, avec une alerte dès que le client a payé.'}>{os.length ? null : <a class="btn btn-primaire" href={adresseBoutique('/')} target="_blank" rel="noopener">Passer une commande test</a>}</Vide></div>}
     </>
   );
@@ -79,17 +81,21 @@ export function Commande() {
   if (!pret.value) return <Chargement />;
   if (!o) return <><TetePage titre="Commande" parent="/commandes" /><div class="carte"><Vide icone="recu" titre="Commande introuvable" texte="Elle a peut-être été effacée." /></div></>;
   const sp = statutPaiement(o), sf = statutPreparation(o); const retrait = R.estRetraitCmd(o);
-  const m = R.margeCommande(o); const points = R.incoherences(o);
+  const m = R.margeCommande(o);
+  // Le double paiement a son propre encadré (avec le bouton « remboursé ») : pas répété dans les points à vérifier.
+  const points = R.incoherences(o).filter((p) => String(p).indexOf(R.TEXTE_DOUBLON) !== 0);
+  const doubles = R.doublonARembourser(o) ? o.payment.duplicates : [];
   const nb = commandes.value.filter((x) => x.phone && x.phone === o.phone).length;
   // Pas de message au client tant que la commande n'est pas payée : le paiement se fait seul, dans la boutique.
   const wa = R.estPayee(o) || o.payment.status === 'refunded' ? lienWhatsApp(o.customer && o.customer.phone, messageClient(o)) : '';
   const agir = async (action, extra) => {
     if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: R.estPayee(o) ? 'Les articles retournent en stock. Le client a payé : remboursez-le sur son numéro Mobile Money, puis notez-le ici.' : 'Les articles retournent en stock. Si le client valide le paiement malgré tout, la commande se rouvrira avec un point à vérifier.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
+    if (action === 'doublon' && !(await confirmer({ titre: 'Le client a bien été remboursé ?', texte: `Confirmez seulement après lui avoir renvoyé ${doubles.length > 1 ? `${doubles.length} × ` : ''}${dollars(o.total)} sur son numéro ${o.payment.label}${o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}. La commande, elle, reste payée.`, ok: 'Oui, c’est remboursé', annuler: 'Retour' }))) return;
     if (action === 'paid' && !(await confirmer({ titre: 'Marquer comme payée à la main ?', texte: `Seulement si vous avez reçu ${dollars(o.total)} en dehors de l’application : vérifiez d’abord dans votre compte ${o.payment.label}. D’habitude, la commande se confirme toute seule dès que l’opérateur valide le paiement.`, ok: 'Oui, j’ai reçu l’argent', annuler: 'Retour' }))) return;
     setOccupe(action);
     try {
       await etapeCommande(o.id, action, extra);
-      toast({ paid: 'Paiement confirmé', preparing: 'Préparation commencée', shipped: retrait ? 'Prête au retrait' : 'Marquée comme expédiée', delivered: retrait ? 'Marquée comme retirée' : 'Marquée comme livrée', cancel: 'Commande annulée', reopen: 'Commande rouverte', refund: 'Remboursement noté', note: 'Note enregistrée' }[action]);
+      toast({ paid: 'Paiement confirmé', preparing: 'Préparation commencée', shipped: retrait ? 'Prête au retrait' : 'Marquée comme expédiée', delivered: retrait ? 'Marquée comme retirée' : 'Marquée comme livrée', cancel: 'Commande annulée', reopen: 'Commande rouverte', refund: 'Remboursement noté', doublon: 'Remboursement du double paiement noté', note: 'Note enregistrée' }[action]);
       if (action === 'note') setNote(null);
     } catch (e) { gererErreur(e); }
     setOccupe('');
@@ -120,6 +126,14 @@ export function Commande() {
         actions={<div class="rangee"><Pastille ton={sp.ton} point>{sp.label}</Pastille>{sf && R.estPayee(o) ? <Pastille ton={sf.ton}>{sf.label}</Pastille> : null}</div>} />
       <div class="detail-grille">
         <div class="pile-l">
+          {doubles.length ? (
+            <Note ton="danger" icone="portefeuille">
+              <b>Paiement reçu {doubles.length > 1 ? `${doubles.length + 1} fois` : 'deux fois'}</b>
+              <p>Le client a validé {doubles.length > 1 ? 'plusieurs paiements' : 'un deuxième paiement'} pour cette commande. Renvoyez-lui {doubles.length > 1 ? `${doubles.length} × ` : ''}<b>{dollars(o.total)}</b> sur son numéro {o.payment.label}{o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}, puis confirmez ici.</p>
+              <ul class="points">{doubles.map((d, i) => <li key={i}>Référence <span class="code">{d.reference || d.id}</span>{d.at ? ` · ${dateHeure(d.at)}` : ''}</li>)}</ul>
+              <div class="rangee-l espace-haut">{bouton('doublon', 'coche', 'Double paiement remboursé', false)}</div>
+            </Note>
+          ) : null}
           {points.length && o.status !== 'cancelled' ? <Note ton="danger" icone="alerte"><b>Points à vérifier</b><ul class="points">{points.map((p, i) => <li key={i}>{p}</li>)}</ul></Note> : null}
           <section class="carte">
             <h2 class="carte-titre"><Icone n="drapeau" />Prochaine étape</h2>
@@ -198,5 +212,3 @@ export function Commande() {
     </>
   );
 }
-
-export const ouvrirCommande = (id) => aller('/commandes/' + id);

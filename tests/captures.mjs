@@ -2,11 +2,14 @@
 //   node tests/captures.mjs [boutique|admin|tout] [clair|sombre]
 import { createRequire } from 'node:module';
 import { mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 const BASE = process.env.BASE || 'http://localhost:8090';
 const ADMIN = process.env.ADMIN || 'http://admin.localhost:8090';
-const SORTIE = process.env.SORTIE || '/tmp/claude-0/-home-user/4c9af478-9b7a-59ef-9660-b9b31e63d534/scratchpad/captures/';
+// Captures d'écran : dossier temporaire du système, ou SORTIE=… pour un autre dossier.
+const SORTIE = process.env.SORTIE || join(tmpdir(), 'sokoyetu-captures') + '/';
 const quoi = process.argv[2] || 'boutique';
 const theme = process.argv[3] || 'clair';
 await mkdir(SORTIE, { recursive: true });

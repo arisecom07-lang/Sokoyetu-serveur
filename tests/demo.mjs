@@ -2,9 +2,14 @@
 //   (cd dist/demo && python3 -m http.server 8095)   puis   node tests/demo.mjs
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const { chromium } = createRequire(import.meta.url)('playwright');
 const BASE = process.env.BASE || 'http://127.0.0.1:8095';
-const SORTIE = process.env.SORTIE || '/tmp/claude-0/-home-user/4c9af478-9b7a-59ef-9660-b9b31e63d534/scratchpad/captures/';
+// Captures d'écran : dossier temporaire du système, ou SORTIE=… pour un autre dossier.
+const SORTIE = process.env.SORTIE || join(tmpdir(), 'sokoyetu-captures') + '/';
+mkdirSync(SORTIE, { recursive: true });
 const erreurs = [];
 const etape = (t) => console.log('✓ ' + t);
 const b = await chromium.launch();

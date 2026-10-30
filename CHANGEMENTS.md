@@ -1,3 +1,34 @@
+# Sokoyetu 2.3 — un site solide : coupures, erreurs, double paiement, surveillance et sauvegardes (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Plus jamais d'écran blanc ni de chargement sans fin.** Si une page plante, un écran clair propose « Recharger la page » (panier et commandes gardés) et l'erreur vous est signalée automatiquement. Connexion très lente au démarrage : au bout de 15 secondes, un message et « Réessayer ». Catalogue ou administration qui ne se chargent pas : message, bouton « Réessayer », et nouvel essai tout seul quand la connexion revient. Une coupure ne vide jamais une liste : les données déjà affichées restent.
+- **Un seul paiement, une seule commande.** Toucher deux fois « Payer » ou « Renvoyer la demande » ne fait rien de plus. Si un client paie deux fois la même commande, l'administration l'annonce aussitôt (« Commande payée deux fois : remboursez le client »), la commande apparaît dans **Points à vérifier** avec le montant à renvoyer, et le bouton **Double paiement remboursé** le note une fois fait.
+- **Plus → Santé et journal** (nouveau) : état du serveur, sauvegarde de la nuit et sa vérification, paiement, assistant IA (appels du jour), erreurs des 30 derniers jours (serveur, boutique, administration) avec « Copier le détail ». Un problème grave s'affiche aussi en haut du tableau de bord.
+- **Être prévenu si le site tombe** : avec un compte gratuit Healthchecks.io et `sudo /opt/sokoyetu/alerte.sh https://hc-ping.com/VOTRE-ID`, vous recevez un e-mail ou un message Telegram si le serveur s'arrête, si une sauvegarde manque ou ne se restaure pas, si le paiement ne répond plus depuis 15 minutes, ou en cas de série d'erreurs.
+- **Sauvegardes vérifiées chaque dimanche** (restaurées à part, base contrôlée). `sauvegarde.sh` : `liste`, `maintenant`, `verifier`, `restaurer` (voir LISEZMOI, section 9).
+- **Dépenses de l'assistant IA plafonnées** : 150 appels par jour au plus (`ia.sh plafond 200` pour changer). Fixez aussi une limite mensuelle sur console.anthropic.com. Crédit épuisé ou limite atteinte : message clair au lieu d'une erreur.
+- **Plus rapide quand beaucoup de visiteurs arrivent ensemble** (après une publicité, un message WhatsApp groupé) : le catalogue est préparé une fois et servi à tous. Essai : 80 visiteurs en même temps, du catalogue au paiement confirmé, sans une erreur ; 25 clients sur le dernier exemplaire : un seul l'obtient.
+- **Longues listes en pages** dans l'administration (commandes, clients, produits, historique, journal : 50 lignes puis « Afficher plus »).
+- Messages en français pour tous les refus du serveur (envoi trop lourd, trop de demandes…). Photos de 10 Mo au plus.
+- Accessibilité : le slogan du pied de page est lisible en thème sombre ; le lien d'accueil annonce ce qui est écrit.
+- Aussi dans cette version : le **design de l'Atelier** (coins plus arrondis, retouches de l'accueil, du choix du compte, de la commande et du reçu), des **animations plus fluides** (pages, fenêtres, messages, panier) et les **photos cadrées par l'assistant** (ci-dessous).
+
+## À faire une fois sur le serveur (facultatif mais recommandé)
+
+1. `sudo /opt/sokoyetu/mise-a-jour.sh` (installe aussi la vérification des sauvegardes du dimanche).
+2. Brancher l'alerte : `sudo /opt/sokoyetu/alerte.sh https://hc-ping.com/VOTRE-ID`, puis `sudo /opt/sokoyetu/alerte.sh test`.
+3. Si l'assistant IA est activé : limite de dépense mensuelle sur console.anthropic.com (Settings → Limits).
+
+## Détails techniques
+
+- Migration `1793500000_sokoyetu_robustesse.js` : index `idx_orders_token` (unique partiel), `idx_orders_created`, `idx_orders_updated`, `idx_products_active` ; table `sokoyetu_compteurs` (compteurs du jour) ; limites des routes erreur, santé, journal, pages `/p/` `/c/` et photos `/api/files/` ; journal 30 jours au niveau avertissement ; alerte e-mail « nouvel appareil » coupée tant qu'aucun SMTP n'est réglé.
+- Serveur : `lib/journal.js` (signalement, lecture, santé, veille), `S.trace`, limites de taille par route, disjoncteur FlexPay, `paidId` / `duplicates` / action `doublon`, verrou de relance, tournée des paiements unique, catalogue en mémoire (`catalogueChange`), gzip retiré des médias et des lectures `Range`, plafond IA (`quota`, `daily_limit`, `no_credit`).
+- Navigateur : `erreurs.jsx` (`Garde`, `signalerErreur`, `surveillerErreurs`), `requete` (GET retentés, envois jamais), `useParPage` / `AfficherPlus`, page `#/journal`, `demarrer` / `erreurChargement` dans l'admin, verrous synchrones sur « Payer » et « Renvoyer la demande », service workers sans `Range` ni vidéos.
+- Scripts : `sauvegarde.sh`, `alerte.sh`, `ia.sh plafond`, minuterie `sokoyetu-sauvegarde` (service.sh). Tests : `tests/charge.mjs`, `tests/sauvegarde.mjs`, nouveaux cas dans `tests/serveur.test.mjs` (double appui, double paiement, relance simultanée, surveillance, limites).
+
+---
+
 # Sokoyetu — photos produits cadrées par l'assistant IA (octobre 2026)
 
 ## Ce qui change pour vous

@@ -24,8 +24,11 @@ export const MESSAGES_IMPORT = {
   bad_url: 'Collez le lien d’une page produit : 1688, Alibaba, AliExpress, Taobao, Tmall, Temu, Shein, Made-in-China ou DHgate.',
   blocked: 'Le site du fournisseur n’a pas laissé lire cette page (connexion ou vérification demandée). Enregistrez ses photos sur le téléphone, puis utilisez « Choisir une photo » de l’assistant.',
   network: 'Le site du fournisseur ne répond pas. Réessayez dans un instant.', limite: 'Trop de demandes pour le moment. Réessayez dans une minute.',
-  reseau: 'Pas de connexion internet. Réessayez une fois reconnecté.'
+  reseau: 'Pas de connexion internet. Réessayez une fois reconnecté.', too_big: 'Photo trop lourde : 10 Mo au plus.',
+  not_image: 'Ce lien ne mène pas à une photo (JPEG, PNG ou WebP).'
 };
+/* Pourquoi l'assistant n'a pas rédigé la fiche pendant un import (la page, elle, a bien été lue). */
+export const IA_IMPORT = { daily_limit: 'limite du jour de l’assistant atteinte', no_credit: 'crédit de l’assistant épuisé', bad_key: 'clé de l’assistant refusée', no_key: 'assistant non activé' };
 
 /* Lit la page, copie les photos dans la boutique et renvoie ce qu'il faut ajouter à la fiche. */
 export async function importerLien(url, { ia, hint, auPasse } = {}) {
@@ -44,7 +47,7 @@ export async function importerLien(url, { ia, hint, auPasse } = {}) {
       source: 'import', supplier: { url: r.url, price: R.arrondi(r.price), currency: r.currency || '' }
     },
     nouveauRayon: fi && !(fi.collectionIds || []).length ? fi.newCollection : '',
-    sansIA: !fi
+    sansIA: !fi, iaErreur: (!fi && ia && IA_IMPORT[r.ia]) || ''
   };
 }
 
@@ -69,7 +72,7 @@ export function CarteLien({ setF, onRayon }) {
       });
       if (r.nouveauRayon) onRayon(r.nouveauRayon);
       const pf = prixFournisseur(r.champs.supplier);
-      setEtat({ occupe: false, erreur: false, photos: 0, message: `${r.images.length ? `${r.images.length} photo${r.images.length > 1 ? 's' : ''} ajoutée${r.images.length > 1 ? 's' : ''}` : 'Aucune photo trouvée'}${pf ? `, prix fournisseur ${pf}` : ''}. ${r.sansIA ? 'Traduisez le titre et complétez la fiche' : 'Fiche rédigée par l’assistant : relisez-la'}, puis indiquez votre prix de vente.` });
+      setEtat({ occupe: false, erreur: false, photos: 0, message: `${r.images.length ? `${r.images.length} photo${r.images.length > 1 ? 's' : ''} ajoutée${r.images.length > 1 ? 's' : ''}` : 'Aucune photo trouvée'}${pf ? `, prix fournisseur ${pf}` : ''}. ${r.sansIA ? `${r.iaErreur ? `Fiche non rédigée (${r.iaErreur}) : traduisez` : 'Traduisez'} le titre et complétez la fiche` : 'Fiche rédigée par l’assistant : relisez-la'}, puis indiquez votre prix de vente.` });
       setUrl('');
     } catch (e) {
       if (e.status === 401) { gererErreur(e); return; }

@@ -8,7 +8,7 @@ import { Local } from '../../commun/js/stockage.js';
 import { DEMO } from '../../commun/js/api.js';
 import { dollars, date, debutJour, JOUR, pluriel, ilya, classes } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, paiementServeur, lireAudience } from '../etat.js';
+import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, erreurChargement, demarrer, paiementServeur, sante, lireAudience } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
 import { statutPaiement, statutPreparation, avecPoints } from './commandes.jsx';
@@ -85,7 +85,8 @@ function etapesDemarrage(c) {
     { texte: 'Vérifier les zones et frais de livraison', fait: !!(c.setup && c.setup.livraison), href: '/reglages/livraison' },
     { texte: 'Ajouter le numéro WhatsApp de la boutique', fait: !!R.chiffres(c.whatsapp), href: '/reglages/general' },
     { texte: 'Compléter les informations légales (RCCM, adresse)', fait: !!(c.legal && c.legal.company && c.legal.address && (c.legal.rccm || c.legal.idnat)), href: '/reglages/legal' },
-    { texte: 'Passer une commande test', fait: commandes.value.some(R.estPayee), href: null }
+    { texte: 'Passer une commande test', fait: commandes.value.some(R.estPayee), href: null },
+    { texte: 'Être prévenu si le site tombe (alerte)', fait: !!(sante.value && sante.value.details && sante.value.details.alerte && sante.value.details.alerte.configuree), href: '/journal' }
   ];
 }
 
@@ -93,6 +94,7 @@ export function Tableau() {
   const c = cfg.value; const os = commandes.value;
   const [periode, setPeriode] = useState(Local.lire('periode', 7));
   const changer = (p) => { setPeriode(p); Local.ecrire('periode', p); };
+  if (!pret.value) return <Chargement />;
   const maintenant = Date.now(); const auj = debutJour(maintenant);
   const debut = auj - (periode - 1) * JOUR; const fin = auj + JOUR;
   const st = statistiques(os, debut, fin); const avant = statistiques(os, debut - periode * JOUR, debut);
@@ -111,6 +113,7 @@ export function Tableau() {
   const h = new Date().getHours();
   const lib = { 1: 'aujourd’hui', 7: 'sur 7 jours', 30: 'sur 30 jours' }[periode];
   const evV = evolution(st.ventes, avant.ventes);
+  const graves = ((sante.value && sante.value.details && sante.value.details.problemes) || []).filter((x) => x.grave);
 
   return (
     <>
@@ -119,6 +122,7 @@ export function Tableau() {
       <div class="pile-l">
         {!p.pret ? <Note ton="danger" icone="portefeuille">La boutique n’encaisse pas encore : le paiement Mobile Money n’est pas branché sur le serveur. <a class="lien" href={lien('/reglages/paiements')}>Voir comment l’activer</a></Note>
           : p.test ? <Note ton="alerte" icone="portefeuille">Paiement en <b>mode test</b> : les commandes sont confirmées sans argent. <a class="lien" href={lien('/reglages/paiements')}>Brancher FlexPay</a></Note> : null}
+        {graves.length ? <Note ton="danger" icone="alerte"><b>Le serveur signale un problème :</b> {graves[0].texte}{graves.length > 1 ? ` (et ${pluriel(graves.length - 1, 'autre')})` : ''} <a class="lien" href={lien('/journal')}>Voir Santé et journal</a></Note> : null}
         {nbExemples.value ? <Note ton="info" icone="info">Le catalogue d’exemple est affiché dans la boutique ({pluriel(nbExemples.value, 'élément')}). Remplacez-le par vos articles, ou retirez-le dans <a class="lien" href={lien('/reglages/general')}>Réglages → Général</a>.</Note> : null}
         <div class="kpis">
           <Kpi grand libelle={`Ventes ${lib}`} icone="graphique" valeur={dollars(st.ventes)} sous={evV ? evV.texte : 'Commandes payées'} ton={evV && evV.ton} />
@@ -207,5 +211,18 @@ export function LigneCommandeCourte({ o }) {
   );
 }
 
-export const Chargement = () => <div class="chargement-admin" aria-busy="true"><div class="squelette" style={{ height: 120 }} /><div class="squelette" style={{ height: 260 }} /></div>;
-export const estPret = () => pret.value;
+/* En attendant les données ; si elles n'arrivent pas, l'erreur et « Réessayer » (jamais un squelette sans fin). */
+export function Chargement() {
+  const [essai, setEssai] = useState(false);
+  if (erreurChargement.value) return (
+    <div class="carte">
+      <div class="etat-erreur" role="alert">
+        <div class="vide-icone" aria-hidden="true"><Icone n="alerte" /></div>
+        <h2>Impossible de charger la boutique</h2>
+        <p>{erreurChargement.value} Vos commandes et vos articles sont en sécurité sur le serveur.</p>
+        <div class="rangee-l"><button class={classes('btn btn-primaire', essai && 'charge')} disabled={essai} onClick={async () => { setEssai(true); await demarrer(); setEssai(false); }}><Icone n="actualiser" />Réessayer</button></div>
+      </div>
+    </div>
+  );
+  return <div class="chargement-admin" aria-busy="true" aria-label="Chargement"><div class="squelette" style={{ height: 120 }} /><div class="squelette" style={{ height: 260 }} /></div>;
+}

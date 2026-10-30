@@ -11,7 +11,18 @@
 
 /* ---------- Adresses, compression, cache et sécurité ---------- */
 
+// Compression des pages, du code et des données. Photos, vidéos et polices sont déjà compressées : envoyées telles quelles
+// (moins de travail pour le serveur), comme les lectures partielles d'une vidéo (Range), que la compression casserait.
+routerUse((e) => {
+  const chemin = String(e.request.url.path || '/');
+  if (e.request.header.get('Range') || /\.(webp|jpe?g|png|gif|avif|heic|mp4|webm|mov|m4v|woff2?|zip|gz)$/i.test(chemin)) e.request.header.del('Accept-Encoding');
+  return e.next();
+});
 routerUse($apis.gzip());
+
+/* Poids maximal des requêtes envoyées aux routes de la boutique (une commande pèse quelques kilo-octets). */
+const KO = 1024;
+const LIMITE = { petite: $apis.bodyLimit(8 * KO), commande: $apis.bodyLimit(96 * KO), compte: $apis.bodyLimit(160 * KO), photo: $apis.bodyLimit(8 * 1024 * KO) };
 
 routerUse((e) => {
   const hote = String(e.request.host || '').toLowerCase().split(':')[0];
@@ -65,12 +76,13 @@ routerAdd('POST', '/api/sokoyetu/devis', (e) => {
   const d = R.devis({ cfg: S.configuration(e.app), produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null, maintenant: Date.now() });
   d.lignes.forEach((l) => { delete l.cost; });
   return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' });
-});
+}, LIMITE.commande);
 
 /*
  * Commande et paiement automatique par Mobile Money. Tout est recalculé ici et enregistré d'un bloc
  * (commande « en attente de paiement » + réservation du stock), puis la demande de paiement part chez le fournisseur :
- * le client la valide sur son téléphone. Renvoyer deux fois la même commande (connexion coupée) ne crée qu'une commande.
+ * le client la valide sur son téléphone. Renvoyer deux fois la même commande (connexion coupée, double appui) ne crée
+ * qu'une commande : le jeton est vérifié dans la transaction, et l'index unique sur le jeton refuse toute copie.
  */
 routerAdd('POST', '/api/sokoyetu/commander', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
@@ -79,12 +91,15 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
   if (b.website) return e.json(400, { message: 'Vérification impossible. Rechargez la page et réessayez.' });
   const jeton = R.valider.jeton(b.token);
   if (!jeton) return e.json(400, { message: 'Jeton de commande invalide. Rechargez la page et réessayez.' });
-  let deja = null;
-  try { deja = e.app.findFirstRecordByData('orders', 'token', jeton); } catch (err) { /* nouvelle commande */ }
+  const existante = () => { try { return e.app.findFirstRecordByData('orders', 'token', jeton); } catch (err) { return null; } };
+  let deja = existante();
   if (deja) return e.json(200, C.reponseClient(deja.id, C.suivre(e.app, deja)));
 
   let id = null, erreur = null;
+  try {
   e.app.runInTransaction((tx) => {
+    try { deja = tx.findFirstRecordByData('orders', 'token', jeton); } catch (err) { deja = null; }
+    if (deja) return;
     const P = S.lecteurProduits(tx);
     const code = R.valider.codePromo(b.discountCode);
     let prep;
@@ -106,10 +121,16 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     S.enregistrerCommande(tx, rec, prep.commande);
     id = rec.id;
   });
+  } catch (err) {
+    // Deux envois simultanés avec le même jeton : le second est refusé par l'index unique, on renvoie la commande du premier.
+    deja = existante();
+    if (!deja) throw err;
+  }
+  if (deja) return e.json(200, C.reponseClient(deja.id, C.suivre(e.app, deja)));
   if (erreur) return e.json(400, erreur);
   const doc = C.demander(e.app, e.app.findRecordById('orders', id), { callbackUrl: C.adresseNotification(e) });
   return e.json(200, C.reponseClient(id, doc));
-});
+}, LIMITE.commande);
 
 // État du paiement d'une commande (le client attend la confirmation sur son téléphone). Revérifié auprès du fournisseur.
 routerAdd('GET', '/api/sokoyetu/paiement/{id}', (e) => {
@@ -119,30 +140,35 @@ routerAdd('GET', '/api/sokoyetu/paiement/{id}', (e) => {
 });
 
 // Nouvelle demande de paiement (refusée, rien reçu sur le téléphone, autre opérateur ou autre numéro), même commande.
+// Une seule nouvelle demande à la fois par commande (double appui, deux onglets) : sinon deux demandes valides en même temps.
 routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
   const C = require(`${__hooks}/lib/commandes.js`);
   const rec = C.commandeDuClient(e);
-  const d = C.suivre(e.app, rec);
-  const raison = R.relancePossible(d);
-  if (raison) return e.json(400, { message: raison });
-  if (d.payment.status === 'pending' && Date.now() - Number(d.payment.startedAt || 0) < 30000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
-  const b = S.corps(e);
-  const moyen = R.moyensDePaiement(S.configuration(e.app)).find((m) => m.k === (b.method || d.payment.method));
-  if (!moyen) return e.json(400, { message: 'Ce mode de paiement n’est pas disponible.', champ: 'method' });
-  const tel = R.valider.mobileMoney(b.phone || d.payment.phone);
-  if (!tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
-  const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel });
-  return e.json(200, C.reponseClient(rec.id, doc));
-});
+  const st = e.app.store(); const cle = 'relance:' + rec.id; const moi = $security.randomString(12);
+  if (st.getOrSet(cle, () => moi) !== moi) return e.json(409, { message: 'Une demande de paiement est déjà en train de partir : regardez votre téléphone.' });
+  try {
+    const d = C.suivre(e.app, rec);
+    const raison = R.relancePossible(d);
+    if (raison) return e.json(400, { message: raison });
+    if (d.payment.status === 'pending' && Date.now() - Number(d.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
+    const b = S.corps(e);
+    const moyen = R.moyensDePaiement(S.configuration(e.app)).find((m) => m.k === (b.method || d.payment.method));
+    if (!moyen) return e.json(400, { message: 'Ce mode de paiement n’est pas disponible.', champ: 'method' });
+    const tel = R.valider.mobileMoney(b.phone || d.payment.phone);
+    if (!tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
+    const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel });
+    return e.json(200, C.reponseClient(rec.id, doc));
+  } finally { st.remove(cle); }
+}, LIMITE.petite);
 
 // Le fournisseur annonce le résultat d'un paiement. Toujours revérifié auprès de lui ; toujours répondu 200.
 routerAdd('POST', '/api/sokoyetu/notification/{fournisseur}', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
   const C = require(`${__hooks}/lib/commandes.js`);
-  try { C.notification(e.app, String(e.request.pathValue('fournisseur') || ''), S.corps(e)); } catch (err) { console.log('sokoyetu notification', err); }
+  try { C.notification(e.app, String(e.request.pathValue('fournisseur') || ''), S.corps(e)); } catch (err) { S.trace('error', 'Notification de paiement non traitée', { module: 'paiement', erreur: String(err) }); }
   return e.json(200, { ok: true });
-});
+}, LIMITE.commande);
 
 // Retrouver sa commande avec son numéro et son téléphone (autre appareil, historique effacé…).
 routerAdd('POST', '/api/sokoyetu/retrouver', (e) => {
@@ -157,7 +183,7 @@ routerAdd('POST', '/api/sokoyetu/retrouver', (e) => {
   const telephones = [d.phone, d.customer && d.customer.phone, d.payment && d.payment.phone].map((x) => R.chiffres(R.valider.telephone(x))).filter(Boolean);
   if (telephones.indexOf(tel) < 0) return introuvable();
   return e.json(200, { id: rec.id, token: rec.getString('token') });
-});
+}, LIMITE.petite);
 
 // Chaque minute : paiements en cours revérifiés, commandes non payées à temps annulées (stock rendu).
 cronAdd('sokoyetu-paiements', '* * * * *', () => {
@@ -172,7 +198,7 @@ routerAdd('POST', '/api/sokoyetu/compte/code', (e) => require(`${__hooks}/lib/co
   const hote = String(e.request.host || '').toLowerCase().split(':')[0].replace(/^www\./, '');
   const b = S.corps(e);
   return e.json(200, C.demanderCode(e.app, b.telephone, /\.[a-z]{2,}$/.test(hote) ? hote : '', b.canal));
-}));
+}), LIMITE.petite);
 
 // Vérifie le code et connecte le client (compte créé au premier code). Le panier et les favoris de l'appareil rejoignent le compte.
 routerAdd('POST', '/api/sokoyetu/compte/connexion', (e) => require(`${__hooks}/lib/comptes.js`).repondre(e, (C) => {
@@ -181,7 +207,7 @@ routerAdd('POST', '/api/sokoyetu/compte/connexion', (e) => require(`${__hooks}/l
   const rec = C.verifierCode(e.app, b.telephone, b.code, b.name);
   C.enregistrer(e.app, rec, { panier: b.panier, favoris: b.favoris, profil: b.profil }, true);
   return $apis.recordAuthResponse(e, rec, 'code', { compte: C.vue(rec), commandes: C.commandes(e.app, rec) });
-}));
+}), LIMITE.compte);
 
 // Le compte connecté : nom, téléphone, panier, favoris, coordonnées, et ses commandes (identifiant et jeton de suivi).
 routerAdd('GET', '/api/sokoyetu/compte', (e) => {
@@ -196,28 +222,46 @@ routerAdd('POST', '/api/sokoyetu/compte', (e) => {
   const C = require(`${__hooks}/lib/comptes.js`);
   const rec = C.exigerCompte(e);
   return e.json(200, { compte: C.enregistrer(e.app, rec, S.corps(e), false) });
-});
+}, LIMITE.compte);
 
 // Le client supprime son compte (ses commandes restent, détachées du compte).
 routerAdd('POST', '/api/sokoyetu/compte/supprimer', (e) => {
   const C = require(`${__hooks}/lib/comptes.js`);
   C.supprimer(e.app, C.exigerCompte(e));
   return e.json(200, { ok: true });
-});
+}, LIMITE.petite);
 
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
 
 // La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
 routerAdd('POST', '/api/sokoyetu/visite', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  try { require(`${__hooks}/lib/audience.js`).enregistrer(e.app, S.corps(e), e.request.header.get('User-Agent')); } catch (err) { console.log('sokoyetu visite', err); }
+  try { require(`${__hooks}/lib/audience.js`).enregistrer(e.app, S.corps(e), e.request.header.get('User-Agent')); } catch (err) { S.trace('warn', 'Visite non comptée', { module: 'audience', erreur: String(err) }); }
   return e.noContent(204);
-});
+}, LIMITE.commande);
 
 // Chaque nuit : compteurs de plus de 90 jours effacés.
 cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/audience.js`).purger($app);
   require(`${__hooks}/lib/comptes.js`).purger($app);
+  require(`${__hooks}/lib/serveur.js`).purgerCompteurs($app);
+});
+
+/* ---------- Surveillance : erreurs, état du serveur, alerte si le site tombe (voir lib/journal.js) ---------- */
+
+// Une erreur dans le navigateur d'un client ou de la gérante : gardée dans le journal du serveur.
+routerAdd('POST', '/api/sokoyetu/erreur', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  try { require(`${__hooks}/lib/journal.js`).signaler(e, S.corps(e)); } catch (err) { }
+  return e.noContent(204);
+}, $apis.bodyLimit(16 * KO));
+
+// État du serveur, pour un service de surveillance (UptimeRobot…) et pour l'administration (détail).
+routerAdd('GET', '/api/sokoyetu/sante', (e) => require(`${__hooks}/lib/journal.js`).sante(e));
+
+// Toutes les 5 minutes : signal au service d'alerte (SOKOYETU_ALERTE_URL, voir alerte.sh).
+cronAdd('sokoyetu-veille', '*/5 * * * *', () => {
+  require(`${__hooks}/lib/journal.js`).veille($app);
 });
 
 /* ---------- Administration ---------- */
@@ -242,7 +286,7 @@ routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
   });
   if (erreur) return e.json(erreur.status, { message: erreur.message });
   return e.json(200, sortie);
-});
+}, $apis.bodyLimit(16 * KO));
 
 // Droit à l'effacement : nom, téléphone, adresse et références de paiement d'un client retirés de ses commandes.
 routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
@@ -265,7 +309,7 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
   });
   const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   return e.json(200, { effacees: n, comptes });
-});
+}, LIMITE.petite);
 
 // Assistant IA : rédige une fiche produit à partir d'une photo.
 routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
@@ -277,7 +321,7 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: 'Assistant indisponible (' + err.code + ').' });
     throw err;
   }
-});
+}, LIMITE.photo);
 
 // Photo ajoutée à une fiche : l'assistant repère l'article, l'administration recadre et éclaire la photo.
 routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
@@ -289,7 +333,7 @@ routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: 'Assistant indisponible (' + err.code + ').' });
     throw err;
   }
-});
+}, LIMITE.photo);
 
 // Import depuis un fournisseur (1688, Alibaba…) : titre, photos et prix d'usine ; avec ia=true, l'assistant rédige la fiche en français.
 routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
@@ -309,17 +353,17 @@ routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'bad_url' ? 'Collez le lien d’une page produit (1688, Alibaba, AliExpress, Taobao…).' : 'Le site du fournisseur n’a pas laissé lire cette page.' });
     throw err;
   }
-});
+}, LIMITE.petite);
 // Copie une photo (adresse publique) dans la médiathèque : import en masse, photos d'un fournisseur.
 routerAdd('POST', '/api/sokoyetu/import/photo', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
   S.exigerGerant(e);
   try { return e.json(200, require(`${__hooks}/lib/import.js`).copierPhoto(e.app, S.corps(e).url)); }
   catch (err) {
-    if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'not_image' ? 'Ce lien ne mène pas à une photo (JPEG, PNG ou WebP).' : err.code === 'bad_url' ? 'Adresse de photo invalide.' : 'Photo introuvable à cette adresse.' });
+    if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'not_image' ? 'Ce lien ne mène pas à une photo (JPEG, PNG ou WebP).' : err.code === 'bad_url' ? 'Adresse de photo invalide.' : err.code === 'too_big' ? 'Photo trop lourde : 10 Mo au plus.' : 'Photo introuvable à cette adresse.' });
     throw err;
   }
-});
+}, LIMITE.petite);
 
 // Fréquentation : en ligne maintenant, visiteurs par jour, chiffres par article (?jours=1 à 90, &graphe=7 : colonnes du graphique).
 routerAdd('GET', '/api/sokoyetu/audience', (e) => {
@@ -338,7 +382,16 @@ routerAdd('GET', '/api/sokoyetu/audience/{id}', (e) => {
 routerAdd('GET', '/api/sokoyetu/etat', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
   S.exigerGerant(e);
-  return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: require(`${__hooks}/lib/ia.js`).active(), paiement: require(`${__hooks}/lib/paiement.js`).etat(), codes: require(`${__hooks}/lib/envoi.js`).etat() });
+  const IA = require(`${__hooks}/lib/ia.js`);
+  return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: IA.active(), iaQuota: IA.quota(), paiement: require(`${__hooks}/lib/paiement.js`).etat(), codes: require(`${__hooks}/lib/envoi.js`).etat() });
+});
+
+// Journal des erreurs (serveur et navigateurs) des derniers jours : ?jours=7&limite=100.
+routerAdd('GET', '/api/sokoyetu/journal', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  const q = e.requestInfo().query || {};
+  return e.json(200, { erreurs: require(`${__hooks}/lib/journal.js`).lire(e.app, q['jours'], q['limite']) });
 });
 
 /* ---------- Champs techniques tenus à jour automatiquement ---------- */
@@ -356,6 +409,12 @@ function majProduit(e) {
 onRecordCreateRequest(majProduit, 'products');
 onRecordUpdateRequest(majProduit, 'products');
 
+// Catalogue public gardé en mémoire (lib/pages.js) : reconstruit à la prochaine visite après tout changement,
+// y compris le stock modifié par une commande.
+onRecordAfterCreateSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
+onRecordAfterUpdateSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
+onRecordAfterDeleteSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
+
 function majRemise(e) {
   const S = require(`${__hooks}/lib/serveur.js`);
   e.record.set('code', S.R.valider.codePromo(S.lire(e.record).code));
@@ -363,6 +422,14 @@ function majRemise(e) {
 }
 onRecordCreateRequest(majRemise, 'discounts');
 onRecordUpdateRequest(majRemise, 'discounts');
+
+// Médiathèque : 10 Mo au plus pour une photo (la limite de 30 Mo du champ vaut pour les vidéos).
+onRecordCreateRequest((e) => {
+  for (const f of e.findUploadedFiles('file') || []) {
+    if (/\.(jpe?g|png|webp|gif|heic|avif)$/i.test(String(f.originalName || f.name || '')) && Number(f.size) > 10 * 1048576) throw new BadRequestError('Photo trop lourde : 10 Mo au plus.');
+  }
+  return e.next();
+}, 'media');
 
 // Commande retouchée depuis le tableau de bord technique : champs de recherche réalignés sur le document.
 onRecordUpdateRequest((e) => {

@@ -2,14 +2,14 @@
 import { useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
-import { Champ, Note, Vide, Bascule, Pastille, toast, confirmer, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
+import { Champ, Note, Vide, Bascule, Pastille, toast, confirmer, ouvrirFeuille, fermerFeuille, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
 import { changerMotDePasse } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises } from '../etat.js';
+import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
 
@@ -25,13 +25,14 @@ export function Clients() {
   const tous = clients.value; const mots = normaliser(q).split(/\s+/).filter(Boolean);
   const liste = tous.filter((c) => !mots.length || mots.every((m) => normaliser(c.nom + ' ' + c.tel).includes(m)));
   const nComptes = comptes.value.length;
+  const page = useParPage(liste, 50, q);
   return (
     <>
       <TetePage titre="Clients" sous={`${pluriel(tous.length, 'client')}${nComptes ? ` · ${pluriel(nComptes, 'compte')}` : ''}${tous.length ? ` · ${dollars(tous.reduce((a, c) => a + c.depense, 0))} dépensés` : ''}`} />
       <div class="outils-liste"><label class="recherche-liste"><Icone n="recherche" /><input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Nom ou téléphone" aria-label="Rechercher un client" /></label></div>
-      {!pret.value ? <Chargement /> : liste.length ? (
+      {!pret.value ? <Chargement /> : liste.length ? (<>
         <div class="liste">
-          {liste.map((c) => {
+          {page.visibles.map((c) => {
             const pa = c.compte ? panierDuCompte(c.compte) : null;
             return (
               <a key={c.tel} class="ligne" href={lien('/clients/' + c.tel)}>
@@ -47,7 +48,8 @@ export function Clients() {
             );
           })}
         </div>
-      ) : <div class="carte"><Vide icone="personnes" titre={tous.length ? 'Aucun client trouvé' : 'Vos clients apparaîtront ici'} texte={tous.length ? '' : 'Chaque personne qui commande ou crée son compte est ajoutée automatiquement, avec son historique.'} /></div>}
+        <AfficherPlus page={page} total={liste.length} libelle="client" />
+      </>) : <div class="carte"><Vide icone="personnes" titre={tous.length ? 'Aucun client trouvé' : 'Vos clients apparaîtront ici'} texte={tous.length ? '' : 'Chaque personne qui commande ou crée son compte est ajoutée automatiquement, avec son historique.'} /></div>}
     </>
   );
 }
@@ -117,6 +119,7 @@ function CompteClient({ a }) {
   );
 }
 
+const problemesGraves = () => ((sante.value && sante.value.details && sante.value.details.problemes) || []).filter((p) => p.grave).length;
 const item = (href, icone, titre, sous, externe) => (
   <a class="menu-item" href={href} target={externe ? '_blank' : undefined} rel={externe ? 'noopener' : undefined}>
     <span class="menu-icone"><Icone n={icone} /></span><span class="menu-texte"><b>{titre}</b>{sous ? <small>{sous}</small> : null}</span><Icone n="droite" classe="chevron" />
@@ -130,7 +133,10 @@ export function Plus() {
       <TetePage titre="Plus" sous="Catalogue, vitrine et réglages" />
       <div class="pile-l formulaire-etroit">
         <p class="intertitre">Suivi</p>
-        <div class="menu">{item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article')}</div>
+        <div class="menu">
+          {item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article')}
+          {item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site')}
+        </div>
         <p class="intertitre">Catalogue</p>
         <div class="menu">
           {item(lien('/rayons'), 'rayons', 'Rayons', pluriel(rayons.value.length, 'rayon'))}
@@ -246,7 +252,8 @@ export function Compte() {
         <section class="carte">
           <h2 class="carte-titre"><Icone n="info" />Serveur</h2>
           <dl class="infos"><dt>Version</dt><dd>{s.version || __VERSION__}</dd><dt>Sauvegardes</dt><dd>Chaque nuit, 7 gardées</dd></dl>
-          <p class="champ-aide espace-haut">Tableau technique (sauvegardes, journal) : <a class="lien" href={adresseBoutique('/_/')} target="_blank" rel="noopener">{adresseBoutique('/_/').replace(/^https?:\/\//, '')}</a></p>
+          <a class="btn btn-secondaire btn-s espace-haut" href={lien('/journal')}><Icone n="bouclier" />Santé et journal des erreurs</a>
+          <p class="champ-aide espace-haut">Tableau technique (sauvegardes, journal complet) : <a class="lien" href={adresseBoutique('/_/')} target="_blank" rel="noopener">{adresseBoutique('/_/').replace(/^https?:\/\//, '')}</a></p>
         </section>
         <button class="btn btn-secondaire" onClick={async () => { if (await confirmer({ titre: 'Se déconnecter ?', ok: 'Se déconnecter' })) seDeconnecter(); }}><Icone n="sortie" />Se déconnecter</button>
       </div>

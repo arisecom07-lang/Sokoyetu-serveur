@@ -95,11 +95,11 @@
   --gouttiere: max(16px, env(safe-area-inset-left, 0px));
   --gouttiere-d: max(16px, env(safe-area-inset-right, 0px));
 
-  /* Rayons */
-  --r-s: 10px;
-  --r-m: 14px;
-  --r-l: 20px;
-  --r-xl: 28px;
+  /* Rayons (arrondis à 140 % des valeurs d'origine 10 / 14 / 20 / 28, choix de messir dans l'Atelier, 2026-10-28) */
+  --r-s: 14px;
+  --r-m: 19.6px;
+  --r-l: 28px;
+  --r-xl: 39.2px;
   --r-rond: 999px;
 
   /* Mouvements */

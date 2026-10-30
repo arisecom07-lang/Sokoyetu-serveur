@@ -110,6 +110,7 @@ export function Connexion() {
 
   async function enregistrerNom(e) {
     e.preventDefault();
+    if (f.envoi) return;
     const n = R.valider.nom(f.nom);
     if (!n) { maj({ erreurs: { nom: 'Indiquez votre nom (2 à 60 lettres).' } }); return; }
     maj({ envoi: true, erreurs: {} });

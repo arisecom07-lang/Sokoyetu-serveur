@@ -10,6 +10,19 @@ const MODELE = 'claude-opus-5-5';
 const TYPES_IMAGE = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 // Essais seulement : adresse d'un faux service (tests/claude-simule.mjs).
 const URL_API = () => String($os.getenv('ANTHROPIC_URL') || 'https://api.anthropic.com').replace(/\/+$/, '');
+/*
+ * Plafond des dépenses : chaque appel (fiche rédigée, ou cadre d'une photo) coûte quelques centimes. Au plus
+ * SOKOYETU_IA_MAX_JOUR appels par jour (150 par défaut) pour toute la boutique, et des réponses bornées (MAX_JETONS pour
+ * une fiche). Fixez aussi une limite de dépense mensuelle dans la console Anthropic (Settings → Limits) : c'est le plafond
+ * qui ne peut jamais être dépassé.
+ */
+const MAX_JETONS = 8000;
+const maxParJour = () => Math.max(1, parseInt(String($os.getenv('SOKOYETU_IA_MAX_JOUR') || ''), 10) || 150);
+function quota() {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  const utilises = S.compteurJour($app, 'ia');
+  return { utilises, max: maxParJour(), restants: Math.max(0, maxParJour() - utilises) };
+}
 
 // Rectangle de l'article en millièmes de la largeur et de la hauteur de la photo (0 = bord gauche ou haut, 1000 = bord droit ou bas).
 const CADRE = {
@@ -105,7 +118,11 @@ function blocImage(entree) {
 function appeler(image, texte, schema, maxTokens) {
   const cle = String($os.getenv('ANTHROPIC_API_KEY') || '').trim();
   if (!cle) throw { code: 'no_key', status: 503 };
+  const S = require(`${__hooks}/lib/serveur.js`);
+  if (!quota().restants) throw { code: 'daily_limit', status: 429 };
   let res;
+  // Compté avant l'appel : une demande partie coûte, même si la réponse se perd.
+  S.ajouterCompteur($app, 'ia');
   try {
     res = $http.send({
       url: URL_API() + '/v1/messages',
@@ -125,12 +142,14 @@ function appeler(image, texte, schema, maxTokens) {
         messages: [{ role: 'user', content: [image, { type: 'text', text: texte }] }]
       })
     });
-  } catch (err) { throw { code: 'network', status: 502 }; }
+  } catch (err) { S.trace('warn', 'Assistant IA injoignable', { module: 'ia', erreur: String(err) }); throw { code: 'network', status: 502 }; }
   const j = res.json || {};
-  if (res.statusCode === 401 || res.statusCode === 403) throw { code: 'bad_key', status: 502 };
+  const detail = String((j.error && j.error.message) || '').slice(0, 300);
+  if (res.statusCode === 401 || res.statusCode === 403) { S.trace('error', 'Clé de l’assistant IA refusée (ia.sh)', { module: 'ia', statut: res.statusCode }); throw { code: 'bad_key', status: 502 }; }
   if (res.statusCode === 429 || res.statusCode === 529) throw { code: 'rate_limited', status: 503 };
-  if (res.statusCode === 400 && /image/i.test(String((j.error && j.error.message) || ''))) throw { code: 'image_rejected', status: 400 };
-  if (res.statusCode !== 200) throw { code: 'upstream_error', status: 502 };
+  if (res.statusCode === 400 && /image/i.test(detail)) throw { code: 'image_rejected', status: 400 };
+  if (res.statusCode === 400 && /credit|billing|spend|limit/i.test(detail)) { S.trace('error', 'Assistant IA : crédit épuisé ou limite de dépense atteinte', { module: 'ia', detail }); throw { code: 'no_credit', status: 503 }; }
+  if (res.statusCode !== 200) { S.trace('warn', 'Assistant IA : réponse inattendue', { module: 'ia', statut: res.statusCode, detail }); throw { code: 'upstream_error', status: 502 }; }
   if (j.stop_reason === 'refusal') throw { code: 'refused', status: 422 };
   if (j.stop_reason === 'max_tokens') throw { code: 'invalid_json', status: 502 };
   const sortie = (j.content || []).filter((b) => b && b.type === 'text').map((b) => b.text).join('');
@@ -148,7 +167,7 @@ function fiche(entree) {
     collections: (Array.isArray(entree.collections) ? entree.collections : []).slice(0, 80)
       .map((c) => ({ id: String((c && c.id) || '').slice(0, 40), name: String((c && c.name) || '').slice(0, 40) })).filter((c) => c.id && c.name)
   };
-  return nettoyerReponse(appeler(image, consigne(ctx), SCHEMA, 16000), ctx);
+  return nettoyerReponse(appeler(image, consigne(ctx), SCHEMA, MAX_JETONS), ctx);
 }
 
 /* Photo ajoutée sans fiche à rédiger : seulement le cadre de l'article ({ cadre } ou { cadre: null }). */
@@ -162,4 +181,4 @@ function cadre(entree) {
 
 const active = () => !!String($os.getenv('ANTHROPIC_API_KEY') || '').trim();
 
-module.exports = { fiche, cadre, active, consigne, nettoyerReponse, nettoyerCadre, SCHEMA, MODELE };
+module.exports = { fiche, cadre, active, quota, consigne, nettoyerReponse, nettoyerCadre, SCHEMA, MODELE, MAX_JETONS };

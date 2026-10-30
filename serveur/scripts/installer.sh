@@ -52,7 +52,8 @@ for d in pb_hooks pb_migrations pb_admin; do rm -rf "${DIR:?}/$d"; cp -r "$SRC/$
 WK=$(mktemp -d); [ -d "$DIR/pb_public/.well-known" ] && mv "$DIR/pb_public/.well-known" "$WK/"
 rm -rf "${DIR:?}/pb_public"; cp -r "$SRC/pb_public" "$DIR/pb_public"
 [ -d "$WK/.well-known" ] && mv "$WK/.well-known" "$DIR/pb_public/.well-known"; rm -rf "$WK"
-for f in mise-a-jour.sh mot-de-passe.sh android.sh ia.sh paiement.sh codes.sh service.sh; do cp "$SRC/$f" "$DIR/$f"; chmod 700 "$DIR/$f"; done
+# Scripts d'entretien : tous ceux du paquet (sauf celui-ci)
+for f in "$SRC"/*.sh; do [ "$(basename "$f")" = installer.sh ] && continue; cp "$f" "$DIR/$(basename "$f")"; chmod 700 "$DIR/$(basename "$f")"; done
 cp "$SRC/LISEZMOI.md" "$DIR/LISEZMOI.md" 2>/dev/null || true
 [ -n "$PAQUET" ] && echo "$PAQUET" > "$DIR/.paquet"
 echo "$DOMAINE" > "$DIR/.domaine"

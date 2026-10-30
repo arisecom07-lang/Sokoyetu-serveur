@@ -70,7 +70,8 @@ function commandePublique(doc) {
   const d = R.copie(doc);
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
-  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; }
+  // Références internes des demandes de paiement : jamais montrées au client.
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
@@ -112,4 +113,33 @@ function versRecord(rec) {
   return Object.assign({}, lire(rec), { id: rec.id });
 }
 
-module.exports = { R, lire, configuration, lecteurProduits, remiseParCode, estGerant, exigerGerant, corps, appliquerStock, commandePublique, produitPublic, versRecord, champsCommande, enregistrerCommande, numeroUnique };
+/*
+ * Journal du serveur (tableau technique /_/ → Logs, et page « Journal » de l'administration) :
+ * trace('error', 'Message', { module: 'paiement', commande: 'K7M2QX' }). Niveaux : info, warn, error.
+ */
+function trace(niveau, message, attributs) {
+  const args = ['type', 'serveur'];
+  Object.keys(attributs || {}).forEach((k) => { const v = attributs[k]; if (v !== undefined && v !== null && v !== '') args.push(k, typeof v === 'number' ? v : String(v).slice(0, 500)); });
+  const methode = niveau === 'error' || niveau === 'warn' ? niveau : 'info';
+  try { $app.logger()[methode](String(message), ...args); } catch (e) { console.log('sokoyetu', niveau, message, JSON.stringify(attributs || {})); }
+}
+
+/* Compteurs du jour (heure de Bukavu et Goma, UTC+2), partagés par tout le serveur : plafonds des appels qui coûtent. */
+const jourLocal = (t) => new Date((t || Date.now()) + 2 * 3600e3).toISOString().slice(0, 10);
+function compteurJour(app, nom) {
+  const l = arrayOf(new DynamicModel({ n: 0 }));
+  try { app.db().newQuery('SELECT n FROM sokoyetu_compteurs WHERE cle = {:c}').bind({ c: nom + ':' + jourLocal() }).all(l); } catch (e) { return 0; }
+  return l.length ? Number(l[0].n) || 0 : 0;
+}
+function ajouterCompteur(app, nom) {
+  try {
+    app.db().newQuery('INSERT INTO sokoyetu_compteurs (cle, n, maj) VALUES ({:c}, 1, {:t}) ON CONFLICT (cle) DO UPDATE SET n = n + 1, maj = excluded.maj')
+      .bind({ c: nom + ':' + jourLocal(), t: Date.now() }).execute();
+  } catch (e) { trace('warn', 'Compteur du jour indisponible', { module: 'compteurs', nom, erreur: String(e) }); }
+}
+/* Chaque nuit : compteurs de plus de 400 jours effacés. */
+function purgerCompteurs(app) {
+  try { app.db().newQuery('DELETE FROM sokoyetu_compteurs WHERE maj < {:t}').bind({ t: Date.now() - 400 * 864e5 }).execute(); } catch (e) { }
+}
+
+module.exports = { R, lire, configuration, lecteurProduits, remiseParCode, estGerant, exigerGerant, corps, appliquerStock, commandePublique, produitPublic, versRecord, champsCommande, enregistrerCommande, numeroUnique, trace, jourLocal, compteurJour, ajouterCompteur, purgerCompteurs };

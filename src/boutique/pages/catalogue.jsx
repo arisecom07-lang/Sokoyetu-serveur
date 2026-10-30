@@ -5,10 +5,10 @@ import { Icone } from '../../commun/js/icones.jsx';
 import { Photo } from '../../commun/js/medias.jsx';
 import { Vide } from '../../commun/js/interface.jsx';
 import { pluriel, normaliser, differer } from '../../commun/js/outils.js';
-import { lien, route, naviguer, retour } from '../routeur.js';
-import { cfg, produits, rayons, rayonsParId, favoris, catalogueDisponible, catalogueAJour, recherches, memoriserRecherche, effacerRecherches } from '../etat.js';
+import { lien, route, retour } from '../routeur.js';
+import { cfg, produits, rayons, rayonsParId, favoris, catalogueDisponible, catalogueAJour, catalogueErreur, recherches, memoriserRecherche, effacerRecherches } from '../etat.js';
 import { EnteteBoutique, EntetePage, Pied } from '../composants/cadre.jsx';
-import { GrilleProduits, SqueletteGrille, trier, lienRayon, photoRayon } from '../composants/produits.jsx';
+import { GrilleProduits, SqueletteGrille, ErreurCatalogue, trier, lienRayon, photoRayon } from '../composants/produits.jsx';
 import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
 
@@ -40,7 +40,7 @@ export function Rayons() {
       <EnteteBoutique />
       <main id="contenu" class="page conteneur">
         <div class="titre-page"><h1 class="titre-serif">Rayons</h1><p class="attenue">{pluriel(tous.length, 'article')} à découvrir</p></div>
-        {!catalogueDisponible.value ? <div class="grille-rayons">{[1, 2, 3, 4].map((i) => <div key={i} class="squelette" style={{ aspectRatio: '1' }} />)}</div>
+        {!catalogueDisponible.value ? (catalogueErreur.value ? <ErreurCatalogue /> : <div class="grille-rayons" aria-busy="true">{[1, 2, 3, 4].map((i) => <div key={i} class="squelette" style={{ aspectRatio: '1' }} />)}</div>)
           : rs.length ? (
             <div class="grille-rayons">
               {rs.map((r, i) => {
@@ -217,5 +217,3 @@ export function Favoris() {
     </>
   );
 }
-
-export const allerRecherche = (q) => naviguer('/recherche' + (q ? '?q=' + encodeURIComponent(q) : ''));

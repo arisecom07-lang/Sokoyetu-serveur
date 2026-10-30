@@ -5,7 +5,7 @@ import { Icone } from '../../commun/js/icones.jsx';
 import { Photo, compresser, taille } from '../../commun/js/medias.jsx';
 import { envoyerPhoto, urlFichierServeur } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
-import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer, ouvrirFeuille, fermerFeuille } from '../../commun/js/interface.jsx';
+import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer, ouvrirFeuille, fermerFeuille, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { dollars, pluriel, uid, classes, normaliser, copie, slug } from '../../commun/js/outils.js';
 import { lien, route, aller, garder } from '../routeur.js';
 import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, cadreIA, gererErreur } from '../etat.js';
@@ -35,6 +35,7 @@ export function Produits() {
   const mots = normaliser(q).split(/\s+/).filter(Boolean);
   const liste = ps.filter(fn).filter((p) => !mots.length || mots.every((m) => normaliser([p.title, p.sku, p.tags].join(' ')).includes(m)));
   const ia = etatServeur.value.ia;
+  const page = useParPage(liste, 50, filtre + '|' + q);
   return (
     <>
       <TetePage titre="Produits" sous={`${pluriel(ps.length, 'produit')} · ${ps.filter(R.estEnVente).length} en vente`}
@@ -46,9 +47,9 @@ export function Produits() {
         </div>
         <div class="puces" role="group" aria-label="Filtrer les produits">{FILTRES.map(([k, t, f]) => <button key={k} class="puce" aria-pressed={filtre === k ? 'true' : 'false'} onClick={() => setFiltre(k)}>{t}<span class="n">{ps.filter(f).length}</span></button>)}</div>
       </div>
-      {!pret.value ? <Chargement /> : liste.length ? (
+      {!pret.value ? <Chargement /> : liste.length ? (<>
         <div class="liste">
-          {liste.map((p) => {
+          {page.visibles.map((p) => {
             const faible = !R.estImport(p) && R.stockTotal(p) <= R.int(cfg.value.lowStock);
             const marge = R.num(p.cost) > 0 && R.num(p.price) > 0 ? Math.round((1 - R.num(p.cost) / R.num(p.price)) * 100) : null;
             return (
@@ -61,7 +62,8 @@ export function Produits() {
             );
           })}
         </div>
-      ) : <div class="carte"><Vide icone="etiquette" titre={ps.length ? 'Aucun produit ici' : 'Ajoutez votre premier produit'} texte={ps.length ? 'Changez de filtre ou de recherche.' : 'Photo, prix, couleurs, tailles et stock : il apparaît aussitôt dans la boutique.'}>{ps.length ? null : <a class="btn btn-primaire" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter un produit</a>}</Vide></div>}
+        <AfficherPlus page={page} total={liste.length} libelle="produit" />
+      </>) : <div class="carte"><Vide icone="etiquette" titre={ps.length ? 'Aucun produit ici' : 'Ajoutez votre premier produit'} texte={ps.length ? 'Changez de filtre ou de recherche.' : 'Photo, prix, couleurs, tailles et stock : il apparaît aussitôt dans la boutique.'}>{ps.length ? null : <a class="btn btn-primaire" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter un produit</a>}</Vide></div>}
       <div class="fab seulement-mobile">
         {ia ? <a class="btn btn-doux btn-l" href={lien('/produits/nouveau?ia=1')} aria-label="Ajouter avec l’IA"><Icone n="ia" />IA</a> : null}
         <a class="btn btn-primaire btn-l" href={lien('/produits/nouveau')}><Icone n="plus" />Ajouter</a>
@@ -84,7 +86,10 @@ const MESSAGES_IA = {
   bad_key: 'La clé de l’assistant est refusée. Enregistrez-en une nouvelle avec ia.sh.',
   rate_limited: 'Trop de demandes pour le moment. Réessayez dans quelques minutes.', limite: 'Trop de demandes pour le moment. Réessayez dans une minute.',
   image_rejected: 'Cette photo n’a pas pu être lue. Essayez une autre image (JPEG ou PNG).', invalid_json: 'La réponse de l’assistant était incomplète. Réessayez.',
-  refused: 'L’assistant n’a pas pu décrire cette photo. Essayez une photo plus nette de l’article seul.', reseau: 'Pas de connexion internet. Réessayez une fois reconnecté.'
+  refused: 'L’assistant n’a pas pu décrire cette photo. Essayez une photo plus nette de l’article seul.', reseau: 'Pas de connexion internet. Réessayez une fois reconnecté.',
+  daily_limit: 'L’assistant a atteint sa limite d’aujourd’hui (fiches et cadrages de photos). Il sera de nouveau disponible demain (limite réglable sur le serveur, voir le guide).',
+  no_credit: 'Le crédit de l’assistant est épuisé ou sa limite de dépense est atteinte : rechargez-le sur console.anthropic.com (Billing).',
+  network: 'L’assistant ne répond pas pour le moment. Réessayez dans un instant.'
 };
 
 function FormulaireProduit() {
@@ -161,7 +166,10 @@ function FormulaireProduit() {
         setF((x) => ({ ...x, images: x.images.map((y) => (y === m0 ? { ...y, ...m, orig: media(y) } : y)) }));
         toast('Photo cadrée et éclairée par l’assistant', { icone: 'ia' });
       }
-    } catch (e) { gererErreur(e, 'L’assistant n’a pas pu cadrer cette photo'); }
+    } catch (e) {
+      if (MESSAGES_IA[e.code]) toast(MESSAGES_IA[e.code], { icone: 'alerte', ton: 'danger', duree: 5000 });
+      else gererErreur(e, 'L’assistant n’a pas pu cadrer cette photo');
+    }
     setEnRetouche(null);
   }
 

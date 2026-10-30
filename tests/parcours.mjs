@@ -3,11 +3,16 @@
 //   npm run build && bash outils/serveur-local.sh   (autre terminal)   puis   node tests/parcours.mjs
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 const BASE = process.env.BASE || 'http://localhost:8090';
 const ADMIN = process.env.ADMIN || 'http://admin.localhost:8090';
-const SORTIE = process.env.SORTIE || '/tmp/claude-0/-home-user/4c9af478-9b7a-59ef-9660-b9b31e63d534/scratchpad/captures/';
+// Captures d'écran : dossier temporaire du système, ou SORTIE=… pour un autre dossier.
+const SORTIE = process.env.SORTIE || join(tmpdir(), 'sokoyetu-captures') + '/';
+mkdirSync(SORTIE, { recursive: true });
 const erreurs = [];
 const etape = (t) => console.log('✓ ' + t);
 
@@ -30,8 +35,9 @@ const admin = await bureau.newPage(); surveiller(admin, 'admin');
 await admin.goto(ADMIN + '/');
 await admin.fill('input[type=email]', 'admin@sokoyetu.test'); await admin.fill('input[autocomplete="current-password"]', 'Sokoyetu-2026');
 await admin.click('button[type=submit]'); await admin.waitForSelector('.kpis');
-await admin.goto(ADMIN + '/#/commandes'); await admin.waitForSelector('.liste .ligne');
-const nAvant = await admin.locator('.liste .ligne').count();
+await admin.goto(ADMIN + '/#/commandes'); await admin.waitForSelector('.liste .ligne, .vide'); // aucune commande encore : état vide
+// Nombre total de commandes (en-tête « N commandes ») : la liste, elle, s'affiche par pages de 50.
+const nAvant = Number(((await admin.locator('.tete-page p').first().innerText()).match(/^(\d+) commande/) || [0, 0])[1]);
 etape(`administration ouverte (${nAvant} commandes)`);
 
 // Le client, sur téléphone, commande une montre avec un code de réduction.
@@ -68,7 +74,7 @@ await client.click('.barre-action .btn-primaire'); await client.waitForSelector(
 assert.match(await client.locator('.paiement-attente').innerText(), /099 765 4321/);
 etape('demande de paiement envoyée au 099 765 4321 : écran « Validez le paiement sur votre téléphone »');
 await client.screenshot({ path: SORTIE + 'parcours-attente.png' });
-await admin.waitForFunction((n) => document.querySelectorAll('.liste .ligne').length === n, nAvant + 1);
+await admin.waitForFunction((n) => String((document.querySelector('.tete-page p') || {}).textContent || '').startsWith(n + ' commande'), nAvant + 1);
 assert.equal(await admin.locator('.toast:has-text("Commande payée")').count(), 0);
 etape('la commande apparaît « Paiement en cours » dans l’administration, sans alerte de vente');
 

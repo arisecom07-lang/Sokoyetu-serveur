@@ -1,6 +1,6 @@
 // Sokoyetu (boutique) — paiement en cours : le client valide la demande sur son téléphone, la page suit l'état auprès du serveur.
 // Payée → reçu. Refusée → nouvelle tentative (même commande). Délai dépassé → commande annulée, articles remis en vente.
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Etapes, LogoOperateur, Note, Vide, toast } from '../../commun/js/interface.jsx';
@@ -13,7 +13,7 @@ import { mesurerEvenement } from '../mesure.js';
 import { NOMS_ETAPES, ChoixPaiement, NoteModeTest } from './commander.jsx';
 import { useSeo } from './commun.jsx';
 
-const RELANCE_APRES = 35000; // le serveur accepte une nouvelle demande 30 s après la précédente
+const RELANCE_APRES = (R.RELANCE_APRES_S + 5) * 1000; // le serveur accepte une nouvelle demande R.RELANCE_APRES_S secondes après la précédente
 
 const minutes = (ms) => { const m = Math.max(0, Math.ceil(ms / 60000)); return m <= 1 ? 'moins d’une minute' : `${m} min`; };
 
@@ -26,6 +26,7 @@ export function Paiement() {
   const [autre, setAutre] = useState(false);       // formulaire « autre numéro ou opérateur »
   const [relance, setRelance] = useState({ methode: '', tel: '', erreurs: {}, envoi: false });
   const [tour, setTour] = useState(0);              // relance la surveillance après une nouvelle demande
+  const verrou = useRef(false);                     // deux appuis rapides : une seule nouvelle demande
   useSeo(() => ({ titre: 'Paiement en cours', noindex: true }), []);
 
   const o = etat && etat.order; const p = etat && etat.paiement;
@@ -70,7 +71,11 @@ export function Paiement() {
   useEffect(() => { if (o && !relance.methode) setRelance((x) => ({ ...x, methode: o.payment.method, tel: '' })); }, [o && o.payment.method]);
 
   async function relancer(avecChoix) {
-    if (relance.envoi) return;
+    if (relance.envoi || verrou.current) return;
+    verrou.current = true;
+    try { await relancerUneFois(avecChoix); } finally { verrou.current = false; }
+  }
+  async function relancerUneFois(avecChoix) {
     const moyen = ms.find((m) => m.k === (avecChoix ? relance.methode : o.payment.method));
     const tel = avecChoix ? (relance.tel.trim() || o.payment.phone) : o.payment.phone;
     if (avecChoix) {

@@ -78,6 +78,8 @@ export function Commander() {
   const maj = (p) => setF((x) => ({ ...x, ...p }));
   const champ = (k) => (e) => maj({ [k]: e.currentTarget.value, erreurs: { ...f.erreurs, [k]: '' } });
   const haut = useRef(null);
+  // Verrou immédiat (avant même le nouvel affichage) : deux appuis rapides sur « Payer » n'envoient qu'une demande.
+  const verrou = useRef(false);
   useSeo(() => ({ titre: 'Commande', noindex: true }), []);
 
   // Brouillon gardé sur l'appareil (et le jeton : un nouvel essai ne crée jamais de doublon)
@@ -165,7 +167,11 @@ export function Commander() {
   }
 
   async function payer() {
-    if (f.envoi) return;
+    if (f.envoi || verrou.current) return;
+    verrou.current = true;
+    try { await payerUneFois(); } finally { verrou.current = false; }
+  }
+  async function payerUneFois() {
     const e = {};
     if (!moyen) e.method = 'Choisissez votre opérateur Mobile Money.';
     else if (!R.valider.mobileMoney(telDebite)) e.payphone = `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`;
