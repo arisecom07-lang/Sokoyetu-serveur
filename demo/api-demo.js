@@ -92,6 +92,7 @@ function stock(b, entrees, sens) {
   for (const id of Object.keys(parProduit)) {
     const rec = b.cols.products[id]; if (!rec) continue;
     rec.doc = R.ajusterStock(rec.doc, parProduit[id], sens); rec.doc.updatedAt = Date.now(); rec.updated = Date.now();
+    if (sens > 0) alertesProduit(b, rec);
   }
   return Object.keys(parProduit);
 }
@@ -263,7 +264,9 @@ function routeRecords(b, col, id, method, corps, q) {
   const now = Date.now();
   if (method === 'DELETE') {
     const avant = table[id]; if (!avant) throw new ErreurApi(404, 'Introuvable.');
-    delete table[id]; enregistrer(b);
+    delete table[id];
+    if (col === 'products') b.alertes = (b.alertes || []).filter((x) => x.produit !== id);
+    enregistrer(b);
     if (col === 'media') try { localStorage.removeItem(CLE_MEDIA + id); } catch (e) { }
     diffuser(col, id, 'delete', avant); return null;
   }
@@ -276,6 +279,7 @@ function routeRecords(b, col, id, method, corps, q) {
   if (col === 'products') { if (!doc.createdAt) doc.createdAt = (rec.doc && rec.doc.createdAt) || now; doc.updatedAt = now; rec.active = doc.status !== 'draft'; }
   if (col === 'discounts') rec.code = R.valider.codePromo(doc.code);
   rec.doc = doc; rec.updated = now; table[rid] = rec;
+  if (col === 'products' && !nouveau) alertesProduit(b, rec);
   enregistrer(b); diffuser(col, rid, nouveau ? 'create' : 'update');
   return vue(col, rec, true);
 }
@@ -332,6 +336,8 @@ async function serveur(chemin, method, corps) {
     const rec = clientConnecte(b); if (!rec) throw new ErreurApi(401, 'Connectez-vous à votre compte.');
     if (p === 'sokoyetu/compte/supprimer') {
       Object.values(b.cols.orders).filter((o) => o.client === rec.id).forEach((o) => { o.client = ''; });
+      // Comme notifications.detacher : ce qui n'appartenait qu'au compte disparaît, l'appareil garde le reste.
+      ['notifications', 'alertes'].forEach((k) => { b[k] = (b[k] || []).map((x) => (x.client === rec.id ? { ...x, client: '' } : x)).filter((x) => x.client || x.appareil); });
       delete b.cols.clients[rec.id]; enregistrer(b); diffuser('clients', rec.id, 'delete', rec); return { ok: true };
     }
     if (method === 'GET') return { compte: vueCompte(rec), commandes: commandesDuCompte(b, rec) };
@@ -397,7 +403,56 @@ async function serveur(chemin, method, corps) {
   if (p === 'sokoyetu/notifications') {
     const l = notificationsPour(b, corps).sort((x, y) => y.cree - x.cree || y.id - x.id).slice(0, 50)
       .map((x) => ({ id: x.id, type: x.type, ...R.texteNotification(x, corps.langue), url: x.url, cree: x.cree, lu: !!x.lu }));
-    return { notifications: l, nonLues: l.filter((x) => !x.lu).length };
+    return { notifications: l, nonLues: l.filter((x) => !x.lu).length, alertes: alertesPour(b, corps) };
+  }
+  // « Prévenez-moi » (comme lib/alertes.js).
+  if (p === 'sokoyetu/alertes' || p === 'sokoyetu/alertes/retirer') {
+    const c = clientConnecte(b); const a = R.valider.jeton(corps.appareil);
+    if (!c && !a) throw new ErreurApi(400, 'Appareil inconnu : rechargez la page.');
+    const l = (b.alertes = Array.isArray(b.alertes) ? b.alertes : []);
+    const moi = (x) => (c && x.client === c.id) || (a && x.appareil === a);
+    if (p === 'sokoyetu/alertes/retirer') {
+      b.alertes = l.filter((x) => !(moi(x) && x.produit === corps.produit && x.variante === String(corps.variante || '')));
+      enregistrer(b); return { ok: true, alertes: alertesPour(b, corps) };
+    }
+    const prod = produit(String(corps.produit || ''));
+    if (!prod || !R.estEnVente(prod)) throw new ErreurApi(404, 'Article introuvable.');
+    const variante = R.varianteAlerte(prod, corps.variante);
+    if (variante === null) throw new ErreurApi(400, 'Cette option n’existe plus : rechargez la page.');
+    if (R.alerteDisponible(prod, variante)) throw new ErreurApi(400, 'Bonne nouvelle : il est de nouveau disponible. Ajoutez-le au panier.');
+    if (alertesPour(b, corps).length >= R.MAX_ALERTES) throw new ErreurApi(400, `Vous attendez déjà ${R.MAX_ALERTES} articles : retirez-en quelques-uns (Compte → Notifications).`);
+    if (!l.some((x) => x.produit === corps.produit && x.variante === variante && x.client === (c ? c.id : '') && x.appareil === (a || ''))) {
+      l.push({ id: l.reduce((m, x) => Math.max(m, x.id), 0) + 1, produit: corps.produit, variante, client: c ? c.id : '', appareil: a || '', cree: Date.now() });
+    }
+    enregistrer(b); return { ok: true, alertes: alertesPour(b, corps) };
+  }
+  if (p === 'sokoyetu/alertes/attente') {
+    exigerGerant('produits');
+    const out = {};
+    (b.alertes || []).forEach((x) => {
+      const o = out[x.produit] = out[x.produit] || { total: 0, variantes: {}, cibles: {} };
+      const cible = x.client ? 'c' + x.client : 'a' + x.appareil;
+      o.variantes[x.variante] = (o.variantes[x.variante] || 0) + 1; o.cibles[cible] = true; o.total = Object.keys(o.cibles).length;
+    });
+    Object.values(out).forEach((o) => { delete o.cibles; });
+    return { produits: out };
+  }
+  // Annonces aux clients (comme lib/alertes.js) : dans la démo, le seul téléphone est ce navigateur.
+  if (p === 'sokoyetu/annonces') {
+    exigerGerant('annonces');
+    const l = (b.annonces = Array.isArray(b.annonces) ? b.annonces : []);
+    const vue24h = () => l.filter((x) => x.cree > Date.now() - JOUR).length;
+    const abonne = !!Local.lire('pushDemo', false), promo = abonne && !!Local.lire('pushPromos', false);
+    if (method === 'POST') {
+      let x; try { x = R.annonceNettoyee(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message, { champ: err.champ }); throw err; }
+      if (vue24h() >= R.ANNONCES_PAR_JOUR) throw new ErreurApi(400, `${R.ANNONCES_PAR_JOUR} annonces par 24 heures au plus : au-delà, vos clients risquent de couper les notifications.`);
+      const id = l.reduce((m, y) => Math.max(m, y.id), 0) + 1; const appareil = R.valider.jeton(Local.lire('appareil', ''));
+      const n = promo && appareil ? 1 : 0;
+      if (n) ajouterNotification(b, { client: '', appareil, type: 'promo', details: { titre: x.titre, texte: x.texte }, url: x.url, cle: 'annonce:' + id });
+      l.unshift({ id, ...x, auteur: (Auth.compte && (Auth.compte.name || Auth.compte.email)) || '', cree: Date.now(), destinataires: n });
+      enregistrer(b);
+    }
+    return { abonnes: { telephones: abonne ? 1 : 0, promos: promo ? 1 : 0 }, restantes: Math.max(0, R.ANNONCES_PAR_JOUR - vue24h()), parJour: R.ANNONCES_PAR_JOUR, annonces: l.slice(0, 30) };
   }
   if (p === 'sokoyetu/notifications/lues') { notificationsPour(b, corps).forEach((x) => { x.lu = x.lu || Date.now(); }); enregistrer(b); return { ok: true }; }
   if (p.startsWith('sokoyetu/push/')) throw new ErreurApi(503, 'Les notifications du téléphone passent par le serveur de la boutique : indisponibles dans la démonstration.');
@@ -472,6 +527,7 @@ async function serveur(chemin, method, corps) {
     const comptes = Object.values(b.cols.clients).filter((c) => R.chiffres(c.phone) === tel);
     const appareils = l.map((rec) => rec.appareil).filter(Boolean); l.forEach((rec) => { rec.appareil = ''; });
     b.notifications = (b.notifications || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
+    b.alertes = (b.alertes || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
     comptes.forEach((c) => { delete b.cols.clients[c.id]; });
     enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update')); comptes.forEach((c) => diffuser('clients', c.id, 'delete', c));
     return { effacees: l.length, comptes: comptes.length };
@@ -582,13 +638,33 @@ function articleDemo(id, jours, graphe) {
 /* Commande changée : le client est prévenu (son appareil et son compte, ou le compte de son téléphone), une fois par étape. */
 function notifierCommande(b, rec, avant, apres) {
   const l = R.evenementsCommande(avant, apres); if (!l.length) return;
-  const n = (b.notifications = Array.isArray(b.notifications) ? b.notifications : []);
   const client = rec.client || (Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === rec.phone) || {}).id || '';
-  l.forEach((ev) => {
-    const cle = rec.id + ':' + ev.type; if (n.some((x) => x.cle === cle)) return;
-    n.push({ id: n.reduce((m, x) => Math.max(m, x.id), 0) + 1, client, appareil: rec.appareil || '', type: ev.type, details: ev.details, url: '/suivi/' + rec.id, cle, cree: Date.now(), lu: 0 });
-  });
+  l.forEach((ev) => ajouterNotification(b, { client, appareil: rec.appareil || '', type: ev.type, details: ev.details, url: '/suivi/' + rec.id, cle: rec.id + ':' + ev.type }));
+}
+function ajouterNotification(b, x) {
+  const n = (b.notifications = Array.isArray(b.notifications) ? b.notifications : []);
+  if (x.cle && n.some((y) => y.cle === x.cle)) return;
+  n.push({ id: n.reduce((m, y) => Math.max(m, y.id), 0) + 1, ...x, cree: Date.now(), lu: 0 });
   if (n.length > 300) b.notifications = n.slice(-300);
+}
+/* Article de nouveau disponible : chaque client qui l'attendait est prévenu une fois, son alerte disparaît. */
+function alertesProduit(b, rec) {
+  const l = Array.isArray(b.alertes) ? b.alertes : []; const p = rec.doc;
+  const servies = l.filter((x) => x.produit === rec.id && R.alerteDisponible(p, x.variante));
+  if (!servies.length) return;
+  const vus = new Set();
+  servies.forEach((x) => {
+    const cible = x.client ? 'c' + x.client : 'a' + x.appareil; if (vus.has(cible)) return; vus.add(cible);
+    ajouterNotification(b, { client: x.client, appareil: x.appareil, type: 'stock', details: { titre: p.title || 'Article', option: R.libelleVariante(x.variante) }, url: '/p/' + rec.id + '/' + R.slug(p.title), cle: 'stock:' + x.id });
+  });
+  b.alertes = l.filter((x) => !servies.includes(x));
+}
+function alertesPour(b, corps) {
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  const vus = new Set();
+  return (b.alertes || []).filter((x) => (c && x.client === c.id) || (a && x.appareil === a)).sort((x, y) => y.cree - x.cree)
+    .filter((x) => { const k = x.produit + '#' + x.variante; if (vus.has(k)) return false; vus.add(k); return true; })
+    .map((x) => ({ produit: x.produit, variante: x.variante }));
 }
 function notificationsPour(b, corps) {
   const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);

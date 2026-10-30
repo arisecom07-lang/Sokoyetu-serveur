@@ -522,6 +522,11 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 .notif-texte span { color: var(--encre-2); font-size: 14px; line-height: 1.4; }
 .notif-texte small { color: var(--encre-3); font-size: 12.5px; }
 .notif-point { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--c1, var(--marque)); }
+.liste-attendus { display: grid; background: var(--surface); border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-1); overflow: hidden; }
+.liste-attendus li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding-right: 8px; }
+.liste-attendus li + li { border-top: 1px solid var(--ligne); }
+.attendu { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px var(--e4); }
+.attendu > :first-child { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
 
 /* ---------- Tablette ---------- */
 @media (min-width: 640px) {

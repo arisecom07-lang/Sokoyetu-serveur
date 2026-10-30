@@ -17,6 +17,19 @@ export const langue = () => 'fr';
 export const notifications = signal(Local.lire('notifications', []) || []);
 export const nonLues = computed(() => notifications.value.filter((n) => !n.lu).length);
 
+/* « Prévenez-moi » : articles épuisés (ou options : variante « Rouge|M ») dont ce client attend le retour. */
+export const alertes = signal(Array.isArray(Local.lire('alertes', [])) ? Local.lire('alertes', []) : []);
+const garderAlertes = (l) => { if (!Array.isArray(l)) return; alertes.value = l; Local.ecrire('alertes', l); };
+/* Une alerte sur l'article entier vaut pour chacune de ses options. */
+export const alerteActive = (produit, variante) => alertes.value.some((a) => a.produit === produit && (!a.variante || a.variante === (variante || '')));
+export async function basculerAlerte(produit, variante) {
+  const v = variante || '';
+  const active = alertes.value.find((a) => a.produit === produit && (a.variante === v || !a.variante));
+  const r = await requete(active ? 'sokoyetu/alertes/retirer' : 'sokoyetu/alertes', { method: 'POST', corps: { appareil: jetonAppareil(), produit, variante: active ? active.variante : v } });
+  garderAlertes(r && r.alertes);
+  return !active;
+}
+
 let deja = new Set(notifications.value.map((n) => n.id));
 /* Démo : pas de service de notification, la boutique montre elle-même la notification quand elle n'est pas à l'écran. */
 function montrerSurLeTelephone(nouvelles) {
@@ -31,6 +44,7 @@ export function chargerNotifications() {
     try {
       const r = await requete('sokoyetu/notifications', { method: 'POST', corps: { appareil: jetonAppareil(), langue: langue() } });
       const l = (r && r.notifications) || [];
+      garderAlertes(r && r.alertes);
       montrerSurLeTelephone(l.filter((n) => !n.lu && !deja.has(n.id)));
       deja = new Set(l.map((n) => n.id));
       notifications.value = l;
@@ -48,6 +62,12 @@ export async function marquerLues() {
   notifications.value = notifications.value.map((n) => ({ ...n, lu: true }));
   Local.ecrire('notifications', notifications.value.slice(0, 30));
   try { await requete('sokoyetu/notifications/lues', { method: 'POST', corps: { appareil: jetonAppareil() } }); } catch (e) { }
+}
+
+/* « Effacer mes données de ce téléphone » : notifications, alertes et jeton de l'appareil oubliés (un nouveau sera tiré). */
+export function oublierNotifications() {
+  ['notifications', 'alertes', 'appareil'].forEach((k) => Local.retirer(k));
+  notifications.value = []; alertes.value = []; deja = new Set();
 }
 
 /* ---------- Notifications du téléphone ---------- */
@@ -111,7 +131,7 @@ export async function desactiverPush() {
   }
   pushEtat.value = 'inactif';
 }
-/* Annonces de la boutique (promotions, nouveautés, retours en stock de la liste d'envies) : facultatives. */
+/* Annonces de la boutique (promotions, nouveautés) : facultatives. */
 export async function changerPromos(v) {
   promos.value = !!v; Local.ecrire('pushPromos', !!v);
   const sub = await abonnementActuel().catch(() => null);

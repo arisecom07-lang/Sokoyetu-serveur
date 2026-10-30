@@ -350,3 +350,31 @@ test('notifications : chaque étape d’une commande payée prévient le client,
   assert.equal(R.texteNotification({ type: 'expediee', details: { numero: 'A' } }, 'xx').texte, 'Commande #A : le livreur est en route.', 'langue inconnue : français, détail absent retiré');
   assert.equal(R.texteNotification({ type: 'inconnu' }, 'fr'), null);
 });
+
+test('« Prévenez-moi » et annonces : option suivie, retour en stock, textes et liens permis', () => {
+  const robe = { title: 'Robe wax', price: 20, options: { colors: [{ name: 'Rouge' }, { name: 'Bleu' }], sizes: ['M', 'L'] }, variants: { 'Rouge|M': 0, 'Rouge|L': 2, 'Bleu|M': 0, 'Bleu|L': 0 } };
+  assert.equal(R.varianteAlerte(robe, ''), '', 'article entier');
+  assert.equal(R.varianteAlerte(robe, '|'), '', 'article sans option');
+  assert.equal(R.varianteAlerte(robe, 'Rouge|M'), 'Rouge|M');
+  assert.equal(R.varianteAlerte(robe, 'Vert|M'), null, 'option inconnue');
+  assert.equal(R.alerteDisponible(robe, 'Rouge|M'), false);
+  assert.equal(R.alerteDisponible(robe, 'Rouge|L'), true);
+  assert.equal(R.alerteDisponible(robe, ''), true, 'une option en stock suffit pour l’article entier');
+  assert.equal(R.alerteDisponible({ ...robe, variants: {} }, ''), false);
+  assert.equal(R.alerteDisponible({ ...robe, status: 'draft' }, 'Rouge|L'), false, 'brouillon : pas encore');
+  assert.equal(R.alerteDisponible({ title: 'Montre', stock: 0, source: 'import' }, ''), true, 'vendu sur commande : disponible');
+  assert.equal(R.alerteDisponible({ title: 'Sac', stock: 3 }, ''), true);
+  assert.equal(R.libelleVariante('Rouge|M'), 'Rouge / M');
+  assert.equal(R.libelleVariante('|42'), '42');
+  assert.deepEqual(R.texteNotification({ type: 'stock', details: { titre: 'Robe wax', option: 'Rouge / M' } }, 'fr'),
+    { titre: 'De retour en stock', texte: '« Robe wax » (Rouge / M) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !' });
+  assert.equal(R.texteNotification({ type: 'stock', details: { titre: 'Sac', option: '' } }, 'fr').texte.indexOf('« Sac » est de nouveau'), 0, 'sans option : pas de parenthèses vides');
+  assert.deepEqual(R.texteNotification({ type: 'promo', details: { titre: 'Arrivage', texte: '40 modèles dès $8.' } }, 'fr'), { titre: 'Arrivage', texte: '40 modèles dès $8.' });
+  assert.deepEqual(R.annonceNettoyee({ titre: '  Arrivage   wax ', texte: 'Nouveaux\nmodèles', url: '/c/abc123/pagnes' }), { titre: 'Arrivage wax', texte: 'Nouveaux modèles', url: '/c/abc123/pagnes' });
+  assert.equal(R.annonceNettoyee({ titre: 'Promo', texte: 'Tout à −20 %' }).url, '/');
+  for (const url of ['/', '/nouveautes', '/en-stock', '/import-chine', '/p/ex-p08/robe-wax', '/p/abc']) assert.equal(R.annonceNettoyee({ titre: 'Promo', texte: 'Tout à −20 %', url }).url, url);
+  for (const url of ['https://exemple.com', '//exemple.com', '/p/../admin', 'javascript:alert(1)', '/compte?x=1']) assert.throws(() => R.annonceNettoyee({ titre: 'Promo', texte: 'Tout à −20 %', url }), /Lien invalide/);
+  assert.throws(() => R.annonceNettoyee({ titre: 'P', texte: 'Tout à −20 %' }), /titre/);
+  assert.throws(() => R.annonceNettoyee({ titre: 'Promo', texte: '' }), /message/);
+  assert.equal(R.annonceNettoyee({ titre: 'x'.repeat(90), texte: 'y'.repeat(300) }).titre.length, 60);
+});

@@ -21,9 +21,10 @@ import { Audience, AudienceArticle } from './pages/audience.jsx';
 import { Journal } from './pages/journal.jsx';
 import { Equipe, AccesReserve } from './pages/equipe.jsx';
 import { Livraisons } from './pages/livraisons.jsx';
+import { Annonces } from './pages/annonces.jsx';
 
 /* Droit nécessaire pour chaque page (regles.DROITS) : sans lui, « accès réservé » (le serveur refuse de toute façon). */
-const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe' };
+const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe', annonces: 'annonces' };
 function page(segs) {
   const [a, b] = segs;
   if (a === 'plus' || (a === 'reglages' && !b)) return role.value === 'livreur' ? Compte : Plus;
@@ -42,6 +43,7 @@ function page(segs) {
   if (a === 'reglages') return Reglages;
   if (a === 'compte') return Compte;
   if (a === 'journal') return Journal;
+  if (a === 'annonces') return Annonces;
   return role.value === 'livreur' ? Livraisons : Tableau;
 }
 

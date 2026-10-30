@@ -599,7 +599,7 @@ test('notifications gratuites : chaque étape prévient l’appareil qui a comma
   const r = await commander(saisie({ token: t, customer: { name: 'Client Notifié', phone: '0861234567' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0861234567' }, appareil }));
   assert.equal(r.status, 200, r.texte);
   const id = r.json.id, numero = r.json.order.number;
-  assert.deepEqual((await centre(appareil)).json, { notifications: [], nonLues: 0 }, 'pas encore payée : rien');
+  assert.deepEqual((await centre(appareil)).json, { notifications: [], nonLues: 0, alertes: [] }, 'pas encore payée : rien');
   await attendre(id, t, 'paid');
   let c = (await centre(appareil)).json;
   assert.deepEqual(c.notifications.map((n) => [n.type, n.titre, n.url, n.lu]), [['payee', 'Paiement reçu', `/suivi/${id}`, false]]);
@@ -651,4 +651,96 @@ test('notifications gratuites : chaque étape prévient l’appareil qui a comma
   // Effacement des données du client : ses notifications aussi.
   assert.equal((await api('/api/sokoyetu/clients/effacer', { method: 'POST', auth: true, body: { phone: '0861234567' } })).status, 200);
   assert.deepEqual((await centre(appareil)).json.notifications, []);
+});
+
+test('« Prévenez-moi » : chaque client prévenu une fois au retour en stock ; annonces aux téléphones qui les acceptent', async () => {
+  const appareil = secret();
+  const centre = (a = appareil, headers = {}) => api('/api/sokoyetu/notifications', { method: 'POST', headers, body: { appareil: a } });
+  const alerte = (corps, a = appareil, chemin = '') => api('/api/sokoyetu/alertes' + chemin, { method: 'POST', body: { appareil: a, ...corps } });
+  const chemise = { title: 'Chemise d’essai', price: 12, status: 'active', source: 'local', options: { colors: [{ name: 'Blanc' }], sizes: ['M', 'L'] }, variants: { 'Blanc|M': 0, 'Blanc|L': 1 }, images: [] };
+  assert.equal((await ecrire('products', 't-chemise', chemise)).status, 200);
+  assert.equal((await alerte({ produit: 'inconnu', variante: '' })).status, 404);
+  assert.equal((await alerte({ produit: 't-cache', variante: '' })).status, 404, 'brouillon');
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|XL' })).status, 400, 'option inconnue');
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|L' })).status, 400, 'option disponible');
+  assert.equal((await alerte({ produit: 't-chemise', variante: '' })).status, 400, 'une option en stock : article disponible');
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|M' }, 'court')).status, 400, 'appareil inconnu');
+  const a = await alerte({ produit: 't-chemise', variante: 'Blanc|M' });
+  assert.equal(a.status, 200, a.texte);
+  assert.deepEqual(a.json.alertes, [{ produit: 't-chemise', variante: 'Blanc|M' }]);
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|M' })).status, 200, 'demandé deux fois : une seule alerte');
+  assert.deepEqual((await centre()).json.alertes, [{ produit: 't-chemise', variante: 'Blanc|M' }]);
+  // Un deuxième client attend aussi ; un troisième change d'avis.
+  const autre = secret(), parti = secret();
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|M' }, autre)).status, 200);
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|M' }, parti)).status, 200);
+  assert.deepEqual((await alerte({ produit: 't-chemise', variante: 'Blanc|M' }, parti, '/retirer')).json.alertes, []);
+  // L'administration voit qui attend quoi (vendeur compris).
+  assert.equal((await api('/api/sokoyetu/alertes/attente')).status, 403);
+  assert.deepEqual((await api('/api/sokoyetu/alertes/attente', { auth: true })).json.produits['t-chemise'], { total: 2, variantes: { 'Blanc|M': 2 } });
+  // Fiche changée mais toujours épuisée : personne n'est prévenu.
+  assert.equal((await ecrire('products', 't-chemise', { ...chemise, price: 11 })).status, 200);
+  assert.deepEqual((await centre()).json.notifications, []);
+  // Retour en stock : les deux clients prévenus, une fois chacun, et leur alerte disparaît.
+  assert.equal((await ecrire('products', 't-chemise', { ...chemise, price: 11, variants: { 'Blanc|M': 4, 'Blanc|L': 1 } })).status, 200);
+  const c = (await centre()).json;
+  assert.deepEqual(c.notifications.map((n) => [n.type, n.titre, n.texte, n.url]),
+    [['stock', 'De retour en stock', '« Chemise d’essai » (Blanc / M) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !', '/p/t-chemise/chemise-d-essai']]);
+  assert.deepEqual(c.alertes, []);
+  assert.deepEqual((await centre(autre)).json.notifications.map((n) => n.type), ['stock']);
+  assert.deepEqual((await centre(parti)).json.notifications, [], 'alerte retirée : rien');
+  assert.equal((await api('/api/sokoyetu/alertes/attente', { auth: true })).json.produits['t-chemise'], undefined);
+  await ecrire('products', 't-chemise', { ...chemise, variants: { 'Blanc|M': 0, 'Blanc|L': 0 } });
+  await ecrire('products', 't-chemise', { ...chemise, variants: { 'Blanc|M': 2, 'Blanc|L': 0 } });
+  assert.equal((await centre()).json.notifications.length, 1, 'prévenu une seule fois');
+
+  // Stock rendu par une commande annulée : le client qui attendait l'article entier est prévenu.
+  const acheteur = secret();
+  assert.equal((await ecrire('products', 't-unique', { title: 'Pièce unique', price: 30, status: 'active', source: 'local', stock: 1, images: [] })).status, 200);
+  const items = [{ productId: 't-unique', qty: 1 }];
+  const total = (await api('/api/sokoyetu/devis', { method: 'POST', body: { items, zoneId: 'bukavu' } })).json.total;
+  const t = secret();
+  const r = await commander(saisie({ token: t, customer: { name: 'Client Unique', phone: '0871112233' }, items, discountCode: '', total, payment: { method: 'mpesa', phone: '0871112233' }, appareil: acheteur }));
+  assert.equal(r.status, 200, r.texte);
+  await attendre(r.json.id, t, 'paid');
+  assert.equal((await alerte({ produit: 't-unique', variante: '' })).status, 200);
+  assert.equal((await alerte({ produit: 't-chemise', variante: 'Blanc|L' }, acheteur)).status, 200);
+  assert.equal((await api(`/api/sokoyetu/commandes/${r.json.id}`, { method: 'POST', auth: true, body: { action: 'cancel' } })).status, 200);
+  assert.deepEqual((await centre()).json.notifications.map((n) => [n.type, n.texte]).slice(0, 1), [['stock', '« Pièce unique » est de nouveau disponible. Les quantités sont limitées : ne tardez pas !']]);
+  // Effacement des données du client : ses alertes aussi.
+  assert.equal((await api('/api/sokoyetu/clients/effacer', { method: 'POST', auth: true, body: { phone: '0871112233' } })).status, 200);
+  assert.deepEqual((await centre(acheteur)).json.alertes, []);
+
+  // Annonces : réservées au propriétaire, envoyées aux téléphones qui acceptent les annonces (un appareil n'en reçoit qu'une).
+  assert.equal((await api('/api/sokoyetu/annonces')).status, 403);
+  const avant = (await api('/api/sokoyetu/annonces', { auth: true })).json;
+  assert.deepEqual([avant.restantes, avant.parJour, avant.annonces], [3, 3, []]);
+  const abonner = (cle, a, promos) => api('/api/sokoyetu/push/abonner', { method: 'POST', body: { appareil: a, promos, abonnement: { endpoint: 'https://fcm.googleapis.com/fcm/send/' + cle + '-' + secret(), keys: { auth: Buffer.alloc(16, 3).toString('base64url'), p256dh: Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 5)]).toString('base64url') } } } });
+  const fan = secret(), discret = secret();
+  for (const x of [await abonner('fan', fan, true), await abonner('fan-bis', fan, true), await abonner('discret', discret, false)]) assert.equal(x.status, 200, x.texte);
+  const apres = (await api('/api/sokoyetu/annonces', { auth: true })).json.abonnes;
+  assert.ok(apres.promos === avant.abonnes.promos + 1 && apres.telephones >= avant.abonnes.telephones + 2, JSON.stringify([avant.abonnes, apres]));
+  const annoncer = (corps) => api('/api/sokoyetu/annonces', { method: 'POST', auth: true, body: corps });
+  assert.equal((await annoncer({ titre: 'Arrivage', texte: 'Nouveaux modèles', url: 'https://ailleurs.example' })).status, 400, 'lien extérieur refusé');
+  const e1 = await annoncer({ titre: 'Arrivage de chemises', texte: 'Nouvelles chemises dès $11, livrées en 24 h.', url: '/p/t-chemise/chemise-d-essai' });
+  assert.equal(e1.status, 200, e1.texte);
+  assert.deepEqual([e1.json.annonces[0].titre, e1.json.annonces[0].destinataires, e1.json.annonces[0].auteur, e1.json.restantes], ['Arrivage de chemises', apres.promos, 'admin@sokoyetu.test', 2]);
+  assert.deepEqual((await centre(fan)).json.notifications.map((n) => [n.type, n.titre, n.texte, n.url]),
+    [['promo', 'Arrivage de chemises', 'Nouvelles chemises dès $11, livrées en 24 h.', '/p/t-chemise/chemise-d-essai']]);
+  assert.deepEqual((await centre(discret)).json.notifications, [], 'annonces refusées : rien');
+  assert.equal((await annoncer({ titre: 'Deuxième', texte: 'Encore une annonce' })).status, 200);
+  assert.equal((await annoncer({ titre: 'Troisième', texte: 'Encore une annonce' })).status, 200);
+  const trop = await annoncer({ titre: 'Quatrième', texte: 'Encore une annonce' });
+  assert.equal(trop.status, 400);
+  assert.match(trop.json.message, /3 annonces par 24 heures/);
+  assert.deepEqual((await api('/api/sokoyetu/annonces', { auth: true })).json.annonces.map((x) => x.titre), ['Troisième', 'Deuxième', 'Arrivage de chemises']);
+
+  // Un vendeur voit les clients en attente, mais n'envoie pas d'annonce.
+  const m = await api('/api/sokoyetu/equipe', { method: 'POST', auth: true, body: { name: 'Amani Bahati', email: 'annonces@sokoyetu.test', role: 'vendeur' } });
+  assert.equal(m.status, 200, m.texte);
+  let v;
+  for (let i = 0; i < 9; i++) { v = await api('/api/collections/admins/auth-with-password', { method: 'POST', body: { identity: 'annonces@sokoyetu.test', password: m.json.motDePasse } }); if (v.status !== 429) break; await pause(2000); }
+  assert.equal(v.status, 200, v.texte);
+  assert.equal((await api('/api/sokoyetu/annonces', { headers: { Authorization: v.json.token } })).status, 403);
+  assert.equal((await api('/api/sokoyetu/alertes/attente', { headers: { Authorization: v.json.token } })).status, 200);
 });

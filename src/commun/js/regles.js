@@ -848,7 +848,9 @@ const TEXTES_NOTIFICATIONS = {
     retiree: ['Commande retirée', 'Commande #{numero} remise en boutique. Merci pour votre confiance !'],
     annulee: ['Commande annulée', 'Commande #{numero} annulée par la boutique.'],
     expiree: ['Paiement non reçu', 'Commande #{numero} annulée : le paiement n’est pas arrivé à temps.'],
-    remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).']
+    remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).'],
+    stock: ['De retour en stock', '« {titre} » ({option}) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !'],
+    promo: ['{titre}', '{texte}']
   }
 };
 /* Une notification ({ type, details }) en { titre, texte } dans la langue demandée (le français à défaut) ; null si type inconnu. */
@@ -858,6 +860,38 @@ function texteNotification(n, langue) {
   const d = (n && n.details) || {};
   const remplir = (x) => x.replace(/\{(\w+)\}/g, (_, k) => (d[k] === undefined || d[k] === null ? '' : String(d[k]))).replace(/ \(\)/g, '');
   return { titre: remplir(t[0]), texte: remplir(t[1]) };
+}
+
+/* ---------- « Prévenez-moi » au retour en stock, et annonces de la boutique ---------- */
+
+const MAX_ALERTES = 50;              // articles suivis au plus par client
+const ANNONCES_PAR_JOUR = 3;         // au-delà, les clients finissent par couper les notifications
+/* « Rouge|M » → « Rouge / M » (option d'un article, '' pour l'article entier). */
+const libelleVariante = (cle) => String(cle || '').split('|').filter(Boolean).join(' / ');
+/* Option suivie : '' (l'article entier, quelle que soit l'option) ou une de ses variantes ; null si elle n'existe pas. */
+function varianteAlerte(p, cle) {
+  const k = String(cle == null ? '' : cle);
+  if (!k || k === '|') return '';
+  return aDesOptions(p) && clesVariantes(p).indexOf(k) >= 0 ? k : null;
+}
+/* L'article (ou cette option) peut de nouveau être commandé : en vente, et en stock ou vendu sur commande. */
+function alerteDisponible(p, variante) {
+  if (!p || !estEnVente(p)) return false;
+  if (estImport(p)) return true;
+  return (variante && aDesOptions(p) ? int((p.variants || {})[variante]) : stockTotal(p)) > 0;
+}
+/* Lien d'une annonce : une page de la boutique (accueil, nouveautés, en stock, import, rayon, article), jamais une adresse extérieure. */
+const LIEN_ANNONCE = /^\/(?:nouveautes|en-stock|import-chine|categories|(?:p|c)\/[A-Za-z0-9_-]{1,40}(?:\/[a-z0-9-]{0,60})?)?$/;
+/* Annonce saisie par la boutique : { titre, texte, url }, ou ErreurCommande. */
+function annonceNettoyee(b) {
+  const x = estObjet(b) ? b : {};
+  const titre = nettoyer(x.titre, 60).replace(/\s+/g, ' ');
+  const texte = nettoyer(x.texte, 180).replace(/\s+/g, ' ');
+  const url = String(x.url == null ? '/' : x.url).trim() || '/';
+  if (titre.length < 3) throw new ErreurCommande('Donnez un titre à l’annonce (3 caractères au moins).', 'titre');
+  if (texte.length < 5) throw new ErreurCommande('Écrivez le message de l’annonce.', 'texte');
+  if (!LIEN_ANNONCE.test(url)) throw new ErreurCommande('Lien invalide : choisissez une page de la boutique.', 'url');
+  return { titre, texte, url };
 }
 
 module.exports = {
@@ -874,5 +908,6 @@ module.exports = {
   etapeCommande, reservationsAnciennes, incoherences, margeCommande,
   MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte,
   MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage,
-  evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification
+  evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification,
+  MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee
 };

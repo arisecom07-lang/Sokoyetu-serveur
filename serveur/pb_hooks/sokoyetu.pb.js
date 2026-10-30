@@ -236,11 +236,12 @@ routerAdd('POST', '/api/sokoyetu/compte/supprimer', (e) => {
 
 /* ---------- Boutique : notifications gratuites du client (voir lib/notifications.js et lib/push.js) ---------- */
 
-// Centre de notifications : celles du compte connecté et de cet appareil ({ appareil, langue }), les plus récentes d'abord.
+// Centre de notifications : celles du compte connecté et de cet appareil ({ appareil, langue }), les plus récentes d'abord,
+// et les articles dont il attend le retour en stock.
 routerAdd('POST', '/api/sokoyetu/notifications', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
-  const b = S.corps(e);
-  return e.json(200, N.liste(e.app, N.destinataire(e, b), b.langue));
+  const b = S.corps(e); const dest = N.destinataire(e, b);
+  return e.json(200, Object.assign(N.liste(e.app, dest, b.langue), { alertes: require(`${__hooks}/lib/alertes.js`).liste(e.app, dest) }));
 }, LIMITE.petite);
 routerAdd('POST', '/api/sokoyetu/notifications/lues', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
@@ -266,6 +267,20 @@ cronAdd('sokoyetu-notifications', '* * * * *', () => {
   catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Tournée des notifications impossible', { module: 'push', erreur: String(err) }); }
 });
 
+/* ---------- Boutique : « Prévenez-moi » au retour en stock (voir lib/alertes.js) ---------- */
+
+// { appareil, produit, variante } : variante '' pour l'article entier, « Rouge|M » pour une option épuisée.
+routerAdd('POST', '/api/sokoyetu/alertes', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).ajouter(e.app, N.destinataire(e, b), b));
+}, LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/alertes/retirer', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).retirer(e.app, N.destinataire(e, b), b));
+}, LIMITE.petite);
+
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
 
 // La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
@@ -280,6 +295,7 @@ cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/audience.js`).purger($app);
   require(`${__hooks}/lib/comptes.js`).purger($app);
   require(`${__hooks}/lib/notifications.js`).purger($app);
+  require(`${__hooks}/lib/alertes.js`).purger($app);
   require(`${__hooks}/lib/serveur.js`).purgerCompteurs($app);
 });
 
@@ -348,10 +364,11 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
       S.enregistrerCommande(tx, rec, d); n++;
     });
   });
-  // Notifications et abonnements du compte et des appareils de ces commandes : effacés aussi.
+  // Notifications, abonnements et alertes du compte et des appareils de ces commandes : effacés aussi (avant le compte).
   const clients = e.app.findRecordsByFilter('clients', 'phone = {:a} || phone = {:b}', '', 10, 0, { a: tel, b: '+' + tel }).map((c) => c.id);
-  const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   require(`${__hooks}/lib/notifications.js`).effacer(e.app, clients, appareils);
+  require(`${__hooks}/lib/alertes.js`).effacer(e.app, clients, appareils);
+  const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   return e.json(200, { effacees: n, comptes });
 }, LIMITE.petite);
 
@@ -453,6 +470,25 @@ routerAdd('DELETE', '/api/sokoyetu/equipe/{id}', (e) => {
   return e.json(200, require(`${__hooks}/lib/equipe.js`).retirer(e.app, e.request.pathValue('id'), e.auth ? e.auth.id : ''));
 });
 
+/* ---------- Administration : clients en attente d'un article, annonces aux clients (voir lib/alertes.js) ---------- */
+
+// Combien de clients attendent le retour de chaque article épuisé (et de chaque option).
+routerAdd('GET', '/api/sokoyetu/alertes/attente', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'produits');
+  return e.json(200, { produits: require(`${__hooks}/lib/alertes.js`).attente(e.app) });
+});
+// Promotions et nouveautés annoncées aux téléphones qui les acceptent (propriétaire) : { titre, texte, url }.
+routerAdd('GET', '/api/sokoyetu/annonces', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'annonces');
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).annonces(e.app));
+});
+routerAdd('POST', '/api/sokoyetu/annonces', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'annonces');
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).annoncer(e.app, auteur, S.corps(e)));
+}, LIMITE.petite);
+
 // Journal des erreurs (serveur et navigateurs) des derniers jours : ?jours=7&limite=100.
 routerAdd('GET', '/api/sokoyetu/journal', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
@@ -481,6 +517,17 @@ onRecordUpdateRequest(majProduit, 'products');
 onRecordAfterCreateSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
 onRecordAfterUpdateSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
 onRecordAfterDeleteSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
+
+// Article de nouveau en stock (fiche modifiée, commande annulée qui rend son stock) : les clients qui l'attendaient sont prévenus.
+onRecordAfterUpdateSuccess((e) => {
+  try { require(`${__hooks}/lib/alertes.js`).apresProduit(e.app, e.record); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Alertes de retour en stock non traitées', { module: 'alertes', produit: e.record.id, erreur: String(err) }); }
+  return e.next();
+}, 'products');
+onRecordAfterDeleteSuccess((e) => {
+  try { require(`${__hooks}/lib/alertes.js`).retirerProduit(e.app, e.record.id); } catch (err) { }
+  return e.next();
+}, 'products');
 
 function majRemise(e) {
   const S = require(`${__hooks}/lib/serveur.js`);

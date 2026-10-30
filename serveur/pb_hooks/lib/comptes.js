@@ -156,6 +156,7 @@ function supprimer(app, rec) {
     tx.db().newQuery('DELETE FROM sokoyetu_codes WHERE telephone = {:t}').bind({ t: rec.getString('phone') }).execute();
     tx.delete(tx.findRecordById('clients', rec.id));
   });
+  try { require(`${__hooks}/lib/notifications.js`).detacher(app, rec.id); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Notifications du compte non détachées', { module: 'comptes', erreur: String(e) }); }
 }
 
 /* Droit à l'effacement demandé à la boutique (administration) : le compte de ce téléphone disparaît aussi. */

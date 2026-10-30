@@ -177,10 +177,11 @@ function pousser(app) {
   return n;
 }
 
-/* Combien de téléphones reçoivent les notifications (administration). */
+/* Combien de téléphones reçoivent les notifications, et les annonces (administration) : un appareil compte une fois. */
 function abonnes(app) {
   const l = arrayOf(new DynamicModel({ n: 0, promos: 0 }));
-  app.db().newQuery('SELECT COUNT(*) AS n, COALESCE(SUM(promos), 0) AS promos FROM sokoyetu_abonnements').all(l);
+  const cible = "CASE WHEN appareil != '' THEN 'a' || appareil ELSE 'c' || client END";
+  app.db().newQuery(`SELECT COUNT(DISTINCT ${cible}) AS n, COUNT(DISTINCT CASE WHEN promos = 1 THEN ${cible} END) AS promos FROM sokoyetu_abonnements`).all(l);
   return { telephones: Number(l[0].n) || 0, promos: Number(l[0].promos) || 0 };
 }
 
@@ -198,4 +199,16 @@ function effacer(app, clients, appareils) {
   if (a) { app.db().newQuery(`DELETE FROM sokoyetu_notifications WHERE appareil IN (${a})`).execute(); app.db().newQuery(`DELETE FROM sokoyetu_abonnements WHERE appareil IN (${a})`).execute(); }
 }
 
-module.exports = { empreinte, destinataire, creer, apresCommande, liste, marquerLues, abonner, renouveler, desabonner, attente, pousser, abonnes, purger, effacer };
+/*
+ * Compte client supprimé : ses notifications, abonnements et alertes ne gardent que leur appareil (le téléphone reste
+ * prévenu de ses commandes) ; ce qui n'appartenait qu'au compte disparaît.
+ */
+function detacher(app, client) {
+  const c = String(client || ''); if (!c) return;
+  ['sokoyetu_notifications', 'sokoyetu_abonnements', 'sokoyetu_alertes'].forEach((t) => {
+    app.db().newQuery(`UPDATE OR REPLACE ${t} SET client = '' WHERE client = {:c}`).bind({ c }).execute();
+    app.db().newQuery(`DELETE FROM ${t} WHERE client = '' AND appareil = ''`).execute();
+  });
+}
+
+module.exports = { empreinte, destinataire, creer, apresCommande, liste, marquerLues, abonner, renouveler, desabonner, attente, pousser, abonnes, purger, effacer, detacher };

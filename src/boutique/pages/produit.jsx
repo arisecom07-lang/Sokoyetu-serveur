@@ -13,6 +13,8 @@ import { mesurerEvenement } from '../mesure.js';
 import { partager, adresseComplete } from '../partage.jsx';
 import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
+import { ActiverNotifications } from './notifications.jsx';
+import { alerteActive, basculerAlerte } from '../notifications.js';
 
 const selectionInitiale = (p) => {
   const cs = R.couleursDe(p), ts = R.taillesDe(p);
@@ -142,6 +144,26 @@ function LigneStock({ p, sel }) {
   return <p class="ligne-stock ok"><Icone n="coche" />En stock à {c.city}</p>;
 }
 
+/* « Prévenez-moi » : article (ou option) épuisé, le client est prévenu de son retour (notification gratuite). */
+function BoutonAlerte({ p, variante, classe, style }) {
+  const [occupe, setOccupe] = useState(false);
+  const actif = alerteActive(p.id, variante);
+  const clic = async () => {
+    if (occupe) return;
+    setOccupe(true);
+    try {
+      const a = await basculerAlerte(p.id, variante);
+      toast(a ? 'Nous vous préviendrons dès son retour' : 'Alerte retirée', { icone: 'cloche' });
+    } catch (err) { toast(err.message || 'Impossible pour le moment. Réessayez.', { icone: 'alerte', ton: 'danger', duree: 5000 }); }
+    setOccupe(false);
+  };
+  return (
+    <button type="button" class={classes('btn btn-l', actif ? 'btn-secondaire' : 'btn-primaire', classe, occupe && 'charge')} style={style} onClick={clic} aria-pressed={actif ? 'true' : 'false'}>
+      <Icone n={actif ? 'coche' : 'cloche'} />{actif ? 'Alerte activée' : 'Prévenez-moi'}
+    </button>
+  );
+}
+
 function Livraison({ p }) {
   const c = cfg.value; const d = delai(p, c); const j = R.int(c.importDays) || 20;
   return (
@@ -206,6 +228,11 @@ export function Produit() {
   const dansPanier = quantiteDansPanier(p.id, sel.color, sel.size);
   const stock = imp ? R.MAX_QTE : R.stockDe(p, sel.color, sel.size);
   const max = Math.max(1, Math.min(R.MAX_QTE, (imp ? R.MAX_QTE : stock) - dansPanier));
+  // Épuisé (tout l'article, ou l'option choisie) : « Prévenez-moi » à la place de « Ajouter au panier ».
+  const complet = (!R.couleursDe(p).length || sel.color) && (!R.taillesDe(p).length || sel.size);
+  const attendre = fini || (!imp && complet && stock <= 0);
+  const variante = R.aDesOptions(p) && complet ? R.cleVariante(R.couleursDe(p).length ? sel.color : '', R.taillesDe(p).length ? sel.size : '') : '';
+  const enAttente = attendre && alerteActive(p.id, variante);
   const details = caracteristiques(p.details);
   const virgule = (v) => String(R.arrondi(v)).replace('.', ',');
   if (R.poidsDe(p) && !details.some(([k]) => /^poids$/i.test(k))) details.push(['Poids', `${virgule(R.poidsDe(p))} kg`]);
@@ -273,11 +300,13 @@ export function Produit() {
                   {paliers.map((x) => <span key={x.min} role="listitem" class={memeArticle + sel.qty >= x.min ? 'atteint' : ''}><b>{dollars(pa.prix * (100 - x.pct) / 100)}</b><small>dès {x.min} pièces · −{x.pct} %</small></span>)}
                 </div>
               ) : null}
-              {!fini ? <div class="entre"><span class="champ-libelle">Quantité</span><Quantite valeur={sel.qty} max={max} onChange={(q) => setSel({ ...sel, qty: Math.max(1, Math.min(max, q)) })} /></div> : null}
+              {!attendre ? <div class="entre"><span class="champ-libelle">Quantité</span><Quantite valeur={sel.qty} max={max} onChange={(q) => setSel({ ...sel, qty: Math.max(1, Math.min(max, q)) })} /></div> : null}
               <div class="seulement-ordi produit-ajout">
-                <button class="btn btn-primaire btn-l btn-bloc" onClick={ajouter} disabled={fini}>{fini ? 'Épuisé' : <><Icone n="sac" />Ajouter au panier · {dollars(unitaire * sel.qty)}</>}</button>
+                {attendre ? <BoutonAlerte p={p} variante={variante} classe="btn-bloc" /> : <button class="btn btn-primaire btn-l btn-bloc" onClick={ajouter}><Icone n="sac" />Ajouter au panier · {dollars(unitaire * sel.qty)}</button>}
                 {ajoute ? <a class="btn btn-secondaire btn-l btn-bloc" href={lien('/panier')}>Voir le panier ({nbArticles.value})</a> : null}
               </div>
+              {enAttente ? <Note ton="ok" icone="cloche">Alerte activée : vous serez prévenu dès son retour en stock{variante ? ` (${R.libelleVariante(variante)})` : ''}, dans vos notifications.</Note> : null}
+              {enAttente ? <ActiverNotifications discret titre="Soyez prévenu même boutique fermée" texte="Une notification gratuite sur ce téléphone dès son retour en stock." /> : null}
               {dansPanier ? <Note ton="ok" icone="sac">{pluriel(dansPanier, 'exemplaire')} de cette option dans votre panier. <a class="lien" href={lien('/panier')}>Voir le panier</a></Note> : null}
             </section>
 
@@ -303,7 +332,8 @@ export function Produit() {
       <BarreAction>
         <BoutonFavori p={p} classe="btn-icone barre-favori" />
         {ajoute ? <a class="btn btn-secondaire" href={lien('/panier')} style={{ flex: 'none' }}>Panier ({nbArticles.value})</a> : null}
-        <button class="btn btn-primaire btn-l" style={{ flex: 1 }} onClick={ajouter} disabled={fini}>{fini ? 'Épuisé' : <>{remise ? <em class="barre-promo">−{remise} %</em> : null}Ajouter au panier</>}</button>
+        {attendre ? <BoutonAlerte p={p} variante={variante} style={{ flex: 1 }} />
+          : <button class="btn btn-primaire btn-l" style={{ flex: 1 }} onClick={ajouter}>{remise ? <em class="barre-promo">−{remise} %</em> : null}Ajouter au panier</button>}
       </BarreAction>
     </>
   );

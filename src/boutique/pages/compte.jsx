@@ -14,7 +14,7 @@ import { installable, installer, estIOS } from '../installation.jsx';
 import { Montants as MontantsDevis } from './commander.jsx';
 import { useSeo } from './commun.jsx';
 import { ActiverNotifications } from './notifications.jsx';
-import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos } from '../notifications.js';
+import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, oublierNotifications } from '../notifications.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
@@ -249,7 +249,7 @@ export function Compte() {
             {item({ href: lien('/infos/conditions'), icone: 'recu', titre: 'Conditions et confidentialité', sous: 'Vente, retours, données personnelles' })}
             {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: 'Se déconnecter', sous: 'Panier, favoris et commandes restent dans votre compte' }) : null}
             {cl ? item({ onClick: confirmerSuppression, icone: 'poubelle', titre: 'Supprimer mon compte', sous: 'Vos commandes restent chez la boutique' }) : null}
-            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
+            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); oublierNotifications(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
           </div>
         </div>
       </main>

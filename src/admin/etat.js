@@ -240,6 +240,14 @@ export const ajouterMembre = (d) => requete('sokoyetu/equipe', { method: 'POST',
 export const modifierMembre = (id, d) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'POST', corps: d });
 export const retirerMembre = (id) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'DELETE' });
 
+/* ---------- Clients qui attendent un article épuisé (« Prévenez-moi »), annonces aux clients (propriétaire) ---------- */
+
+/* { produit: { total, variantes: { 'Rouge|M': 2 } } } : relu à chaque ouverture des produits. */
+export const attentes = signal({});
+export const chargerAttentes = () => requete('sokoyetu/alertes/attente', { essais: 0 }).then((r) => { attentes.value = (r && r.produits) || {}; }).catch(() => { });
+export const lireAnnonces = () => requete('sokoyetu/annonces');
+export const envoyerAnnonce = (a) => requete('sokoyetu/annonces', { method: 'POST', corps: a });
+
 export async function effacerClient(tel) {
   const r = await requete('sokoyetu/clients/effacer', { method: 'POST', corps: { phone: tel } });
   await charger().catch(() => { }); // l'effacement est fait ; les fiches se mettent à jour en direct si la relecture échoue

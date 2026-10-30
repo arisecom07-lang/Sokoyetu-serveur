@@ -144,6 +144,7 @@ export function Plus() {
         </div>
         <p class="intertitre">Boutique en ligne</p>
         <div class="menu">
+          {peut('annonces') ? item(lien('/annonces'), 'cloche', 'Annonces aux clients', 'Promotions et nouveautés, en notification gratuite') : null}
           {peut('catalogue') ? item(lien('/bannieres'), 'megaphone', 'Bannières d’accueil', bannieres.value.length ? pluriel(bannieres.value.filter((b) => b.active !== false).length, 'bannière active', 'bannières actives') : 'Images du port par défaut') : null}
           {peut('reglages') ? item(lien('/reglages/boutique'), 'boutique', 'Identité de la boutique', `${c.name} · ${c.tagline}`) : null}
           {item(adresseBoutique('/'), 'oeil', 'Voir la boutique', 'Comme vos clients la voient', true)}

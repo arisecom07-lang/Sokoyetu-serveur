@@ -489,3 +489,12 @@ label.import-ligne { cursor: pointer; grid-template-columns: auto auto minmax(0,
 .import-ligne > input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: var(--marque); }
 .import-ligne.fait { opacity: .7; cursor: default; }
 .import-ligne .ligne-vignette .ic { --ic: 20px; color: var(--encre-3); }
+/* Annonces aux clients : la notification telle qu'elle s'affiche sur le téléphone. */
+.apercu-notif { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px; border-radius: 20px;
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); border: 1px solid var(--ligne); box-shadow: var(--ombre-1); }
+.apercu-notif-icone { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--marque); color: #fff; }
+.apercu-notif-texte { display: grid; gap: 2px; min-width: 0; }
+.apercu-notif-texte small { color: var(--encre-3); font-size: 12px; }
+.apercu-notif-texte b { font-weight: 750; overflow-wrap: anywhere; }
+.apercu-notif-texte span { color: var(--encre-2); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.ligne-texte small.attente { color: var(--info); font-weight: 650; }

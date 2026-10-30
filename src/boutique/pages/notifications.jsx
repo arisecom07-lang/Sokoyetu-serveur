@@ -1,15 +1,19 @@
 // Sokoyetu (boutique) — centre de notifications, et invitation à recevoir les notifications sur le téléphone (gratuites).
 import { useEffect, useState } from 'preact/hooks';
+import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
+import { Photo } from '../../commun/js/medias.jsx';
 import { Note, Vide, toast } from '../../commun/js/interface.jsx';
 import { ilya, classes } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { notifications, chargerNotifications, marquerLues, pushEtat, activerPush } from '../notifications.js';
+import { produitsParId } from '../etat.js';
+import { notifications, chargerNotifications, marquerLues, pushEtat, activerPush, alertes, basculerAlerte } from '../notifications.js';
 import { EntetePage, Pied } from '../composants/cadre.jsx';
+import { lienProduit } from '../composants/produits.jsx';
 import { useSeo } from './commun.jsx';
 
-const ICONES = { payee: 'portefeuille', preparation: 'colis', expediee: 'camion', prete: 'boutique', livree: 'coche', retiree: 'coche', annulee: 'alerte', expiree: 'alerte', remboursee: 'portefeuille' };
-const TONS = { livree: 'ok', retiree: 'ok', payee: 'ok', annulee: 'danger', expiree: 'danger' };
+const ICONES = { payee: 'portefeuille', preparation: 'colis', expediee: 'camion', prete: 'boutique', livree: 'coche', retiree: 'coche', annulee: 'alerte', expiree: 'alerte', remboursee: 'portefeuille', stock: 'etincelle', promo: 'megaphone' };
+const TONS = { livree: 'ok', retiree: 'ok', payee: 'ok', stock: 'ok', annulee: 'danger', expiree: 'danger' };
 
 /*
  * Invitation à activer les notifications du téléphone. discret : rien quand elles sont bloquées ou impossibles
@@ -38,6 +42,32 @@ export function ActiverNotifications({ titre, texte, discret }) {
   );
 }
 
+/* Articles épuisés dont le client attend le retour (« Prévenez-moi ») : il peut ne plus les attendre. */
+function ArticlesAttendus() {
+  const l = alertes.value.map((a) => ({ ...a, p: produitsParId.value.get(a.produit) })).filter((a) => a.p);
+  if (!l.length) return null;
+  const retirer = async (a) => {
+    try { await basculerAlerte(a.produit, a.variante); toast('Alerte retirée', { icone: 'cloche' }); }
+    catch (err) { toast(err.message || 'Impossible pour le moment. Réessayez.', { icone: 'alerte', ton: 'danger' }); }
+  };
+  return (
+    <section class="pile" aria-labelledby="titre-attendus">
+      <h2 class="sous-titre" id="titre-attendus">Vous attendez leur retour</h2>
+      <ul class="liste-attendus">
+        {l.map((a) => (
+          <li key={a.produit + '#' + a.variante}>
+            <a class="attendu" href={lienProduit(a.p)}>
+              <Photo m={R.imagePrincipale(a.p)} alt="" tailles="56px" />
+              <span class="notif-texte"><b>{a.p.title}</b><span>{a.variante ? R.libelleVariante(a.variante) : 'Toutes les options'} · prévenu dès son retour</span></span>
+            </a>
+            <button type="button" class="btn-icone" aria-label={`Ne plus attendre « ${a.p.title} »`} onClick={() => retirer(a)}><Icone n="fermer" /></button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function Notifications() {
   useSeo(() => ({ titre: 'Notifications', noindex: true }), []);
   const [pret, setPret] = useState(notifications.value.length > 0);
@@ -51,7 +81,7 @@ export function Notifications() {
         <div class="pile-l">
           <ActiverNotifications />
           {!l.length && !pret ? <div class="pile">{[1, 2, 3].map((i) => <div key={i} class="squelette" style={{ height: 76 }} />)}</div>
-            : !l.length ? <Vide icone="cloche" titre="Aucune notification" texte="Vos commandes vous préviennent ici à chaque étape : paiement reçu, préparation, en route, livrée." />
+            : !l.length ? <Vide icone="cloche" titre="Aucune notification" texte="Vos commandes vous préviennent ici à chaque étape : paiement reçu, préparation, en route, livrée. Et les articles épuisés, à leur retour en stock." />
               : (
                 <ul class="liste-notifs" aria-label="Notifications">
                   {l.map((n) => (
@@ -65,6 +95,7 @@ export function Notifications() {
                   ))}
                 </ul>
               )}
+          <ArticlesAttendus />
         </div>
       </main>
       <Pied />

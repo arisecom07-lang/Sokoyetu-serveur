@@ -57,6 +57,28 @@ assert.deepEqual(await client.locator('.notif-texte b').allInnerTexts(), ['Comma
 await client.waitForSelector('.entete a[href="#/notifications"] .pastille-compte', { state: 'detached', timeout: 8000 });
 etape('notifications gratuites : « Paiement reçu » puis « Commande en préparation », lues dans le centre de notifications');
 
+// « Prévenez-moi » : option épuisée suivie, vue par l'administration, client prévenu dès que le stock revient.
+await client.goto(BASE + '/boutique/index.html#/p/ex-p09/chemise-habillee-en-coton'); await client.waitForSelector('.produit-titre');
+await client.click('button.couleur[aria-label^="Bordeaux"]'); await client.click('button.taille:has-text("XXL")');
+await client.click('.barre-action button:has-text("Prévenez-moi")'); await client.waitForSelector('.barre-action button:has-text("Alerte activée")');
+await admin.bringToFront();
+await admin.goto(BASE + '/admin/index.html#/produits/ex-p09'); await admin.waitForSelector('.note:has-text("1 client attend le retour de cet article (Bordeaux / XXL : 1)")');
+await admin.fill('input[aria-label="Stock Bordeaux XXL"]', '3'); await admin.click('button:has-text("Enregistrer")'); await admin.waitForSelector('.toast:has-text("Produit enregistré")');
+await client.bringToFront();
+await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.notif-texte b:text("De retour en stock")');
+etape('« Prévenez-moi » : option épuisée suivie, client prévenu dès que la boutique remet du stock');
+// Annonce de la boutique : reçue par ce navigateur, qui accepte les annonces (« Promotions et nouveautés »).
+await client.evaluate(() => { localStorage.setItem('sokoyetu:pushDemo', 'true'); localStorage.setItem('sokoyetu:pushPromos', 'true'); });
+await admin.bringToFront();
+await admin.goto(BASE + '/admin/index.html#/annonces'); await admin.waitForSelector('.kpi:has-text("Acceptent les annonces") .kpi-val:text("1")');
+await admin.fill('#annonce-titre', 'Arrivage de chemises'); await admin.fill('textarea[maxlength="180"]', 'Nouvelles chemises dès $18, en stock à Bukavu.');
+await admin.click('button:has-text("Envoyer l’annonce")'); await admin.click('.feuille button:has-text("Envoyer")');
+await admin.waitForSelector('.toast:has-text("Annonce envoyée à 1 téléphone")');
+await client.bringToFront();
+await client.goto(BASE + '/boutique/index.html#/'); await client.waitForSelector('.carte-produit'); await client.goto(BASE + '/boutique/index.html#/notifications');
+await client.waitForSelector('.notif-texte b:text("Arrivage de chemises")');
+etape('annonce aux clients : envoyée depuis l’administration, reçue dans la boutique');
+
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.
 const envelopper = async (route) => { const r = await route.fetch(); route.fulfill({ response: r, headers: { ...r.headers(), 'content-type': 'text/html; charset=utf-8' }, body: '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + (await r.text()) + '</body></html>' }); };
