@@ -268,14 +268,17 @@ cronAdd('sokoyetu-veille', '*/5 * * * *', () => {
 /* ---------- Administration ---------- */
 
 // Étapes d'une commande : paiement confirmé, préparation, expédition, livraison, annulation (stock restitué)…
+// Le livreur ne fait que « En route » et « Livrée », sur les commandes payées à livrer ; les remboursements restent au propriétaire.
 routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
-  S.exigerGerant(e);
+  const role = S.exigerGerant(e);
   const b = S.corps(e);
+  if (!R.etapePermise(role, String(b.action || ''))) return e.json(403, { message: 'Votre rôle dans l’équipe ne permet pas cette action.' });
   let sortie = null, erreur = null;
   e.app.runInTransaction((tx) => {
     let rec;
     try { rec = tx.findRecordById('orders', e.request.pathValue('id')); } catch (err) { erreur = { status: 404, message: 'Commande introuvable.' }; return; }
+    if (role === 'livreur' && !R.pourLivreur(S.lire(rec))) { erreur = { status: 404, message: 'Commande introuvable.' }; return; }
     const P = S.lecteurProduits(tx);
     let r;
     try { r = R.etapeCommande(S.lire(rec), String(b.action || ''), { maintenant: Date.now(), note: b.note, produit: (id) => P.doc(id) }); }
@@ -283,7 +286,7 @@ routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
     if (r.stock === 'reserver') S.appliquerStock(tx, r.entrees, -1);
     if (r.stock === 'restituer') S.appliquerStock(tx, r.entrees, 1);
     S.enregistrerCommande(tx, rec, r.commande);
-    sortie = { id: rec.id, doc: r.commande };
+    sortie = { id: rec.id, doc: role === 'livreur' ? S.commandeLivreur(r.commande) : r.commande };
   });
   if (erreur) return e.json(erreur.status, { message: erreur.message });
   return e.json(200, sortie);
@@ -292,7 +295,7 @@ routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
 // Droit à l'effacement : nom, téléphone, adresse et références de paiement d'un client retirés de ses commandes.
 routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'effacer');
   const tel = R.chiffres(S.corps(e).phone);
   if (tel.length < 6) return e.json(400, { message: 'Numéro de téléphone manquant.' });
   let n = 0;
@@ -315,7 +318,7 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
 // Assistant IA : rédige une fiche produit à partir d'une photo.
 routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   const IA = require(`${__hooks}/lib/ia.js`);
   try { return e.json(200, IA.fiche(S.corps(e))); }
   catch (err) {
@@ -327,7 +330,7 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
 // Photo ajoutée à une fiche : l'assistant repère l'article, l'administration recadre et éclaire la photo.
 routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   const IA = require(`${__hooks}/lib/ia.js`);
   try { return e.json(200, IA.cadre(S.corps(e))); }
   catch (err) {
@@ -339,7 +342,7 @@ routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
 // Import depuis un fournisseur (1688, Alibaba…) : titre, photos et prix d'usine ; avec ia=true, l'assistant rédige la fiche en français.
 routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   const I = require(`${__hooks}/lib/import.js`); const IA = require(`${__hooks}/lib/ia.js`);
   const b = S.corps(e);
   try {
@@ -358,7 +361,7 @@ routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
 // Copie une photo (adresse publique) dans la médiathèque : import en masse, photos d'un fournisseur.
 routerAdd('POST', '/api/sokoyetu/import/photo', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   try { return e.json(200, require(`${__hooks}/lib/import.js`).copierPhoto(e.app, S.corps(e).url)); }
   catch (err) {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'not_image' ? 'Ce lien ne mène pas à une photo (JPEG, PNG ou WebP).' : err.code === 'bad_url' ? 'Adresse de photo invalide.' : err.code === 'too_big' ? 'Photo trop lourde : 10 Mo au plus.' : 'Photo introuvable à cette adresse.' });
@@ -369,12 +372,12 @@ routerAdd('POST', '/api/sokoyetu/import/photo', (e) => {
 // Fréquentation : en ligne maintenant, visiteurs par jour, chiffres par article (?jours=1 à 90, &graphe=7 : colonnes du graphique).
 routerAdd('GET', '/api/sokoyetu/audience', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'audience');
   return e.json(200, require(`${__hooks}/lib/audience.js`).resume(e.app, (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']));
 });
 routerAdd('GET', '/api/sokoyetu/audience/{id}', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'audience');
   const r = require(`${__hooks}/lib/audience.js`).article(e.app, e.request.pathValue('id'), (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']);
   return r ? e.json(200, r) : e.json(404, { message: 'Article introuvable.' });
 });
@@ -387,10 +390,33 @@ routerAdd('GET', '/api/sokoyetu/etat', (e) => {
   return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: IA.active(), iaQuota: IA.quota(), paiement: require(`${__hooks}/lib/paiement.js`).etat(), codes: require(`${__hooks}/lib/envoi.js`).etat() });
 });
 
+/* ---------- Administration : l'équipe (propriétaire seulement, voir lib/equipe.js) ---------- */
+
+routerAdd('GET', '/api/sokoyetu/equipe', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'equipe');
+  return e.json(200, { membres: require(`${__hooks}/lib/equipe.js`).liste(e.app) });
+});
+// Nouveau membre : son mot de passe provisoire n'est montré qu'une fois, dans cette réponse.
+routerAdd('POST', '/api/sokoyetu/equipe', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'equipe');
+  return e.json(200, require(`${__hooks}/lib/equipe.js`).ajouter(e.app, S.corps(e)));
+}, LIMITE.petite);
+// Rôle ou nom changé, nouveau mot de passe provisoire (« reinitialiser »).
+routerAdd('POST', '/api/sokoyetu/equipe/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'equipe');
+  return e.json(200, require(`${__hooks}/lib/equipe.js`).modifier(e.app, e.request.pathValue('id'), S.corps(e), e.auth ? e.auth.id : ''));
+}, LIMITE.petite);
+routerAdd('DELETE', '/api/sokoyetu/equipe/{id}', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'equipe');
+  return e.json(200, require(`${__hooks}/lib/equipe.js`).retirer(e.app, e.request.pathValue('id'), e.auth ? e.auth.id : ''));
+});
+
 // Journal des erreurs (serveur et navigateurs) des derniers jours : ?jours=7&limite=100.
 routerAdd('GET', '/api/sokoyetu/journal', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'journal');
   const q = e.requestInfo().query || {};
   return e.json(200, { erreurs: require(`${__hooks}/lib/journal.js`).lire(e.app, q['jours'], q['limite']) });
 });
@@ -443,13 +469,16 @@ onRecordUpdateRequest((e) => {
 
 onRecordEnrich((e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  if (!S.estGerant(e.requestInfo)) { e.record.set('doc', S.commandePublique(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
+  const role = S.roleDe(e.requestInfo);
+  if (!role) { e.record.set('doc', S.commandePublique(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
+  else if (role === 'livreur') { e.record.set('doc', S.commandeLivreur(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
   return e.next();
 }, 'orders');
 
 onRecordEnrich((e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  if (!S.estGerant(e.requestInfo)) e.record.set('doc', S.produitPublic(S.lire(e.record)));
+  const role = S.roleDe(e.requestInfo);
+  if (!role || !S.R.peut(role, 'produits')) e.record.set('doc', S.produitPublic(S.lire(e.record)));
   return e.next();
 }, 'products');
 

@@ -135,6 +135,7 @@ function vue(col, rec, gerant) {
   if (col === 'media') r.file = rec.file;
   if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, created: new Date(rec.created).toISOString().replace('T', ' ') });
   if (!gerant) { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = commandePublique(rec.doc); }
+  else if (roleActuel() === 'livreur') { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = { ...commandePublique(rec.doc), adminNote: rec.doc.adminNote || '' }; }
   // Comme le serveur : la boutique apprend quel paiement est ouvert (ici, le mode test).
   if (col === 'config') { const c = configPaiement(rec.doc); r.doc.payment = { provider: 'simulation', holdMinutes: c.payment.holdMinutes, test: true }; r.doc.accounts = { open: true, test: true, channels: ['whatsapp', 'sms'] }; }
   return r;
@@ -158,12 +159,32 @@ export const Auth = {
   get expireBientot() { return false; }
 };
 const gerant = () => !!auth && !!auth.record && auth.record.collectionName === 'admins';
+/* Rôle dans l'équipe : dans la démo, il se choisit par l'e-mail de connexion (livreur@…, vendeur@…, sinon propriétaire). */
+const roleActuel = () => (gerant() ? R.roleNettoye(auth.record.role) : '');
+const roleDeEmail = (email) => (/^livreur/i.test(email) ? 'livreur' : /^vendeu/i.test(email) ? 'vendeur' : 'proprietaire');
+/* L'équipe de la démo : le propriétaire et deux membres d'exemple. */
+function equipe(b) {
+  if (!Array.isArray(b.equipe)) {
+    const t = Date.now() - 20 * JOUR;
+    b.equipe = [
+      { id: COMPTE.id, email: COMPTE.email, name: 'Messir', role: 'proprietaire', created: t },
+      { id: 'demo-vendeur', email: 'vendeur@sokoyetu.com', name: 'Neema Furaha', role: 'vendeur', created: t + 2 * JOUR },
+      { id: 'demo-livreur', email: 'livreur@sokoyetu.com', name: 'Patrick Mulumba', role: 'livreur', created: t + 5 * JOUR }
+    ];
+  }
+  return b.equipe;
+}
+const vueMembre = (m) => ({ id: m.id, email: m.email, name: m.name, role: m.role, created: new Date(m.created).toISOString().replace('T', ' ') });
 /* Client connecté à son compte (boutique), sinon null. */
 const clientConnecte = (b) => (auth && auth.record && auth.record.collectionName === 'clients' ? b.cols.clients[auth.record.id] || null : null);
 const jetonClient = (id) => `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ id, exp: Math.floor(Date.now() / 1000) + 90 * 86400 })}.demo`;
 const vueCompte = (rec) => ({ id: rec.id, phone: rec.phone, name: rec.name, created: new Date(rec.created).toISOString(), doc: R.docCompte(rec.doc) });
 const commandesDuCompte = (b, rec) => Object.values(b.cols.orders).filter((o) => o.client === rec.id || (o.phone && o.phone === R.chiffres(rec.phone))).sort((x, y) => y.created - x.created).map((o) => ({ id: o.id, t: o.token }));
-function exigerGerant() { if (!gerant()) throw new ErreurApi(403, 'Réservé à l’administration de la boutique.'); }
+function exigerGerant(droit) {
+  if (!gerant()) throw new ErreurApi(403, 'Réservé à l’administration de la boutique.');
+  if (droit && !R.peut(roleActuel(), droit)) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+  return roleActuel();
+}
 
 /* ---------- Temps réel entre les onglets de la démo ---------- */
 
@@ -209,15 +230,20 @@ export const TempsReel = {
 
 /* ---------- Le « serveur » ---------- */
 
+/* Droits de lecture et d'écriture des collections selon le rôle (comme les règles de la migration « équipe »). */
+const DROIT_ECRITURE = { config: 'reglages', collections: 'catalogue', banners: 'catalogue', products: 'produits', discounts: 'remises', media: 'produits' };
 function routeRecords(b, col, id, method, corps, q) {
   const table = b.cols[col]; if (!table) throw new ErreurApi(404, 'Collection inconnue.');
   const lecturePublique = ['config', 'collections', 'banners', 'products'].includes(col);
+  const role = roleActuel();
+  if (role && ((col === 'discounts' && !R.peut(role, 'remises')) || (col === 'clients' && !R.peut(role, 'clients')))) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
   if (col === 'clients' && method !== 'GET') throw new ErreurApi(403, 'Les comptes se modifient par la boutique.');
   if (col === 'clients' && id && !gerant()) throw new ErreurApi(404, 'Introuvable.');
   if (method === 'GET' && !id) {
     if (!lecturePublique && !gerant()) return { items: [], page: 1, perPage: 500 };
     let l = Object.values(table);
     if (col === 'products' && !gerant()) l = l.filter((x) => x.active !== false);
+    if (col === 'orders' && role === 'livreur') l = l.filter((x) => R.pourLivreur(x.doc));
     if (q.get('sort') === '-created') l.sort((x, y) => y.created - x.created);
     const page = Number(q.get('page') || 1), par = Number(q.get('perPage') || 500);
     return { items: l.slice((page - 1) * par, page * par).map((x) => vue(col, x, gerant())), page, perPage: par };
@@ -226,11 +252,12 @@ function routeRecords(b, col, id, method, corps, q) {
     const rec = table[id];
     if (!rec) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'orders' && !gerant() && rec.token !== q.get('t')) throw new ErreurApi(404, 'Introuvable.');
+    if (col === 'orders' && role === 'livreur' && !R.pourLivreur(rec.doc)) throw new ErreurApi(404, 'Introuvable.');
     if ((col === 'discounts' || col === 'media') && !gerant()) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'products' && !gerant() && rec.active === false) throw new ErreurApi(404, 'Introuvable.');
     return vue(col, rec, gerant());
   }
-  exigerGerant();
+  exigerGerant(DROIT_ECRITURE[col]);
   // Comme sur le serveur : une commande ne change que par les routes de paiement et d'étapes.
   if (col === 'orders') throw new ErreurApi(403, 'Les commandes se modifient par leurs étapes.');
   const now = Date.now();
@@ -259,7 +286,9 @@ async function serveur(chemin, method, corps) {
   let m;
   if (p === 'collections/admins/auth-with-password') {
     if (!corps || !String(corps.identity || '').includes('@') || !corps.password) throw new ErreurApi(400, 'E-mail ou mot de passe incorrect.');
-    return { token: fauxJeton(), record: { ...COMPTE, email: String(corps.identity).trim().toLowerCase() } };
+    const email = String(corps.identity).trim().toLowerCase();
+    const membre = equipe(b).find((x) => x.email === email);
+    return { token: fauxJeton(), record: membre ? { ...COMPTE, id: membre.id, email, name: membre.name, role: membre.role } : { ...COMPTE, email, role: roleDeEmail(email) } };
   }
   if (p === 'collections/admins/auth-refresh') { exigerGerant(); return { token: fauxJeton(), record: Auth.compte }; }
   if (p === 'collections/clients/auth-refresh') { const c = clientConnecte(b); if (!c) throw new ErreurApi(401, 'Connectez-vous à votre compte.'); return { token: jetonClient(c.id), record: { id: c.id, collectionName: 'clients', phone: c.phone, name: c.name } }; }
@@ -274,7 +303,7 @@ async function serveur(chemin, method, corps) {
     if (gerant()) r.details = { sauvegardes: { nombre: 7, derniere: Date.now() - 5 * 3600e3, verification: { quand: Date.now() - 2 * JOUR, ok: true, fichier: '@auto_pb_backup_sokoyetu.zip', message: 'Restauration réussie (exemple de la démonstration).' } }, paiement: { fournisseur: 'simulation', pret: true, test: true, panne: 0 }, erreurs: { heure: 0, jour: 0 }, alerte: { configuree: false, dernier: 0 }, problemes: [{ grave: false, texte: 'Démonstration : sur votre serveur, cette page montre l’état réel des sauvegardes, du paiement et des erreurs.' }] };
     return r;
   }
-  if (p === 'sokoyetu/journal') { exigerGerant(); return { erreurs: [] }; }
+  if (p === 'sokoyetu/journal') { exigerGerant('journal'); return { erreurs: [] }; }
 
   // Comptes clients (comme serveur/pb_hooks/lib/comptes.js) : code affiché à l'écran, comme en mode test.
   if (p === 'sokoyetu/compte/code') {
@@ -373,8 +402,9 @@ async function serveur(chemin, method, corps) {
     return { id: rec.id, token: rec.token };
   }
   if ((m = p.match(/^sokoyetu\/commandes\/(.+)$/))) {
-    exigerGerant();
-    const rec = b.cols.orders[decodeURIComponent(m[1])]; if (!rec) throw new ErreurApi(404, 'Commande introuvable.');
+    const role = exigerGerant();
+    if (!R.etapePermise(role, String(corps.action || ''))) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+    const rec = b.cols.orders[decodeURIComponent(m[1])]; if (!rec || (role === 'livreur' && !R.pourLivreur(rec.doc))) throw new ErreurApi(404, 'Commande introuvable.');
     let r;
     try { r = R.etapeCommande(rec.doc, String(corps.action || ''), { maintenant: Date.now(), note: corps.note, produit }); }
     catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
@@ -383,10 +413,43 @@ async function serveur(chemin, method, corps) {
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
     diffuser('orders', rec.id, 'update');
-    return { id: rec.id, doc: r.commande };
+    return { id: rec.id, doc: role === 'livreur' ? { ...commandePublique(r.commande), adminNote: r.commande.adminNote || '' } : r.commande };
+  }
+  // L'équipe (propriétaire) : comme lib/equipe.js, sans vrai mot de passe.
+  if (p === 'sokoyetu/equipe' && method === 'GET') { exigerGerant('equipe'); return { membres: equipe(b).map(vueMembre) }; }
+  if (p === 'sokoyetu/equipe') {
+    exigerGerant('equipe');
+    const email = String(corps.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new ErreurApi(400, 'Adresse e-mail invalide.');
+    if (!R.ROLES[corps.role]) throw new ErreurApi(400, 'Choisissez un rôle : propriétaire, vendeur ou livreur.');
+    if (!R.valider.nom(corps.name)) throw new ErreurApi(400, 'Indiquez le nom du membre (2 à 60 lettres).');
+    if (equipe(b).some((x) => x.email === email)) throw new ErreurApi(400, 'Cette adresse a déjà un compte dans l’équipe.');
+    const membre = { id: 'adm' + uid().slice(0, 12), email, name: R.valider.nom(corps.name), role: corps.role, created: Date.now() };
+    equipe(b).push(membre); enregistrer(b);
+    return { membre: vueMembre(membre), motDePasse: 'DEMO-essai-2026' };
+  }
+  if ((m = p.match(/^sokoyetu\/equipe\/(.+)$/))) {
+    exigerGerant('equipe');
+    const l = equipe(b); const membre = l.find((x) => x.id === decodeURIComponent(m[1]));
+    if (!membre) throw new ErreurApi(404, 'Ce membre de l’équipe n’existe plus.');
+    const proprios = l.filter((x) => x.role === 'proprietaire').length;
+    const moi = Auth.compte && Auth.compte.id === membre.id;
+    if (method === 'DELETE') {
+      if (moi) throw new ErreurApi(400, 'Vous ne pouvez pas retirer votre propre compte.');
+      if (membre.role === 'proprietaire' && proprios <= 1) throw new ErreurApi(400, 'La boutique doit garder au moins un propriétaire.');
+      b.equipe = l.filter((x) => x !== membre); enregistrer(b); return { ok: true };
+    }
+    if (corps.role !== undefined) {
+      if (!R.ROLES[corps.role]) throw new ErreurApi(400, 'Choisissez un rôle : propriétaire, vendeur ou livreur.');
+      if (membre.role === 'proprietaire' && corps.role !== 'proprietaire' && proprios <= 1) throw new ErreurApi(400, 'La boutique doit garder au moins un propriétaire.');
+      membre.role = corps.role;
+    }
+    if (corps.reinitialiser && moi) throw new ErreurApi(400, 'Changez votre propre mot de passe dans « Mon compte ».');
+    enregistrer(b);
+    return { membre: vueMembre(membre), motDePasse: corps.reinitialiser ? 'DEMO-essai-2026' : '' };
   }
   if (p === 'sokoyetu/clients/effacer') {
-    exigerGerant();
+    exigerGerant('effacer');
     const tel = R.chiffres(corps.phone); if (tel.length < 6) throw new ErreurApi(400, 'Numéro de téléphone manquant.');
     const l = Object.values(b.cols.orders).filter((x) => x.phone === tel);
     l.forEach((rec) => {
@@ -403,8 +466,8 @@ async function serveur(chemin, method, corps) {
     return { effacees: l.length, comptes: comptes.length };
   }
   if (p === 'sokoyetu/visite') { visiteDemo(corps); return null; }
-  if (p === 'sokoyetu/audience') { exigerGerant(); return resumeDemo(q.get('jours'), q.get('graphe')); }
-  if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant(); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
+  if (p === 'sokoyetu/audience') { exigerGerant('audience'); return resumeDemo(q.get('jours'), q.get('graphe')); }
+  if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant('audience'); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
   // Import depuis un fournisseur : la démo ne peut pas lire les sites chinois, elle montre un exemple de lecture.
   if (p === 'sokoyetu/import/lien') {

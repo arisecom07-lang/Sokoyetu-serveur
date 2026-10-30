@@ -784,8 +784,37 @@ function apercuPartage(opts) {
   return { lignes, disponibles, n: disponibles.reduce((a, l) => a + l.qty, 0), sousTotal, frais, total: arrondi(sousTotal + frais) };
 }
 
+/* ---------- Équipe : rôles des comptes de l'administration (le serveur contrôle, l'administration masque le reste) ---------- */
+
+const ROLES = {
+  proprietaire: { label: 'Propriétaire', texte: 'Tout : réglages, équipe, réductions, remboursements et chiffres.' },
+  vendeur: { label: 'Vendeur', texte: 'Commandes, produits, clients, messages et avis. Ni réglages, ni équipe, ni réductions, ni remboursements.' },
+  livreur: { label: 'Livreur', texte: 'Seulement les commandes à livrer : adresse, téléphone, « En route » et « Livrée ».' }
+};
+/* Rôle d'un compte : les comptes créés avant les rôles (rôle vide) sont ceux du propriétaire. */
+const roleNettoye = (r) => (ROLES[r] ? r : 'proprietaire');
+const DROITS = {
+  proprietaire: ['*'],
+  vendeur: ['tableau', 'commandes', 'produits', 'catalogue', 'clients', 'messages', 'avis', 'audience'],
+  livreur: ['livraisons']
+};
+function peut(role, droit) {
+  const l = DROITS[roleNettoye(role)];
+  return l.indexOf('*') >= 0 || l.indexOf(droit) >= 0;
+}
+/* Étapes de commande permises : le livreur ne fait que « En route » et « Livrée » ; les remboursements restent au propriétaire. */
+function etapePermise(role, action) {
+  const r = roleNettoye(role);
+  if (r === 'proprietaire') return true;
+  if (r === 'livreur') return action === 'shipped' || action === 'delivered';
+  return action !== 'refund' && action !== 'doublon';
+}
+/* Commandes montrées au livreur : payées, ouvertes, à livrer (pas les retraits en boutique). */
+const pourLivreur = (o) => !!o && o.status === 'open' && estPayee(o) && !estRetraitCmd(o);
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
+  ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
   config, zoneDe, estRetrait, moyensDePaiement, fraisService,
   cleVariante, couleursDe, taillesDe, aDesOptions, estImport, estEnVente, clesVariantes, stockDe, stockTotal, prixBarre, pourcentRemise, imagePrincipale, ajusterStock,

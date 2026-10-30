@@ -6,7 +6,7 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { LogoOperateur, Note, Vide, Pastille, toast, confirmer, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { dollars, dateHeure, pluriel, telephone, lienWhatsApp, lienAppel, copier, classes, normaliser } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, commandes, produitsParId, pret, etapeCommande, gererErreur } from '../etat.js';
+import { cfg, commandes, produitsParId, pret, etapeCommande, gererErreur, role } from '../etat.js';
 import { TetePage, adresseBoutique } from '../composants/cadre.jsx';
 import { LigneCommandeCourte, Chargement } from './accueil.jsx';
 
@@ -100,7 +100,8 @@ export function Commande() {
     } catch (e) { gererErreur(e); }
     setOccupe('');
   };
-  const bouton = (action, icone, children, secondaire) => <button class={classes('btn', secondaire ? 'btn-secondaire' : 'btn-primaire', occupe === action && 'charge')} disabled={!!occupe} onClick={() => agir(action)}><Icone n={icone} />{children}</button>;
+  // Remboursements : propriétaire seulement (le serveur le vérifie aussi).
+  const bouton = (action, icone, children, secondaire) => (R.etapePermise(role.value, action) ? <button class={classes('btn', secondaire ? 'btn-secondaire' : 'btn-primaire', occupe === action && 'charge')} disabled={!!occupe} onClick={() => agir(action)}><Icone n={icone} />{children}</button> : null);
 
   let suite;
   if (R.nonAboutie(o)) suite = <Note ton="info" icone="horloge">Le client n’a pas payé dans le délai : commande annulée automatiquement{o.cancelledAt ? ` le ${dateHeure(o.cancelledAt)}` : ''}, articles remis en stock. Rien à faire.</Note>;

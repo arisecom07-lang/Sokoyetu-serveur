@@ -7,6 +7,9 @@ import { urlMedia } from '../commun/js/medias.jsx';
 import { empreinteCarte, fabriquerCarte, LARGEUR, HAUTEUR } from './carte-partage.js';
 
 export const compte = signal(Auth.charger() ? Auth.compte : null);
+/* Rôle dans l'équipe (propriétaire, vendeur, livreur) : le serveur contrôle chaque action, l'administration masque le reste. */
+export const role = computed(() => R.roleNettoye(compte.value && compte.value.role));
+export const peut = (droit) => R.peut(role.value, droit);
 export const pret = signal(false);          // données chargées
 export const erreurChargement = signal(''); // premier chargement impossible : message affiché avec « Réessayer »
 // Santé du serveur (sauvegardes, paiement, erreurs) : lue à l'ouverture et sur la page « Santé et journal ».
@@ -29,6 +32,8 @@ export const remises = computed(() => [...donnees.value.discounts].sort((a, b) =
 export const commandes = computed(() => [...donnees.value.orders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
 export const produitsParId = computed(() => new Map(donnees.value.products.map((p) => [p.id, p])));
 export const aTraiter = computed(() => donnees.value.orders.filter(R.aTraiter).length);
+/* Livreur : commandes payées à livrer, pas encore remises au client. */
+export const aLivrer = computed(() => donnees.value.orders.filter((o) => R.pourLivreur(o) && o.fulfillment !== 'delivered').length);
 
 /* Comptes clients (facultatifs) : panier, favoris et coordonnées gardés par le serveur. */
 export const comptes = signal([]);
@@ -59,6 +64,9 @@ export const clients = computed(() => {
 /* ---------- Chargement et temps réel ---------- */
 
 const COLLECTIONS = ['config', 'collections', 'banners', 'products', 'discounts', 'orders'];
+/* Collections lues selon le rôle : le livreur ne reçoit que les commandes à livrer, les codes promo restent au propriétaire. */
+const DROIT_COLLECTION = { collections: 'catalogue', banners: 'catalogue', products: 'produits', discounts: 'remises', orders: 'commandes' };
+const lisible = (c) => !DROIT_COLLECTION[c] || peut(DROIT_COLLECTION[c]) || (c === 'orders' && peut('livraisons'));
 function poser(col, ligne, retirer) {
   const d = donnees.value;
   if (col === 'config') { if (ligne.id === 'store') donnees.value = { ...d, config: retirer ? null : ligne }; return; }
@@ -75,13 +83,13 @@ export function quandNouvelleCommande(fn) { surNouvelleCommande = fn; }
  */
 export async function charger() {
   const echecs = [];
-  const res = await Promise.all(COLLECTIONS.map((c) => tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => {
-    if (e.status === 401 || e.status === 403) throw e;
-    if (e.status === 404) return []; // collection absente (serveur d'une ancienne version)
+  const res = await Promise.all(COLLECTIONS.map((c) => (!lisible(c) ? Promise.resolve([]) : tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => {
+    if (e.status === 401) throw e;
+    if (e.status === 404 || e.status === 403) return []; // collection absente (ancienne version du serveur) ou réservée à un autre rôle
     echecs.push(e); return null;
-  })));
+  }))));
   if (echecs.length && !pret.value) throw echecs[0];
-  chargerComptes();
+  if (peut('clients')) chargerComptes();
   batch(() => {
     const avant = donnees.value; const d = {};
     COLLECTIONS.forEach((c, i) => { d[c] = res[i] || (c === 'config' ? null : avant[c]); });
@@ -133,12 +141,12 @@ let suivi = false;
 export function suivreEnDirect() {
   if (suivi) return; suivi = true;
   // Un client met un article au panier ou en favori, crée son compte : l'administration le voit aussitôt.
-  TempsReel.abonner('clients/*', (m) => {
+  if (peut('clients')) TempsReel.abonner('clients/*', (m) => {
     if (!m || !m.record) return;
     const autres = comptes.value.filter((c) => c.id !== m.record.id);
     comptes.value = m.action === 'delete' ? autres : [...autres, versCompte(m.record)];
   });
-  COLLECTIONS.forEach((col) => TempsReel.abonner(col + '/*', (m) => {
+  COLLECTIONS.filter(lisible).forEach((col) => TempsReel.abonner(col + '/*', (m) => {
     if (!m || !m.record) return;
     const ligne = versLigne(m.record);
     // Alerte quand une commande vient d'être payée (confirmée par l'opérateur), pas quand le client commence à payer.
@@ -225,6 +233,13 @@ export async function etapeCommande(id, action, note) {
   poser('orders', versLigne(r));
   return r;
 }
+/* ---------- Équipe (propriétaire) : comptes de l'administration et leurs rôles ---------- */
+
+export const lireEquipe = () => requete('sokoyetu/equipe').then((r) => r.membres || []);
+export const ajouterMembre = (d) => requete('sokoyetu/equipe', { method: 'POST', corps: d });
+export const modifierMembre = (id, d) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'POST', corps: d });
+export const retirerMembre = (id) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'DELETE' });
+
 export async function effacerClient(tel) {
   const r = await requete('sokoyetu/clients/effacer', { method: 'POST', corps: { phone: tel } });
   await charger().catch(() => { }); // l'effacement est fait ; les fiches se mettent à jour en direct si la relecture échoue

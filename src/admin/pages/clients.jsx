@@ -9,7 +9,7 @@ import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises } from '../etat.js';
+import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
 
@@ -134,27 +134,32 @@ export function Plus() {
       <div class="pile-l formulaire-etroit">
         <p class="intertitre">Suivi</p>
         <div class="menu">
-          {item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article')}
-          {item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site')}
+          {peut('audience') ? item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article') : null}
+          {peut('journal') ? item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site') : null}
         </div>
         <p class="intertitre">Catalogue</p>
         <div class="menu">
-          {item(lien('/rayons'), 'rayons', 'Rayons', pluriel(rayons.value.length, 'rayon'))}
-          {item(lien('/remises'), 'pourcent', 'Réductions', pluriel(remises.value.filter((d) => d.active !== false).length, 'code actif', 'codes actifs'))}
+          {peut('catalogue') ? item(lien('/rayons'), 'rayons', 'Rayons', pluriel(rayons.value.length, 'rayon')) : null}
+          {peut('remises') ? item(lien('/remises'), 'pourcent', 'Réductions', pluriel(remises.value.filter((d) => d.active !== false).length, 'code actif', 'codes actifs')) : null}
         </div>
         <p class="intertitre">Boutique en ligne</p>
         <div class="menu">
-          {item(lien('/bannieres'), 'megaphone', 'Bannières d’accueil', bannieres.value.length ? pluriel(bannieres.value.filter((b) => b.active !== false).length, 'bannière active', 'bannières actives') : 'Images du port par défaut')}
-          {item(lien('/reglages/boutique'), 'boutique', 'Identité de la boutique', `${c.name} · ${c.tagline}`)}
+          {peut('catalogue') ? item(lien('/bannieres'), 'megaphone', 'Bannières d’accueil', bannieres.value.length ? pluriel(bannieres.value.filter((b) => b.active !== false).length, 'bannière active', 'bannières actives') : 'Images du port par défaut') : null}
+          {peut('reglages') ? item(lien('/reglages/boutique'), 'boutique', 'Identité de la boutique', `${c.name} · ${c.tagline}`) : null}
           {item(adresseBoutique('/'), 'oeil', 'Voir la boutique', 'Comme vos clients la voient', true)}
         </div>
-        <p class="intertitre">Réglages</p>
-        <div class="menu">
-          {item(lien('/reglages/paiements'), 'portefeuille', 'Paiements Mobile Money', ms.length ? ms.map((m) => m.label).join(', ') : 'À configurer')}
-          {item(lien('/reglages/livraison'), 'camion', 'Livraison', c.zones.map((z) => z.name).join(', '))}
-          {item(lien('/reglages/general'), 'reglages', 'Général', 'Contact, devise, échanges, statistiques, exemples')}
-          {item(lien('/reglages/legal'), 'recu', 'Informations légales', 'RCCM, adresse, conditions de vente')}
-        </div>
+        {peut('reglages') ? (
+          <>
+            <p class="intertitre">Réglages</p>
+            <div class="menu">
+              {item(lien('/reglages/paiements'), 'portefeuille', 'Paiements Mobile Money', ms.length ? ms.map((m) => m.label).join(', ') : 'À configurer')}
+              {item(lien('/reglages/livraison'), 'camion', 'Livraison', c.zones.map((z) => z.name).join(', '))}
+              {item(lien('/reglages/general'), 'reglages', 'Général', 'Contact, devise, échanges, statistiques, exemples')}
+              {item(lien('/reglages/legal'), 'recu', 'Informations légales', 'RCCM, adresse, conditions de vente')}
+            </div>
+          </>
+        ) : null}
+        {peut('equipe') ? <div class="menu">{item(lien('/equipe'), 'personnes', 'Équipe', 'Vendeurs et livreurs : chacun son accès')}</div> : null}
         <p class="intertitre">Compte</p>
         <div class="menu">{item(lien('/compte'), 'personne', 'Mon compte', compte.value && compte.value.email)}</div>
       </div>
@@ -230,16 +235,14 @@ export function Compte() {
   const s = etatServeur.value;
   return (
     <>
-      <TetePage titre="Mon compte" sous={compte.value && compte.value.email} parent="/plus" />
+      <TetePage titre="Mon compte" sous={`${compte.value && compte.value.email} · ${R.ROLES[role.value].label}`} parent={role.value === 'livreur' ? undefined : '/plus'} />
       <div class="pile-l formulaire-etroit">
         <div class="menu">
-          <button class="menu-item" onClick={ouvrirMotDePasse}><span class="menu-icone"><Icone n="cadenas" /></span><span class="menu-texte"><b>Changer le mot de passe</b><small>Recommandé après l’installation</small></span><Icone n="droite" classe="chevron" /></button>
+          <button class="menu-item" onClick={ouvrirMotDePasse}><span class="menu-icone"><Icone n="cadenas" /></span><span class="menu-texte"><b>Changer le mot de passe</b><small>{role.value === 'proprietaire' ? 'Recommandé après l’installation' : 'Remplacez le mot de passe provisoire reçu'}</small></span><Icone n="droite" classe="chevron" /></button>
           <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur cet appareil' : 'Désactivé : thème clair'} />
         </div>
-        <div class="pile">
-          <AlertesCommandes />
-        </div>
-        <section class="carte">
+        {role.value !== 'livreur' ? <div class="pile"><AlertesCommandes /></div> : null}
+        {peut('produits') && (s.ia || peut('reglages')) ? <section class="carte">
           <h2 class="carte-titre"><Icone n="ia" />Assistant IA des fiches produits</h2>
           {s.ia ? <Note ton="ok" icone="coche">Activé. Dans Produits, touchez « Ajouter avec l’IA » et prenez l’article en photo.</Note> : (
             <div class="pile">
@@ -247,14 +250,14 @@ export function Compte() {
               <code class="commande">sudo /opt/sokoyetu/ia.sh 'sk-ant-…'</code>
             </div>
           )}
-        </section>
-        <ComptesClients s={s.codes} />
-        <section class="carte">
+        </section> : null}
+        {peut('reglages') ? <ComptesClients s={s.codes} /> : null}
+        {peut('journal') ? <section class="carte">
           <h2 class="carte-titre"><Icone n="info" />Serveur</h2>
           <dl class="infos"><dt>Version</dt><dd>{s.version || __VERSION__}</dd><dt>Sauvegardes</dt><dd>Chaque nuit, 7 gardées</dd></dl>
           <a class="btn btn-secondaire btn-s espace-haut" href={lien('/journal')}><Icone n="bouclier" />Santé et journal des erreurs</a>
           <p class="champ-aide espace-haut">Tableau technique (sauvegardes, journal complet) : <a class="lien" href={adresseBoutique('/_/')} target="_blank" rel="noopener">{adresseBoutique('/_/').replace(/^https?:\/\//, '')}</a></p>
-        </section>
+        </section> : null}
         <button class="btn btn-secondaire" onClick={async () => { if (await confirmer({ titre: 'Se déconnecter ?', ok: 'Se déconnecter' })) seDeconnecter(); }}><Icone n="sortie" />Se déconnecter</button>
       </div>
     </>

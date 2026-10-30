@@ -7,7 +7,7 @@ import { Garde, surveillerErreurs } from '../commun/js/erreurs.jsx';
 import { dollars } from '../commun/js/outils.js';
 import { Local } from '../commun/js/stockage.js';
 import { route, aller } from './routeur.js';
-import { compte, demarrer, verifierSession, quandNouvelleCommande, aTraiter, cfg } from './etat.js';
+import { compte, demarrer, verifierSession, quandNouvelleCommande, aTraiter, aLivrer, cfg, role, peut } from './etat.js';
 import { BarreLaterale, NavBasAdmin } from './composants/cadre.jsx';
 import { Connexion, Tableau } from './pages/accueil.jsx';
 import { Commandes, Commande } from './pages/commandes.jsx';
@@ -19,10 +19,18 @@ import { Clients, Client, Plus, Compte } from './pages/clients.jsx';
 import { Reglages } from './pages/reglages.jsx';
 import { Audience, AudienceArticle } from './pages/audience.jsx';
 import { Journal } from './pages/journal.jsx';
+import { Equipe, AccesReserve } from './pages/equipe.jsx';
+import { Livraisons } from './pages/livraisons.jsx';
 
+/* Droit nécessaire pour chaque page (regles.DROITS) : sans lui, « accès réservé » (le serveur refuse de toute façon). */
+const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe' };
 function page(segs) {
   const [a, b] = segs;
-  if (!a) return Tableau;
+  if (a === 'plus' || (a === 'reglages' && !b)) return role.value === 'livreur' ? Compte : Plus;
+  if (DROIT_PAGE[a] && !peut(DROIT_PAGE[a])) return AccesReserve;
+  if (!a) return role.value === 'livreur' ? Livraisons : Tableau;
+  if (a === 'livraisons') return peut('livraisons') || peut('commandes') ? Livraisons : AccesReserve;
+  if (a === 'equipe') return Equipe;
   if (a === 'commandes') return b ? Commande : Commandes;
   if (a === 'historique') return Historique;
   if (a === 'produits') return b === 'importer' ? ImportProduits : b ? FicheProduit : Produits;
@@ -31,11 +39,10 @@ function page(segs) {
   if (a === 'rayons') return b ? () => <FicheCatalogue type="rayons" /> : Rayons;
   if (a === 'bannieres') return b ? () => <FicheCatalogue type="bannieres" /> : Bannieres;
   if (a === 'remises') return b ? () => <FicheCatalogue type="remises" /> : Remises;
-  if (a === 'reglages') return b ? Reglages : Plus;
-  if (a === 'plus') return Plus;
+  if (a === 'reglages') return Reglages;
   if (a === 'compte') return Compte;
   if (a === 'journal') return Journal;
-  return Tableau;
+  return role.value === 'livreur' ? Livraisons : Tableau;
 }
 
 /* Petit carillon à l'arrivée d'une commande (autorisé après le premier geste sur la page). */
@@ -51,6 +58,7 @@ function carillon() {
   });
 }
 quandNouvelleCommande((o) => {
+  if (role.value === 'livreur') return; // le livreur voit ses livraisons arriver dans sa liste
   toast(`Commande payée #${o.number} · ${dollars(o.total)}`, { icone: 'cloche', duree: 6000 });
   carillon();
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
@@ -60,7 +68,7 @@ quandNouvelleCommande((o) => {
 
 function App() {
   const connecte = !!compte.value;
-  const n = aTraiter.value;
+  const n = role.value === 'livreur' ? aLivrer.value : aTraiter.value;
   useEffect(() => {
     document.title = `${n ? `(${n}) ` : ''}${cfg.value.name} · Gestion`;
     try { if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => { }); } catch (e) { }

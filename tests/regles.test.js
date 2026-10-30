@@ -301,3 +301,28 @@ test('panier partagé : aperçu aux prix et au stock du jour (message, aperçu d
   assert.deepEqual([a.sousTotal, a.frais, a.total], [71, 1.42, 72.42]);
   assert.deepEqual(R.apercuPartage({ cfg, produit, lignes: [] }), { lignes: [], disponibles: [], n: 0, sousTotal: 0, frais: 0, total: 0 });
 });
+
+test('équipe : rôles, droits et étapes permises', () => {
+  assert.equal(R.roleNettoye(''), 'proprietaire', 'les comptes créés avant les rôles sont ceux du propriétaire');
+  assert.equal(R.roleNettoye('inconnu'), 'proprietaire');
+  assert.equal(R.roleNettoye('livreur'), 'livreur');
+  assert.equal(R.peut('', 'reglages'), true);
+  assert.equal(R.peut('vendeur', 'produits'), true);
+  assert.equal(R.peut('vendeur', 'reglages'), false);
+  assert.equal(R.peut('vendeur', 'equipe'), false);
+  assert.equal(R.peut('vendeur', 'remises'), false);
+  assert.equal(R.peut('livreur', 'livraisons'), true);
+  assert.equal(R.peut('livreur', 'commandes'), false);
+  assert.equal(R.etapePermise('proprietaire', 'refund'), true);
+  assert.equal(R.etapePermise('vendeur', 'shipped'), true);
+  assert.equal(R.etapePermise('vendeur', 'refund'), false);
+  assert.equal(R.etapePermise('livreur', 'delivered'), true);
+  assert.equal(R.etapePermise('livreur', 'cancel'), false);
+  assert.equal(R.etapePermise('livreur', 'paid'), false);
+  const { commande } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'EEEEEE' });
+  assert.equal(R.pourLivreur(commande), false, 'pas encore payée');
+  const payee = R.paiementConfirme(commande, { reference: 'X' }).commande;
+  assert.equal(R.pourLivreur(payee), true);
+  assert.equal(R.pourLivreur(R.etapeCommande(payee, 'cancel').commande), false, 'annulée');
+  assert.equal(R.pourLivreur({ ...payee, shipping: { ...payee.shipping, pickup: true } }), false, 'retrait en boutique');
+});

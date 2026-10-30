@@ -371,6 +371,7 @@ test('compte client : code sur WhatsApp ou par SMS (mode test), connexion, panie
   assert.equal(o.status, 200, o.texte);
   assert.equal((await enregistrement(o.json.id)).client, compteId);
   assert.ok((await api('/api/sokoyetu/compte', { headers: moi })).json.commandes.some((x) => x.id === o.json.id && x.t === t));
+  assert.equal((await api(`/api/collections/orders/records/${o.json.id}?t=${t}`, { headers: moi })).status, 200, 'suivi de commande lu connecté au compte');
   const renouvele = await api('/api/collections/clients/auth-refresh', { method: 'POST', headers: moi });
   assert.equal(renouvele.status, 200);
 });
@@ -481,4 +482,104 @@ test('audience : visites anonymes comptées, robots ignorés, chiffres réservé
   const d = await api('/api/sokoyetu/audience/art-audience?jours=7', { auth: true });
   assert.equal(d.json.dansPaniers, 0);
   assert.equal(d.json.total.vues, 1);
+});
+
+test('équipe : vendeur et livreur ajoutés par le propriétaire, chacun limité à son rôle', async () => {
+  const equipe = (chemin = '', opts = {}) => api('/api/sokoyetu/equipe' + chemin, { auth: true, ...opts });
+  // Connexions rapprochées : la limite de 5 essais en 15 secondes peut répondre 429, on patiente alors un peu.
+  const connexion = async (email, password) => {
+    for (let i = 0; ; i++) {
+      const r = await api('/api/collections/admins/auth-with-password', { method: 'POST', body: { identity: email, password } });
+      if (r.status !== 429 || i === 8) return r;
+      await pause(2000);
+    }
+  };
+  assert.equal((await api('/api/sokoyetu/equipe')).status, 403);
+  const avant = (await equipe()).json.membres;
+  assert.deepEqual(avant.map((m) => [m.email, m.role]), [['admin@sokoyetu.test', 'proprietaire']]);
+  assert.equal((await equipe('', { method: 'POST', body: { name: 'Patrick Mulumba', email: 'livreur@sokoyetu.test', role: 'chef' } })).status, 400);
+  const l = await equipe('', { method: 'POST', body: { name: 'Patrick Mulumba', email: 'Livreur@Sokoyetu.test', role: 'livreur' } });
+  assert.equal(l.status, 200, l.texte);
+  assert.deepEqual([l.json.membre.email, l.json.membre.role], ['livreur@sokoyetu.test', 'livreur']);
+  assert.match(l.json.motDePasse, /^[A-Z]{4}-[a-z]{4}-[2-9]{4}$/);
+  assert.equal((await equipe('', { method: 'POST', body: { name: 'Doublon', email: 'livreur@sokoyetu.test', role: 'vendeur' } })).status, 400);
+  const v = await equipe('', { method: 'POST', body: { name: 'Neema Furaha', email: 'vendeur@sokoyetu.test', role: 'vendeur' } });
+  assert.equal(v.status, 200, v.texte);
+
+  // Trois commandes : payée à livrer, payée à retirer en boutique, paiement refusé.
+  const nouvelle = async (extra = {}) => {
+    const t = secret();
+    const r = await api('/api/sokoyetu/commander', { method: 'POST', body: saisie({ token: t, customer: { name: 'Client Équipe', phone: '0851112233' }, items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3, payment: { method: 'mpesa', phone: '0851112233' }, ...extra }) });
+    assert.equal(r.status, 200, r.texte);
+    return { id: r.json.id, t };
+  };
+  const aLivrer = await nouvelle();
+  const aRetirer = await nouvelle({ shipping: { zoneId: 'retrait' }, total: 15.3 });
+  const refusee = await nouvelle({ payment: { method: 'mpesa', phone: '0850000000' } });
+  await attendre(aLivrer.id, aLivrer.t, 'paid'); await attendre(aRetirer.id, aRetirer.t, 'paid'); await attendre(refusee.id, refusee.t, 'failed');
+  assert.equal((await api(`/api/sokoyetu/commandes/${aLivrer.id}`, { method: 'POST', auth: true, body: { action: 'note', note: 'Sonner deux fois' } })).status, 200);
+
+  const cl = await connexion('livreur@sokoyetu.test', l.json.motDePasse);
+  assert.deepEqual([cl.status, cl.json.record.role], [200, 'livreur']);
+  const livreur = { Authorization: cl.json.token };
+  // Le livreur : seulement les commandes payées à livrer, sans coûts ni jeton, avec la consigne de la boutique.
+  const vues = await api('/api/collections/orders/records?perPage=500', { headers: livreur });
+  assert.equal(vues.status, 200, vues.texte);
+  const ids = vues.json.items.map((x) => x.id);
+  assert.ok(ids.includes(aLivrer.id));
+  assert.ok(!ids.includes(aRetirer.id) && !ids.includes(refusee.id), 'ni retrait en boutique, ni commande impayée');
+  const vue = vues.json.items.find((x) => x.id === aLivrer.id);
+  assert.deepEqual([vue.doc.items[0].cost, vue.doc.adminNote, vue.token, vue.doc.customer.phone], [undefined, 'Sonner deux fois', undefined, '0851112233']);
+  assert.equal((await api(`/api/collections/orders/records/${refusee.id}`, { headers: livreur })).status, 404);
+  const etape = (id, action) => api(`/api/sokoyetu/commandes/${id}`, { method: 'POST', headers: livreur, body: { action } });
+  assert.equal((await etape(aLivrer.id, 'cancel')).status, 403);
+  assert.equal((await etape(aLivrer.id, 'refund')).status, 403);
+  assert.equal((await etape(aRetirer.id, 'shipped')).status, 404);
+  const route = await etape(aLivrer.id, 'shipped');
+  assert.deepEqual([route.status, route.json.doc.fulfillment, route.json.doc.items[0].cost], [200, 'shipped', undefined]);
+  assert.equal((await etape(aLivrer.id, 'delivered')).json.doc.fulfillment, 'delivered');
+  assert.equal((await enregistrement(aLivrer.id)).etape, 'delivered');
+  // Rien d'autre : réglages, produits, réductions, comptes clients, chiffres, équipe.
+  assert.notEqual((await api('/api/collections/config/records/store', { method: 'PATCH', headers: livreur, body: { doc: { name: 'Piraté' } } })).status, 200);
+  assert.notEqual((await api('/api/collections/products/records/t-montre', { method: 'PATCH', headers: livreur, body: { doc: { title: 'Piraté' } } })).status, 200);
+  assert.equal((await api('/api/collections/products/records/t-montre', { headers: livreur })).json.doc.cost, undefined);
+  assert.equal((await api('/api/collections/discounts/records', { headers: livreur })).json.items.length, 0);
+  assert.equal((await api('/api/collections/clients/records', { headers: livreur })).json.items.length, 0);
+  assert.equal((await api('/api/sokoyetu/audience', { headers: livreur })).status, 403);
+  assert.equal((await api('/api/sokoyetu/journal', { headers: livreur })).status, 403);
+  assert.equal((await api('/api/sokoyetu/equipe', { headers: livreur })).status, 403);
+
+  // Le vendeur : catalogue, commandes, clients et audience ; ni réglages, ni réductions, ni remboursements, ni équipe.
+  const cv = await connexion('vendeur@sokoyetu.test', v.json.motDePasse);
+  assert.deepEqual([cv.status, cv.json.record.role], [200, 'vendeur']);
+  const vendeur = { Authorization: cv.json.token };
+  const montre = (await api('/api/collections/products/records/t-montre', { headers: vendeur })).json.doc;
+  assert.equal(montre.cost, 5);
+  const p = await api('/api/collections/products/records/t-montre', { method: 'PATCH', headers: vendeur, body: { doc: { ...montre, title: 'Montre du vendeur' } } });
+  assert.equal(p.status, 200, p.texte);
+  assert.equal((await ecrire('products', 't-montre', { ...montre, title: 'Montre d’essai' })).status, 200);
+  assert.notEqual((await api('/api/collections/config/records/store', { method: 'PATCH', headers: vendeur, body: { doc: { name: 'Piraté' } } })).status, 200);
+  assert.equal((await api('/api/collections/config/records/store')).json.doc.name, 'Sokoyetu');
+  assert.equal((await api('/api/collections/discounts/records', { headers: vendeur })).json.items.length, 0);
+  assert.ok((await api('/api/collections/orders/records?perPage=500', { headers: vendeur })).json.items.some((x) => x.id === refusee.id));
+  assert.equal((await api(`/api/sokoyetu/commandes/${aLivrer.id}`, { method: 'POST', headers: vendeur, body: { action: 'refund' } })).status, 403);
+  assert.equal((await api('/api/sokoyetu/audience', { headers: vendeur })).status, 200);
+  assert.equal((await api('/api/sokoyetu/journal', { headers: vendeur })).status, 403);
+  assert.equal((await api('/api/sokoyetu/equipe', { headers: vendeur })).status, 403);
+
+  // Le propriétaire : nouveau mot de passe, changement de rôle, retrait ; la boutique garde toujours un propriétaire.
+  const proprio = avant[0].id;
+  assert.equal((await equipe('/' + proprio, { method: 'POST', body: { role: 'vendeur' } })).status, 400);
+  assert.equal((await equipe('/' + proprio, { method: 'DELETE' })).status, 400);
+  assert.equal((await equipe('/' + proprio, { method: 'POST', body: { reinitialiser: true } })).status, 400);
+  const mdp = await equipe('/' + l.json.membre.id, { method: 'POST', body: { reinitialiser: true } });
+  assert.match(mdp.json.motDePasse, /^[A-Z]{4}-[a-z]{4}-[2-9]{4}$/);
+  assert.equal((await connexion('livreur@sokoyetu.test', l.json.motDePasse)).status, 400);
+  assert.equal((await connexion('livreur@sokoyetu.test', mdp.json.motDePasse)).status, 200);
+  const promu = await equipe('/' + v.json.membre.id, { method: 'POST', body: { role: 'proprietaire' } });
+  assert.equal(promu.json.membre.role, 'proprietaire');
+  assert.equal((await api('/api/collections/discounts/records', { headers: vendeur })).json.items.length, 1, 'droits suivis tout de suite');
+  assert.equal((await equipe('/' + l.json.membre.id, { method: 'DELETE' })).status, 200);
+  assert.equal((await api('/api/collections/orders/records', { headers: livreur })).json.items.length, 0, 'membre retiré : plus aucun accès');
+  assert.deepEqual((await equipe()).json.membres.map((m) => m.role), ['proprietaire', 'proprietaire']);
 });
