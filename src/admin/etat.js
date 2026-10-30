@@ -1,8 +1,10 @@
 // Sokoyetu (administration) — session, données de la boutique, temps réel et actions envoyées au serveur.
 import { signal, computed, batch } from '@preact/signals';
 import R from '../commun/js/regles.js';
-import { Auth, connexion, prolongerSession, requete, tout, lire, ecrire, supprimer, TempsReel, versLigne } from '../commun/js/api.js';
+import { Auth, connexion, prolongerSession, requete, tout, lire, ecrire, supprimer, TempsReel, versLigne, envoyerPhoto, DEMO } from '../commun/js/api.js';
 import { toast } from '../commun/js/interface.jsx';
+import { urlMedia } from '../commun/js/medias.jsx';
+import { empreinteCarte, fabriquerCarte, LARGEUR, HAUTEUR } from './carte-partage.js';
 
 export const compte = signal(Auth.charger() ? Auth.compte : null);
 export const pret = signal(false);          // données chargées
@@ -180,13 +182,32 @@ export async function retirer(col, id) {
 }
 
 /*
+ * Image d'aperçu des liens partagés (logo de la boutique et photo principale de l'article), montrée par WhatsApp ou Facebook.
+ * Refaite seulement quand la photo principale ou la boutique (nom, slogan, villes) a changé. Si elle ne peut pas être faite
+ * (pas de connexion, photo illisible), l'article est enregistré quand même : le lien partagé montre alors la photo seule.
+ */
+async function carteProduit(d) {
+  const m = R.imagePrincipale(d);
+  if (DEMO || !m || (m.type !== 'pb' && m.type !== 'url')) return null;
+  const sig = empreinteCarte(m, cfg.value);
+  if (d.share && d.share.sig === sig) return d.share;
+  try {
+    const delai = new Promise((_, ko) => setTimeout(() => ko(new Error('Image d’aperçu trop longue à envoyer')), 20000));
+    const r = await Promise.race([fabriquerCarte(urlMedia(m), cfg.value).then(envoyerPhoto), delai]);
+    return { ...r, w: LARGEUR, h: HAUTEUR, sig };
+  } catch (e) { console.warn('Image d’aperçu non créée', e); return null; }
+}
+
+/*
  * Enregistre un produit sans écraser ce qui a changé entre-temps sur le serveur (commandes passées pendant la modification) :
  * le stock d'une variante n'est remplacé que si vous l'avez modifié ; le nombre de ventes vient toujours du serveur.
  */
 export async function sauverProduit(id, doc, initial) {
+  const d = { ...doc };
+  const carte = await carteProduit(d);
+  if (carte) d.share = carte; else delete d.share;
   let frais = null;
   if (initial) { try { frais = await lire('products', id); } catch (e) { if (e.status !== 404) throw e; } }
-  const d = { ...doc };
   if (frais && initial) {
     d.sold = R.int(frais.sold);
     if (!R.aDesOptions(d) && R.int(d.stock) === R.int(initial.stock)) d.stock = R.int(frais.stock);

@@ -15,7 +15,7 @@ import './animations.js';
 import { Accueil } from './pages/accueil.jsx';
 import { Rayons, Rayon, Nouveautes, Provenance, Recherche, Favoris } from './pages/catalogue.jsx';
 import { Produit } from './pages/produit.jsx';
-import { Panier } from './pages/panier.jsx';
+import { Panier, PanierPartage } from './pages/panier.jsx';
 import { Commander } from './pages/commander.jsx';
 import { Paiement } from './pages/paiement.jsx';
 import { Merci, Compte, Commandes, Suivi, Retrouver } from './pages/compte.jsx';
@@ -23,9 +23,9 @@ import { Connexion } from './pages/connexion.jsx';
 import { Infos } from './pages/infos.jsx';
 import { Introuvable } from './pages/introuvable.jsx';
 
-const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos };
+const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos };
 /* Ce qui occupe le bas de l'écran du téléphone : navigation, barre d'action, ou les deux. */
-const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', paiement: '', merci: '', recherche: '' };
+const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', 'panier-partage': 'barre', paiement: '', merci: '', recherche: '' };
 
 function Consentement() {
   const c = cfg.value;

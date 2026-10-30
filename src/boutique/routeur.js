@@ -7,7 +7,7 @@ const HASH = typeof __DEMO__ !== 'undefined' && __DEMO__;
 
 const ROUTES = [
   ['/', 'accueil'], ['/categories', 'rayons'], ['/nouveautes', 'nouveautes'], ['/en-stock', 'en-stock'], ['/import-chine', 'import-chine'], ['/c/:id/:slug?', 'rayon'], ['/p/:id/:slug?', 'produit'],
-  ['/recherche', 'recherche'], ['/favoris', 'favoris'], ['/panier', 'panier'], ['/commander', 'commander'], ['/paiement/:id', 'paiement'], ['/merci/:id', 'merci'],
+  ['/recherche', 'recherche'], ['/favoris', 'favoris'], ['/panier', 'panier'], ['/panier/partage', 'panier-partage'], ['/commander', 'commander'], ['/paiement/:id', 'paiement'], ['/merci/:id', 'merci'],
   ['/compte', 'compte'], ['/compte/commandes', 'commandes'], ['/compte/retrouver', 'retrouver'], ['/compte/connexion', 'connexion'], ['/suivi/:id', 'suivi'], ['/infos/:page', 'infos']
 ].map(([motif, nom]) => {
   const cles = [];
@@ -20,9 +20,9 @@ export function analyser(adresse) {
   const chemin = u.pathname.replace(/\/index\.html$/, '/') || '/';
   for (const r of ROUTES) {
     const m = chemin.match(r.re);
-    if (m) { const params = {}; r.cles.forEach((k, i) => { if (m[i + 1] != null) params[k] = decodeURIComponent(m[i + 1]); }); return { nom: r.nom, params, query: u.searchParams, chemin, cle: chemin + u.search }; }
+    if (m) { const params = {}; r.cles.forEach((k, i) => { if (m[i + 1] != null) params[k] = decodeURIComponent(m[i + 1]); }); return { nom: r.nom, params, query: u.searchParams, recherche: u.search, chemin, cle: chemin + u.search }; }
   }
-  return { nom: 'introuvable', params: {}, query: u.searchParams, chemin, cle: chemin + u.search };
+  return { nom: 'introuvable', params: {}, query: u.searchParams, recherche: u.search, chemin, cle: chemin + u.search };
 }
 
 const adresseActuelle = () => (HASH ? (location.hash.replace(/^#/, '') || '/') : location.pathname + location.search);

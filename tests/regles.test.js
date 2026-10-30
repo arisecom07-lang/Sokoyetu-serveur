@@ -275,3 +275,29 @@ test('prix par variante, vente flash et prix de gros', () => {
   assert.equal(dv.poids, 1.5);
   assert.equal(dv.livraison, 6.5);
 });
+
+test('panier partagé : lien court et lisible, lu à l’identique, lignes invalides écartées', () => {
+  const lignes = [{ productId: 'robe', color: 'Noir', size: 'M', qty: 2 }, { productId: 'sac', qty: 1 }, { productId: 'montre', size: 'XL', qty: 1 }, { productId: 'robe', color: 'Bleu marine: foncé', size: 'L', qty: 3 }];
+  const q = R.lienPanier(lignes);
+  assert.equal(q, 'a=robe:2:Noir:M&a=sac&a=montre:1::XL&a=robe:3:Bleu%20marine%3A%20fonc%C3%A9:L');
+  assert.deepEqual(R.panierDepuisLien('?' + q), R.panierCompte(lignes));
+  // Lien réencodé par une application (« : » devenu %3A, espaces en +) : les articles sont retrouvés.
+  assert.deepEqual(R.panierDepuisLien('a=robe%3A2%3ANoir%3AM&a=sac'), [{ productId: 'robe', color: 'Noir', size: 'M', qty: 2 }, { productId: 'sac', color: '', size: '', qty: 1 }]);
+  // Identifiant invalide, quantité nulle, doublon, autre paramètre : ignorés ; quantité bornée à MAX_QTE.
+  assert.deepEqual(R.panierDepuisLien('a=MAUVAIS ID:2&a=sac:0&a=sac:999&a=sac:1&utm_source=wa&a=&a=%E0'), [{ productId: 'sac', color: '', size: '', qty: R.MAX_QTE }]);
+  // Au plus MAX_LIGNES_PARTAGE lignes, dans les deux sens.
+  const beaucoup = Array.from({ length: 40 }, (_, i) => ({ productId: 'p' + i, qty: 1 }));
+  assert.equal(R.panierDepuisLien(R.lienPanier(beaucoup)).length, R.MAX_LIGNES_PARTAGE);
+  assert.deepEqual(R.panierDepuisLien(''), []);
+  assert.deepEqual(R.panierDepuisLien('?'), []);
+  assert.deepEqual(R.panierDepuisLien(null), []);
+});
+
+test('panier partagé : aperçu aux prix et au stock du jour (message, aperçu du lien et page identiques)', () => {
+  const a = R.apercuPartage({ cfg, produit, lignes: [{ productId: 'robe', color: 'Noir', size: 'M', qty: 5 }, { productId: 'robe', color: 'Noir', size: 'L', qty: 1 }, { productId: 'robe', color: 'Rouge', size: 'M', qty: 1 }, { productId: 'montre', qty: 2 }, { productId: 'brouillon', qty: 1 }, { productId: 'inconnu', qty: 1 }] });
+  assert.deepEqual(a.lignes.map((l) => [l.productId, l.qty, l.demandee, l.probleme]), [['robe', 2, 5, ''], ['robe', 1, 1, 'epuise'], ['robe', 1, 1, 'option'], ['montre', 2, 2, ''], ['brouillon', 1, 1, 'retiré'], ['inconnu', 1, 1, 'retiré']]);
+  assert.equal(a.n, 4);
+  // Robe 2 × $20 (stock restant) + montre 2 × $15.50 = $71 ; frais de service 2 % ; livraison non comprise.
+  assert.deepEqual([a.sousTotal, a.frais, a.total], [71, 1.42, 72.42]);
+  assert.deepEqual(R.apercuPartage({ cfg, produit, lignes: [] }), { lignes: [], disponibles: [], n: 0, sousTotal: 0, frais: 0, total: 0 });
+});

@@ -6,7 +6,7 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { Champ, Note, Bascule, Segment, Pastille, toast } from '../../commun/js/interface.jsx';
 import { dollars, pluriel, uid, classes, normaliser, slug } from '../../commun/js/outils.js';
 import { aller } from '../routeur.js';
-import { rayons, etatServeur, sauver, lireFournisseur, copierPhoto, gererErreur } from '../etat.js';
+import { rayons, etatServeur, sauver, sauverProduit, lireFournisseur, copierPhoto, gererErreur } from '../etat.js';
 import { TetePage } from '../composants/cadre.jsx';
 import { MESSAGES_IMPORT, IA_IMPORT, MAX_PHOTOS_IMPORT, prixFournisseur } from './produits-plus.jsx';
 
@@ -214,7 +214,8 @@ export function ImportProduits() {
         if (images[0] && l.alt) images[0] = { ...images[0], alt: l.alt };
         const ids = [...(l.doc.collectionIds || [])];
         for (const nom of l.rayons || []) ids.push(await rayonPour(nom, crees));
-        await sauver('products', uid(), { ...l.doc, images, collectionIds: [...new Set(ids)], createdAt: Date.now() });
+        // sauverProduit : l'article reçoit aussi son image d'aperçu pour les liens partagés (logo de la boutique + photo).
+        await sauverProduit(uid(), { ...l.doc, images, collectionIds: [...new Set(ids)], createdAt: Date.now() });
         ok++;
         setLignes((x) => x.map((y, j) => (j === i ? { ...y, etat: 'ok', photosCopiees: images.length } : y)));
       } catch (e) {

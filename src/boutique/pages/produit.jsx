@@ -4,12 +4,13 @@ import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo, urlMedia } from '../../commun/js/medias.jsx';
 import { toast, Quantite, Note, ouvrirFeuille } from '../../commun/js/interface.jsx';
-import { dollars, francs, pluriel, copier, classes, date, JOUR } from '../../commun/js/outils.js';
+import { dollars, francs, pluriel, classes, date, JOUR } from '../../commun/js/outils.js';
 import { lien, route, retour } from '../routeur.js';
 import { cfg, produitsParId, produits, catalogueAJour, catalogueErreur, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement, panier } from '../etat.js';
 import { EnteteBoutique, BarreAction, Pied, ouvrirLivraisonPaiement } from '../composants/cadre.jsx';
 import { BoutonFavori, CompteARebours, ErreurCatalogue, GrilleProduits, delai, epuise, lienProduit, lienRayon, nomRayon, PuceOperateur, trier } from '../composants/produits.jsx';
 import { mesurerEvenement } from '../mesure.js';
+import { partager, adresseComplete } from '../partage.jsx';
 import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
 
@@ -226,12 +227,8 @@ export function Produit() {
     setErreur(''); setAjoute(true); setSel({ ...sel, qty: 1 });
     toast(`Ajouté au panier · ${pluriel(nbArticles.value, 'article')}`, { icone: 'sac' });
   };
-  const partager = async () => {
-    const url = location.origin + lienProduit(p).replace(/^#/, '');
-    const texte = `${p.title} à ${dollars(pa.prix)} chez ${c.name}`;
-    if (navigator.share) { try { await navigator.share({ title: p.title, text: texte, url }); } catch (e) { } }
-    else if (await copier(url)) toast('Lien copié');
-  };
+  // Le lien s'ouvre avec l'aperçu de l'article (logo de la boutique, photo, prix) dans WhatsApp, Facebook…
+  const partagerArticle = () => partager({ titre: p.title, texte: `${p.title} à ${pa.des ? 'partir de ' : ''}${dollars(pa.prix)} chez ${c.name}`, url: adresseComplete(`/p/${encodeURIComponent(p.id)}/${R.slug(p.title)}`), type: 'produit', id: p.id });
   const rayon = (p.collectionIds || []).map((k) => [k, nomRayon(k)]).find(([, n]) => n);
 
   return (
@@ -240,7 +237,7 @@ export function Produit() {
       <div class="produit-flottant seulement-mobile">
         <button class="btn-icone flottant" onClick={() => retour('/')} aria-label="Retour"><Icone n="retour" /></button>
         <div class="rangee">
-          <button class="btn-icone flottant" onClick={partager} aria-label="Partager cet article"><Icone n="partager" /></button>
+          <button class="btn-icone flottant" onClick={partagerArticle} aria-label="Partager cet article"><Icone n="partager" /></button>
           <a class="btn-icone flottant" href={lien('/panier')} aria-label="Panier" data-cible-panier><Icone n="sac" />{nbArticles.value ? <span class="pastille-compte">{nbArticles.value}</span> : null}</a>
         </div>
       </div>
@@ -248,7 +245,10 @@ export function Produit() {
         <div class="conteneur produit-grille">
           <div class="produit-galerie"><Galerie p={p} idx={idx} setIdx={setIdx} /></div>
           <div class="produit-infos">
-            {rayon ? <nav class="fil seulement-ordi" aria-label="Fil d’Ariane"><a href={lien('/')}>Accueil</a><Icone n="droite" /><a href={lienRayon({ id: rayon[0], name: rayon[1] })}>{rayon[1]}</a></nav> : null}
+            <div class="produit-haut seulement-ordi">
+              {rayon ? <nav class="fil" aria-label="Fil d’Ariane"><a href={lien('/')}>Accueil</a><Icone n="droite" /><a href={lienRayon({ id: rayon[0], name: rayon[1] })}>{rayon[1]}</a></nav> : <span />}
+              <button type="button" class="btn btn-secondaire btn-s" onClick={partagerArticle}><Icone n="partager" />Partager</button>
+            </div>
             <section class="produit-entete">
               <div class="produit-prix">
                 {pa.des ? <small class="prix-des">dès</small> : null}

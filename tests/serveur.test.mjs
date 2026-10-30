@@ -406,6 +406,41 @@ test('pages partageables : aperçu WhatsApp d’un article, plan du site', async
   assert.doesNotMatch(plan.texte, /t-cache/);
 });
 
+test('liens partagés : image d’aperçu avec le logo, panier partagé, rien de plus dans le catalogue public', async () => {
+  const meta = (html, p) => ((new RegExp(`<meta (?:property|name)="${p}" content="([^"]*)"`)).exec(html) || [])[1];
+  // L'administration envoie l'image d'aperçu comme une photo, puis la note sur l'article.
+  const { readFile } = await import('node:fs/promises');
+  const fd = new FormData();
+  fd.append('file', new Blob([await readFile(new URL('../medias/photos/p03-1-s.webp', import.meta.url))], { type: 'image/webp' }), 'carte.webp');
+  const m = await (await fetch(BASE + '/api/collections/media/records', { method: 'POST', headers: { Authorization: jeton }, body: fd })).json();
+  const robe = await produit('t-robe');
+  // Stock connu (les commandes des essais précédents en ont pris) : 5 robes noires en M.
+  assert.equal((await ecrire('products', 't-robe', { ...robe, variants: { ...robe.variants, 'Noir|M': 5 }, share: { type: 'pb', id: m.id, f: m.file, w: 1200, h: 630, sig: 'essai' } })).status, 200);
+  const page = (await api('/p/t-robe/robe-d-essai')).texte;
+  assert.ok(meta(page, 'og:image').endsWith(`/api/files/media/${m.id}/${m.file}`));
+  assert.deepEqual([meta(page, 'og:image:width'), meta(page, 'og:image:height')], ['1200', '630']);
+  assert.equal((page.match(/og:image:width/g) || []).length, 1, 'une seule taille d’image annoncée');
+  // L'image d'aperçu reste côté serveur : ni dans le catalogue ni dans la lecture publique de l'article.
+  assert.equal((await api('/api/sokoyetu/catalogue')).json.products.find((p) => p.id === 't-robe').share, undefined);
+  assert.equal((await api('/api/collections/products/records/t-robe')).json.doc.share, undefined);
+
+  // Panier partagé : articles disponibles et total estimé du jour (2 × $20 + $15, frais de service 2 %) ; brouillon et article
+  // inconnu écartés ; quantité ramenée au stock ; jamais référencé.
+  const r = await api('/panier/partage?a=t-robe:2:Noir:M&a=t-montre&a=t-cache&a=inconnu');
+  assert.equal(r.status, 200);
+  assert.equal(meta(r.texte, 'og:title'), 'Panier partagé · 3 articles · $56.10');
+  assert.match(meta(await api('/panier/partage?a=t-robe:9:Noir:M').then((x) => x.texte), 'og:title'), /^Panier partagé · 5 articles · /);
+  assert.match(meta(r.texte, 'og:description'), /^Robe d’essai ×2, Montre d’essai\. Livraison à Bukavu et Goma, paiement Mobile Money\.$/);
+  assert.ok(meta(r.texte, 'og:image').endsWith(`/api/files/media/${m.id}/${m.file}`), 'image du premier article');
+  assert.equal(meta(r.texte, 'robots'), 'noindex');
+  assert.match(meta(r.texte, 'og:url'), /\/panier\/partage\?a=t-robe:2:Noir:M&amp;a=t-montre/);
+  assert.match(r.texte, /<div id="app">/, 'la boutique s’ouvre sur la page du panier partagé');
+  const vide = await api('/panier/partage?a=inconnu&a=t-cache');
+  assert.match(meta(vide.texte, 'og:image'), /\/og-image\.png$/);
+  assert.equal(meta(vide.texte, 'robots'), 'noindex');
+  assert.equal((await api('/panier/partage')).status, 200);
+});
+
 // fetch ignore l'en-tête Host : requête HTTP brute pour simuler admin.sokoyakwetu.com
 const brut = (chemin, hote) => new Promise((ok, ko) => {
   const u = new URL(BASE + chemin);
