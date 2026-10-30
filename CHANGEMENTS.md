@@ -1,3 +1,20 @@
+# Sokoyetu 2.3.1 — accueil plus compact et soigné sur téléphone (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Les quatre étapes** (Commande, Paiement, Import, Livraison) sont désormais **quatre petites tuiles en 2 × 2**, avec une petite icône colorée, un mot et un détail court, au lieu de grandes cartes qui défilaient. « Comment ça marche » ouvre l'explication complète.
+- **Bandeau du haut sur une seule ligne**, même sur les petits téléphones.
+- **Bannière d'accueil resserrée** sur téléphone : les étapes apparaissent dès le premier écran.
+- **Titres de section** à la même taille et sans débordement ; sélecteur **Pour vous / Nouveautés / Promos** en trois parts égales, sur toute la largeur.
+- Vérifié de 320 à 412 pixels de large, en thème clair et sombre, sans aucun texte coupé ni débordement.
+
+## Détails techniques
+
+- `ETAPES_IMPORT` (cadre.jsx) : titre et détail courts en plus ; classe `.etapes-accueil` (boutique.css, couleurs dans couleurs.css). Les anciennes retouches `.etapes-import` (qui imposaient 4 colonnes jusque dans la fenêtre « Comment ça marche ») sont retirées.
+- Bloc « Téléphone » (`max-width: 899.98px`) dans boutique.css : bannière, titres, sélecteur `.puces-egales`.
+
+---
+
 # Sokoyetu 2.3 — un site solide : coupures, erreurs, double paiement, surveillance et sauvegardes (octobre 2026)
 
 ## Ce qui change pour vous

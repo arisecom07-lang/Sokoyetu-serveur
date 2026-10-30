@@ -6,12 +6,6 @@
  */
 
 /* ---------- Accueil ---------- */
-/* Cases « Vous choisissez / Vous payez… » plus compactes */
-.etapes-import { grid-template-columns: repeat(4, minmax(190px, 1fr)) !important; gap: var(--e2) !important; }
-.etapes-import li { padding: 11px 12px !important; gap: 10px !important; }
-.etapes-import b { font-size: 13px !important; }
-.etapes-import p { font-size: 12.5px !important; line-height: 1.35 !important; }
-
 /* Rayons : photos rondes plus petites, noms un peu plus fins */
 .rr-photo { width: 70px !important; height: 70px !important; }
 .rayon-rond { width: 82px !important; }
