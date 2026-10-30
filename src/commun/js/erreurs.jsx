@@ -8,7 +8,7 @@ const vus = new Set();
 let envoyes = 0;
 
 /*
- * Signale une erreur au serveur (journal → administration, Plus → Journal). Cinq au plus par page ouverte,
+ * Signale une erreur au serveur (journal → administration, Plus → Santé et journal). Cinq au plus par page ouverte,
  * une seule fois chacune, sans rien d'autre que le message, la page et l'endroit du code : ni nom ni téléphone.
  */
 export function signalerErreur(e, genre = 'erreur') {

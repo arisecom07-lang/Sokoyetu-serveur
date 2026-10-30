@@ -33,7 +33,7 @@ ReadWritePaths=$DIR
 [Install]
 WantedBy=multi-user.target
 UNIT
-# Chaque dimanche : la dernière sauvegarde est restaurée à part et contrôlée (résultat dans l'administration, Plus → Journal).
+# Chaque dimanche : la dernière sauvegarde est restaurée à part et contrôlée (résultat dans l'administration, Plus → Santé et journal).
 cat > /etc/systemd/system/sokoyetu-sauvegarde.service <<UNIT
 [Unit]
 Description=Sokoyetu : vérification de la dernière sauvegarde (restauration d'essai)

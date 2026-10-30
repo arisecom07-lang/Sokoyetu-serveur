@@ -22,13 +22,17 @@ Le fichier **`sokoyetu-serveur.zip`** contient tout :
 | `installer.sh` | Installation complète : PocketBase 0.40.5 (empreinte vérifiée), pare-feu, service automatique, HTTPS, compte administrateur |
 | `mise-a-jour.sh` | Installe une nouvelle version ; sauvegarde la base avant ; garde produits, commandes, photos et réglages |
 | `mot-de-passe.sh` | Nouveau mot de passe administrateur (mot de passe oublié) |
-| `ia.sh` | Active ou retire l'assistant IA des fiches produits |
+| `paiement.sh` | Branche le paiement Mobile Money (FlexPay) ou le mode test |
+| `codes.sh` | Envoi des codes de connexion des comptes clients (WhatsApp, SMS de secours) |
+| `ia.sh` | Active ou retire l'assistant IA des fiches produits, règle son plafond du jour |
+| `sauvegarde.sh` | Liste, crée, vérifie et restaure les sauvegardes de la base |
+| `alerte.sh` | Vous prévient si le site tombe ou va mal (avec Healthchecks.io, gratuit) |
 | `android.sh` | Relie une future application Google Play au site |
-| `service.sh` | Service automatique (démarrage avec le serveur, redémarrage en cas d'arrêt) |
+| `service.sh` | Service automatique (démarrage avec le serveur, redémarrage en cas d'arrêt) et vérification des sauvegardes chaque dimanche |
 | `pb_public/` | La boutique |
 | `pb_admin/` | L'administration |
 | `pb_hooks/` | Les règles du serveur : prix, total et stock recalculés à chaque commande, codes promo, coûts d'achat jamais montrés aux clients |
-| `pb_migrations/` | Structure de la base, droits d'accès, limites anti-spam, sauvegarde quotidienne |
+| `pb_migrations/` | Structure de la base, droits d'accès, index, limites anti-abus, sauvegarde quotidienne |
 
 Mettez ce fichier dans un dépôt GitHub (par exemple `arisecom07-lang/Sokoyetu-serveur`) : sur github.com, ouvrez le dépôt → **Add file → Upload files** → choisissez le zip → **Commit changes**. Son adresse de téléchargement est alors :
 
@@ -120,7 +124,14 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 | Fermer les comptes clients | `sudo /opt/sokoyetu/codes.sh arreter` |
 | Voir l'état des codes | `sudo /opt/sokoyetu/codes.sh` |
 | Activer l'assistant IA | `sudo /opt/sokoyetu/ia.sh 'sk-ant-...'` |
+| Plafond de l'assistant IA (appels par jour) | `sudo /opt/sokoyetu/ia.sh plafond 200` |
 | Retirer l'assistant IA | `sudo /opt/sokoyetu/ia.sh --retirer` |
+| Lister les sauvegardes | `sudo /opt/sokoyetu/sauvegarde.sh liste` |
+| Sauvegarder tout de suite | `sudo /opt/sokoyetu/sauvegarde.sh maintenant` |
+| Vérifier que la dernière sauvegarde se restaure | `sudo /opt/sokoyetu/sauvegarde.sh verifier` |
+| Revenir à une sauvegarde | `sudo /opt/sokoyetu/sauvegarde.sh restaurer NOM_DU_FICHIER.zip` |
+| Être prévenu si le site tombe | `sudo /opt/sokoyetu/alerte.sh https://hc-ping.com/VOTRE-ID` |
+| Essayer l'alerte | `sudo /opt/sokoyetu/alerte.sh test` |
 | Voir si le site tourne | `systemctl status sokoyetu` |
 | Voir les dernières erreurs | `journalctl -u sokoyetu -n 50 --no-pager` |
 | Journal de l'installation | `cat /var/log/sokoyetu-installation.log` |
@@ -182,13 +193,16 @@ Coût : Meta facture chaque code envoyé (tarif « authentification » du pays d
 
 ## 7. Assistant IA des fiches produits (facultatif)
 
-Il rédige le titre, la description et les caractéristiques d'un article à partir d'une photo, repère les couleurs et choisit le rayon. Vous relisez, puis vous mettez le prix.
+Il rédige le titre, la description et les caractéristiques d'un article à partir d'une photo, repère les couleurs et choisit le rayon. Il cadre aussi chaque photo ajoutée (article centré, format de la boutique, lumière corrigée), en gardant l'originale. Vous relisez, puis vous mettez le prix.
 
 1. Créez une clé sur **console.anthropic.com → API Keys** (l'usage est facturé par Anthropic, quelques centimes par fiche).
-2. Dans la console du Droplet : `sudo /opt/sokoyetu/ia.sh 'sk-ant-...'`
-3. Dans l'administration → **Produits**, le bouton **Ajouter avec l'IA** apparaît.
+2. **Fixez une limite de dépense mensuelle** sur console.anthropic.com (**Settings → Limits**) : c'est le plafond qui ne peut jamais être dépassé, quoi qu'il arrive.
+3. Dans la console du Droplet : `sudo /opt/sokoyetu/ia.sh 'sk-ant-...'`
+4. Dans l'administration → **Produits**, le bouton **Ajouter avec l'IA** apparaît.
 
-La clé reste sur le serveur, dans un fichier lisible par l'administrateur du serveur seulement ; elle n'est jamais envoyée au navigateur.
+**Plafond du jour** : au plus 150 appels à l'assistant par jour pour toute la boutique (une fiche rédigée ou une photo cadrée = un appel). Au-delà, l'administration l'annonce et l'assistant revient le lendemain ; les photos sont alors ajoutées telles quelles. Pour changer ce nombre : `sudo /opt/sokoyetu/ia.sh plafond 200`. Le compteur du jour s'affiche dans **Plus → Santé et journal**.
+
+La clé reste sur le serveur, dans un fichier lisible par l'administrateur du serveur seulement ; elle n'est jamais envoyée au navigateur. Si le crédit Anthropic est épuisé, l'administration le dit clairement et le journal le garde.
 
 ---
 
@@ -202,20 +216,34 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 
 ## 9. Sauvegardes
 
-- Automatiques **chaque nuit** (7 dernières gardées) dans `/opt/sokoyetu/pb_data/backups`, téléchargeables depuis le tableau technique (`/_/` → Settings → Backups).
+- Automatiques **chaque nuit** à 5 h (7 dernières gardées) dans `/opt/sokoyetu/pb_data/backups`, téléchargeables depuis le tableau technique (`/_/` → Settings → Backups).
+- **Vérifiées chaque dimanche** : la plus récente est restaurée à part (sans toucher à la boutique), la base est contrôlée et un serveur d'essai démarre dessus. Le résultat s'affiche dans **Plus → Santé et journal** ; un échec déclenche l'alerte (section 10). À la main : `sudo /opt/sokoyetu/sauvegarde.sh verifier`.
+- Sauvegarde immédiate (avant une grosse modification) : `sudo /opt/sokoyetu/sauvegarde.sh maintenant`.
 - Copie avant chaque mise à jour dans `/opt/sokoyetu/sauvegardes`.
-- Recommandé en plus : activer les **sauvegardes DigitalOcean** du Droplet (copie hors du serveur).
+- **Revenir à une sauvegarde** (erreur grave, base abîmée) : `sudo /opt/sokoyetu/sauvegarde.sh liste`, puis `sudo /opt/sokoyetu/sauvegarde.sh restaurer NOM_DU_FICHIER.zip`. Le script demande de taper RESTAURER, garde une copie de l'état actuel (`avant-restauration-…`), arrête la boutique une minute, remet la sauvegarde et redémarre.
+- Recommandé en plus : activer les **sauvegardes DigitalOcean** du Droplet, ou télécharger de temps en temps une sauvegarde depuis le tableau technique (copie hors du serveur, si le Droplet entier disparaît).
 
 ---
 
-## 10. Pour un développeur
+## 10. Surveillance : être prévenu si le site tombe
+
+- **Plus → Santé et journal** (administration) : état du serveur, dernière sauvegarde et sa vérification, paiement, assistant IA, et la liste des **erreurs** des 30 derniers jours (serveur, boutique et administration ; une erreur dans le navigateur d'un client est signalée automatiquement, sans son nom ni son téléphone). Un problème grave s'affiche aussi en haut du tableau de bord. « Copier le détail » prépare un texte à envoyer à votre développeur.
+- **Alerte par e-mail ou Telegram** : créez un compte gratuit sur **healthchecks.io**, ajoutez un « check » (période 5 minutes, délai de grâce 10 minutes), copiez son adresse `https://hc-ping.com/…`, puis : `sudo /opt/sokoyetu/alerte.sh https://hc-ping.com/VOTRE-ID`. Le serveur y envoie un signal toutes les 5 minutes ; s'il s'arrête (serveur en panne, coupure), ou s'il signale un problème grave (sauvegarde manquée, restauration en échec, paiement injoignable depuis 15 minutes, beaucoup d'erreurs), vous êtes prévenu. Essai : `sudo /opt/sokoyetu/alerte.sh test`.
+- **En complément** (facultatif) : un service comme UptimeRobot peut surveiller `https://sokoyakwetu.com/api/sokoyetu/sante` (réponse 200 quand la base répond).
+- **Limites anti-abus** : chaque visiteur (adresse IP) a un nombre de demandes par minute ; au-delà, il est invité à patienter. Les envois trop gros sont refusés (photos de 10 Mo au plus). Un essai de charge (`tests/charge.mjs`) vérifie 80 visiteurs simultanés, du catalogue au paiement confirmé.
+
+---
+
+## 11. Pour un développeur
 
 ```bash
 npm install
 npm run build        # → dist/sokoyetu-serveur.zip (le paquet à déposer sur GitHub)
 npm run demo         # → dist/demo/ (démonstration sans serveur, données dans le navigateur)
-npm test             # règles métier et icônes
+npm test             # règles métier, icônes, import, cadrage des photos
 bash outils/serveur-local.sh   # vrai serveur local (paiement en mode test) : http://localhost:8090 et http://admin.localhost:8090
 ```
+
+Autres essais (serveur local lancé) : `tests/serveur.test.mjs` (routes du serveur), `tests/parcours.mjs` et `tests/comptes.mjs` (vrais navigateurs), `tests/accessibilite.mjs clair|sombre`, `tests/charge.mjs` (visiteurs simultanés), `tests/sauvegarde.mjs` (sauvegarde et restauration), `tests/demo.mjs` (démo construite). La commande de chacun est en tête du fichier.
 
 Le détail technique (architecture, tests, conventions) est dans `A-LIRE-CLAUDE-CODE.md`.

@@ -6,7 +6,7 @@
 #    sudo /opt/sokoyetu/sauvegarde.sh verifier [FICHIER]      restaure une copie à part et la contrôle (la plus récente par défaut)
 #    sudo /opt/sokoyetu/sauvegarde.sh restaurer FICHIER       remet la boutique dans l'état de cette sauvegarde
 #  Les sauvegardes automatiques ont lieu chaque nuit (pb_data/backups, 7 gardées) ; une vérification automatique
-#  tourne chaque dimanche (minuterie sokoyetu-sauvegarde). Le résultat s'affiche dans l'administration (Plus → Journal).
+#  tourne chaque dimanche (minuterie sokoyetu-sauvegarde). Le résultat s’affiche dans l’administration (Plus → Santé et journal).
 # =====================================================================
 set -euo pipefail
 DIR="${SOKOYETU_DIR:-/opt/sokoyetu}"

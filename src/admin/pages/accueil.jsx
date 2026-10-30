@@ -85,7 +85,8 @@ function etapesDemarrage(c) {
     { texte: 'Vérifier les zones et frais de livraison', fait: !!(c.setup && c.setup.livraison), href: '/reglages/livraison' },
     { texte: 'Ajouter le numéro WhatsApp de la boutique', fait: !!R.chiffres(c.whatsapp), href: '/reglages/general' },
     { texte: 'Compléter les informations légales (RCCM, adresse)', fait: !!(c.legal && c.legal.company && c.legal.address && (c.legal.rccm || c.legal.idnat)), href: '/reglages/legal' },
-    { texte: 'Passer une commande test', fait: commandes.value.some(R.estPayee), href: null }
+    { texte: 'Passer une commande test', fait: commandes.value.some(R.estPayee), href: null },
+    { texte: 'Être prévenu si le site tombe (alerte)', fait: !!(sante.value && sante.value.details && sante.value.details.alerte && sante.value.details.alerte.configuree), href: '/journal' }
   ];
 }
 
