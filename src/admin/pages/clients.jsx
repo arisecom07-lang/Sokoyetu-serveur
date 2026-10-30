@@ -113,7 +113,7 @@ function CompteClient({ a }) {
           <p class="intertitre">Favoris</p>
           {favs.length ? <div class="liste sans-bord">{favs.map((x) => ligne(x.p, x.depuis ? 'en favori ' + ilya(x.depuis) : 'en favori', x.id))}</div> : <p class="attenue petit">Aucun favori.</p>}
         </div>
-        {pa.lignes.length ? <Note ton="info" icone="bulle">Ce client n’a pas encore commandé son panier. Un message, un appel ou une réduction peut l’aider à finir son achat (boutons ci-dessus).</Note> : null}
+        {pa.lignes.length ? <Note ton="info" icone="bulle">Ce client n’a pas encore commandé son panier.{a.relance ? ` Rappel gratuit envoyé ${ilya(a.relance)}.` : ''} Un message, un appel ou une réduction peut l’aider à finir son achat (boutons ci-dessus).</Note> : null}
       </div>
     </section>
   );

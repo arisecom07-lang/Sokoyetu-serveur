@@ -227,6 +227,17 @@ routerAdd('POST', '/api/sokoyetu/compte', (e) => {
   return e.json(200, { compte: C.enregistrer(e.app, rec, S.corps(e), false) });
 }, LIMITE.compte);
 
+// Toutes les heures : les clients avec compte qui ont laissé leur panier reçoivent un rappel gratuit (voir comptes.relancerPaniers).
+cronAdd('sokoyetu-relances', '23 * * * *', () => {
+  try { require(`${__hooks}/lib/comptes.js`).relancerPaniers($app); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Relance des paniers impossible', { module: 'comptes', erreur: String(err) }); }
+});
+// La même relance tout de suite (tableau technique, essais) : { relances } clients prévenus.
+routerAdd('POST', '/api/sokoyetu/relances', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'reglages');
+  return e.json(200, { relances: require(`${__hooks}/lib/comptes.js`).relancerPaniers(e.app) });
+});
+
 // Le client supprime son compte (ses commandes restent, détachées du compte).
 routerAdd('POST', '/api/sokoyetu/compte/supprimer', (e) => {
   const C = require(`${__hooks}/lib/comptes.js`);

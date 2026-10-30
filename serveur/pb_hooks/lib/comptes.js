@@ -166,6 +166,44 @@ function effacerParTelephone(app, chiffres) {
   return n;
 }
 
+/* Le client a-t-il commandé (connecté, ou avec son téléphone) depuis t ? */
+function commandeDepuis(app, client, tel, t) {
+  const l = arrayOf(new DynamicModel({ n: 0 }));
+  app.db().newQuery("SELECT COUNT(*) AS n FROM orders WHERE (client = {:c} OR (phone != '' AND phone = {:p})) AND created > {:d}")
+    .bind({ c: client, p: tel, d: new Date(t).toISOString().replace('T', ' ') }).all(l);
+  return Number(l[0].n) > 0;
+}
+
+/*
+ * Toutes les heures : le client avec compte qui a laissé son panier (cfg.cartReminder.hours sans y ajouter ni commander)
+ * reçoit une notification gratuite, une fois par panier et au plus une fois par semaine (regles.relancePanier).
+ * Renvoie le nombre de clients relancés.
+ */
+function relancerPaniers(app) {
+  const cfg = S.configuration(app);
+  if (!cfg.cartReminder.enabled) return 0;
+  const N = require(`${__hooks}/lib/notifications.js`);
+  const P = S.lecteurProduits(app);
+  const now = Date.now();
+  const l = arrayOf(new DynamicModel({ id: '' }));
+  app.db().newQuery(`SELECT id FROM clients WHERE seen > {:actif} AND relance < {:semaine}
+    AND (CASE WHEN json_valid(doc) THEN json_array_length(doc, '$.panier') ELSE 0 END) > 0 ORDER BY seen DESC LIMIT 500`)
+    .bind({ actif: now - 30 * 864e5, semaine: now - R.RELANCE_PANIER_JOURS * 864e5 }).all(l);
+  let n = 0;
+  l.forEach((x) => {
+    let rec; try { rec = app.findRecordById('clients', String(x.id)); } catch (e) { return; }
+    const tel = R.chiffres(rec.getString('phone'));
+    const r = R.relancePanier({ doc: S.lire(rec), cfg, relance: rec.getInt('relance'), maintenant: now, produit: (id) => P.doc(id),
+      commandeDepuis: (t) => commandeDepuis(app, rec.id, tel, t) });
+    if (!r) return;
+    N.creer(app, { client: rec.id, appareil: '', type: 'panier', details: { titre: r.titre, autres: r.autres }, url: '/panier', cle: 'panier:' + rec.id + ':' + r.depuis });
+    // Sans réenregistrer le compte : le client peut changer son panier au même moment.
+    app.db().newQuery('UPDATE clients SET relance = {:t} WHERE id = {:id}').bind({ t: now, id: rec.id }).execute();
+    n++;
+  });
+  return n;
+}
+
 /* Chaque nuit : compteurs d'envois de plus de 30 jours effacés. */
 function purger(app) {
   app.db().newQuery('DELETE FROM sokoyetu_codes WHERE envoye < {:l}').bind({ l: Date.now() - 30 * 864e5 }).execute();
@@ -184,4 +222,4 @@ function repondre(e, fn) {
 /* Ce que l'administration et la boutique ont le droit de savoir. */
 const etat = () => ENVOI.etat();
 
-module.exports = { ErreurCompte, demanderCode, verifierCode, compteDe, exigerCompte, vue, enregistrer, commandes, supprimer, effacerParTelephone, purger, repondre, etat };
+module.exports = { ErreurCompte, demanderCode, verifierCode, compteDe, exigerCompte, vue, enregistrer, commandes, supprimer, effacerParTelephone, relancerPaniers, purger, repondre, etat };

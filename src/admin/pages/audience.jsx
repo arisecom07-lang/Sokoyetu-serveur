@@ -8,7 +8,7 @@ import { Note, Segment, Pastille, Vide } from '../../commun/js/interface.jsx';
 import { Local } from '../../commun/js/stockage.js';
 import { debutJour, JOUR, pluriel, groupe, classes, dollars, ilya, telephone } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { commandes, clients, comptes, produitsParId, pret, lireAudience, lireAudienceArticle, gererErreur } from '../etat.js';
+import { cfg, commandes, clients, comptes, produitsParId, pret, lireAudience, lireAudienceArticle, gererErreur } from '../etat.js';
 import { TetePage, Kpi } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
 import { Chargement, LigneCommandeCourte, venteDu, estVente } from './accueil.jsx';
@@ -144,8 +144,11 @@ function PaniersARelancer() {
   return (
     <section class="carte">
       <h2 class="carte-titre"><Icone n="sac" />Paniers à relancer<span class="fin">{pluriel(l.length, 'client')}</span></h2>
-      {l.length ? <div class="liste sans-bord">{l.slice(0, 8).map(({ a, pa }) => <LigneCompte key={a.id} a={a} texte={`${pluriel(pa.lignes.reduce((s, x) => s + x.qty, 0), 'article')} · ${dollars(pa.valeur)}${pa.depuis ? ' · ' + ilya(pa.depuis) : ''}`} />)}</div>
+      {l.length ? <div class="liste sans-bord">{l.slice(0, 8).map(({ a, pa }) => <LigneCompte key={a.id} a={a} texte={`${pluriel(pa.lignes.reduce((s, x) => s + x.qty, 0), 'article')} · ${dollars(pa.valeur)}${pa.depuis ? ' · ' + ilya(pa.depuis) : ''}${a.relance ? ' · rappel envoyé ' + ilya(a.relance) : ''}`} />)}</div>
         : <p class="attenue petit">{comptes.value.length ? 'Aucun client avec compte n’a d’article en attente dans son panier.' : 'Quand un client avec compte met un article au panier sans commander, il apparaît ici avec son nom et son téléphone.'}</p>}
+      <p class="champ-aide espace-haut">{cfg.value.cartReminder.enabled
+        ? `Rappel automatique : ${cfg.value.cartReminder.hours} h après son dernier ajout au panier, le client reçoit une notification gratuite, une fois par panier et au plus une fois par semaine.`
+        : 'Rappel automatique des paniers désactivé (Réglages → Général).'}</p>
     </section>
   );
 }

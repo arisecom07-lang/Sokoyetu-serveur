@@ -9,7 +9,7 @@ import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 7;
+const VERSION_BASE = 8;
 const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
@@ -44,7 +44,7 @@ const CLIENTS = [
 // [nom, téléphone, panier, favoris, dernière visite (heures)]
 const COMPTES = [
   ['Grâce Mapendo', '0991234501', [{ productId: 'ex-p04', qty: 1 }], ['ex-p05', 'ex-p13'], 3],
-  ['Aline Zawadi', '0971234507', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 2 }], ['ex-p10'], 20],
+  ['Aline Zawadi', '0971234507', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 2 }], ['ex-p10'], 30],
   ['Patient Bisimwa', '0971234502', [], ['ex-p18'], 50]
 ];
 /* Configuration telle que le serveur la voit : paiement en mode test. */
@@ -134,7 +134,7 @@ function vue(col, rec, gerant) {
   const r = { id: rec.id, collectionId: col, collectionName: col, created: new Date(rec.created).toISOString(), updated: new Date(rec.updated).toISOString(), doc: R.copie(rec.doc) };
   if (col === 'products') r.active = rec.active !== false;
   if (col === 'media') r.file = rec.file;
-  if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, created: new Date(rec.created).toISOString().replace('T', ' ') });
+  if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, relance: rec.relance || 0, created: new Date(rec.created).toISOString().replace('T', ' ') });
   if (!gerant) { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = commandePublique(rec.doc); }
   else if (roleActuel() === 'livreur') { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = { ...commandePublique(rec.doc), adminNote: rec.doc.adminNote || '' }; }
   // Comme le serveur : la boutique apprend quel paiement est ouvert (ici, le mode test).
@@ -426,6 +426,7 @@ async function serveur(chemin, method, corps) {
     }
     enregistrer(b); return { ok: true, alertes: alertesPour(b, corps) };
   }
+  if (p === 'sokoyetu/relances') { exigerGerant('reglages'); return { relances: relancerPaniers(b) }; }
   if (p === 'sokoyetu/alertes/attente') {
     exigerGerant('produits');
     const out = {};
@@ -671,6 +672,23 @@ function notificationsPour(b, corps) {
   return (b.notifications || []).filter((x) => (c && x.client === c.id) || (a && x.appareil === a));
 }
 
+/* Relance des paniers laissés (comme comptes.relancerPaniers) : notification gratuite, une fois par panier. */
+function relancerPaniers(b) {
+  const cfg = configPaiement(b.cols.config.store ? b.cols.config.store.doc : {}); const now = Date.now(); let n = 0;
+  if (!cfg.cartReminder.enabled) return 0;
+  Object.values(b.cols.clients).forEach((rec) => {
+    const tel = R.chiffres(rec.phone);
+    const r = R.relancePanier({ doc: rec.doc, cfg, relance: rec.relance, maintenant: now, produit: (id) => (b.cols.products[id] ? b.cols.products[id].doc : null),
+      commandeDepuis: (t) => Object.values(b.cols.orders).some((o) => (o.client === rec.id || (tel && o.phone === tel)) && o.created > t) });
+    if (!r) return;
+    ajouterNotification(b, { client: rec.id, appareil: '', type: 'panier', details: { titre: r.titre, autres: r.autres }, url: '/panier', cle: 'panier:' + rec.id + ':' + r.depuis });
+    rec.relance = now; n++;
+    diffuser('clients', rec.id, 'update');
+  });
+  if (n) enregistrer(b);
+  return n;
+}
+
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
 
 function verifierSimulation(d) {
@@ -708,10 +726,13 @@ function reponseClient(rec) {
   const d = rec.doc; const p = d.payment || {};
   return { id: rec.id, order: commandePublique(d), paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: R.int(p.attempts), relance: R.relancePossible(d) === '', test: true } };
 }
-// Comme la tâche minute du serveur : les paiements en cours avancent même si le client a fermé la page.
+// Comme les tâches du serveur : les paiements en cours avancent même si le client a fermé la page ; les paniers laissés
+// sont rappelés (chaque minute dans la démo).
+let derniereRelance = 0;
 setInterval(() => {
   if (document.visibilityState !== 'visible') return;
   try { const b = base(); Object.values(b.cols.orders).filter((r) => R.enAttentePaiement(r.doc)).forEach((r) => suivrePaiement(b, r)); } catch (e) { }
+  if (Date.now() - derniereRelance > 60000) { derniereRelance = Date.now(); try { relancerPaniers(base()); } catch (e) { } }
 }, 4000);
 
 /* ---------- Même interface que src/commun/js/api.js ---------- */

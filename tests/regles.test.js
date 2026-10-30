@@ -378,3 +378,26 @@ test('« Prévenez-moi » et annonces : option suivie, retour en stock, textes e
   assert.throws(() => R.annonceNettoyee({ titre: 'Promo', texte: '' }), /message/);
   assert.equal(R.annonceNettoyee({ titre: 'x'.repeat(90), texte: 'y'.repeat(300) }).titre.length, 60);
 });
+
+test('relance des paniers : une fois par panier, seulement les articles encore disponibles, jamais après une commande', () => {
+  const t0 = Date.UTC(2026, 9, 30, 8);
+  const cfg = R.config({});
+  assert.deepEqual(cfg.cartReminder, { enabled: true, hours: 24 });
+  assert.deepEqual(R.config({ cartReminder: { enabled: false, hours: 500 } }).cartReminder, { enabled: false, hours: 72 });
+  const cat = { sac: { title: 'Sac cabas', stock: 2 }, robe: { title: 'Robe', stock: 0 }, montre: { title: 'Montre', source: 'import' }, brouillon: { title: 'Brouillon', stock: 3, status: 'draft' } };
+  const produit = (id) => cat[id] || null;
+  const doc = (ids, heures) => ({ panier: ids.map((productId) => ({ productId, qty: 1 })), dates: Object.fromEntries(ids.map((id) => ['panier:' + id, t0 - heures * 3600e3])) });
+  const relance = (d, extra = {}) => R.relancePanier({ doc: d, cfg, produit, maintenant: t0, relance: 0, commandeDepuis: () => false, ...extra });
+  assert.equal(relance(doc(['sac'], 5)), null, 'trop tôt');
+  assert.deepEqual(relance(doc(['sac', 'robe', 'montre', 'brouillon'], 30)), { titre: 'Sac cabas', autres: 1, depuis: t0 - 30 * 3600e3 }, 'épuisé et brouillon écartés');
+  assert.equal(relance(doc(['robe'], 30)), null, 'plus rien de disponible');
+  assert.equal(relance(doc(['sac'], 24 * 8)), null, 'panier laissé depuis plus d’une semaine');
+  assert.equal(relance(doc(['sac'], 30), { relance: t0 - 3600e3 }), null, 'déjà relancé pour ce panier');
+  assert.equal(relance(doc(['sac'], 30), { relance: t0 - 40 * 3600e3 }), null, 'une relance par semaine au plus');
+  assert.ok(relance(doc(['sac'], 30), { relance: t0 - 8 * R.JOUR }), 'la semaine passée, on peut rappeler un nouveau panier');
+  assert.equal(relance(doc(['sac'], 30), { commandeDepuis: (t) => t === t0 - 30 * 3600e3 }), null, 'a commandé depuis');
+  assert.equal(R.relancePanier({ doc: doc(['sac'], 30), cfg: R.config({ cartReminder: { enabled: false } }), produit, maintenant: t0 }), null, 'désactivée');
+  assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 0 } }, 'fr').texte, '« Sac cabas » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.');
+  assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 1 } }, 'fr').texte, '« Sac cabas » et un autre article vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.');
+  assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 3 } }, 'fr').texte, '« Sac cabas » et 3 autres articles vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.');
+});

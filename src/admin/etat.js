@@ -37,7 +37,7 @@ export const aLivrer = computed(() => donnees.value.orders.filter((o) => R.pourL
 
 /* Comptes clients (facultatifs) : panier, favoris et coordonnées gardés par le serveur. */
 export const comptes = signal([]);
-const versCompte = (r) => ({ id: r.id, phone: r.phone || '', name: r.name || '', created: Date.parse(String(r.created || '').replace(' ', 'T')) || 0, seen: R.num(r.seen), ...R.docCompte(r.doc) });
+const versCompte = (r) => ({ id: r.id, phone: r.phone || '', name: r.name || '', created: Date.parse(String(r.created || '').replace(' ', 'T')) || 0, seen: R.num(r.seen), relance: R.num(r.relance), ...R.docCompte(r.doc) });
 
 /* Clients : déduits des commandes (une fiche par numéro de téléphone), plus les comptes qui n'ont pas encore commandé. */
 export const clients = computed(() => {

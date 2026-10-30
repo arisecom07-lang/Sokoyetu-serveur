@@ -171,6 +171,16 @@ function Formulaire({ section }) {
               <Bascule actif={!!f.showCDF} onClick={() => maj({ showCDF: !f.showCDF })} libelle="Afficher l’équivalent en francs congolais" />
             </section>
             <section class="carte formulaire">
+              <h2 class="carte-titre"><Icone n="sac" />Paniers laissés</h2>
+              <Bascule actif={f.cartReminder.enabled} onClick={() => maj({ cartReminder: { ...f.cartReminder, enabled: !f.cartReminder.enabled } })} libelle="Rappeler son panier au client"
+                sous="Notification gratuite (ni SMS ni WhatsApp), aux clients avec compte, une fois par panier et au plus une fois par semaine" />
+              {f.cartReminder.enabled ? <Champ libelle="Envoyé après">{(a) => (
+                <select class="saisie" {...a} value={String(f.cartReminder.hours)} onChange={(e) => maj({ cartReminder: { ...f.cartReminder, hours: Number(e.currentTarget.value) } })}>
+                  {[6, 12, 24, 48].map((h) => <option key={h} value={String(h)}>{h} heures sans commander</option>)}
+                </select>
+              )}</Champ> : null}
+            </section>
+            <section class="carte formulaire">
               <h2 class="carte-titre"><Icone n="echange" />Échanges</h2>
               <Champ libelle="Politique d’échange" aide="Affichée sur chaque fiche article.">{(a) => <textarea class="saisie" {...a} rows="3" value={f.returns} onInput={champ('returns')} maxlength="600" />}</Champ>
             </section>

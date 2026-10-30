@@ -744,3 +744,68 @@ test('« Prévenez-moi » : chaque client prévenu une fois au retour en stock ;
   assert.equal((await api('/api/sokoyetu/annonces', { headers: { Authorization: v.json.token } })).status, 403);
   assert.equal((await api('/api/sokoyetu/alertes/attente', { headers: { Authorization: v.json.token } })).status, 200);
 });
+
+test('relance des paniers : le client avec compte qui laisse son panier est prévenu une fois, gratuitement', async () => {
+  assert.equal((await ecrire('products', 't-sac', { title: 'Sac d’essai', price: 25, status: 'active', source: 'local', stock: 5, images: [] })).status, 200);
+  const technicien = { Authorization: technique };
+  // Premier compte par la vraie connexion (code reçu) ; les autres créés par le tableau technique (limite de codes par adresse).
+  const compte = async (telephone, panier) => {
+    const code = (await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone } })).json.code;
+    const cx = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone, code, panier } });
+    assert.equal(cx.status, 200, cx.texte);
+    return { id: cx.json.record.id, moi: { Authorization: cx.json.token } };
+  };
+  const compteTechnique = async (phone, panier) => {
+    const mdp = secret() + secret();
+    const r = await api('/api/collections/clients/records', { method: 'POST', headers: technicien, body: { phone, password: mdp, passwordConfirm: mdp, verified: true, seen: Date.now(), doc: { panier, favoris: [], profil: {}, dates: Object.fromEntries(panier.map((l) => ['panier:' + l.productId, Date.now()])) } } });
+    assert.equal(r.status, 200, r.texte);
+    const t = await api(`/api/collections/clients/impersonate/${r.json.id}`, { method: 'POST', headers: technicien, body: {} });
+    assert.equal(t.status, 200, t.texte);
+    return { id: r.json.id, moi: { Authorization: t.json.token } };
+  };
+  // Le panier est daté par le serveur à chaque ajout : le tableau technique le vieillit pour l'essai.
+  const vieillir = async (id, heures) => {
+    const rec = (await api(`/api/collections/clients/records/${id}`, { headers: technicien })).json;
+    const dates = Object.fromEntries(Object.keys(rec.doc.dates).map((k) => [k, Date.now() - heures * 3600e3]));
+    assert.equal((await api(`/api/collections/clients/records/${id}`, { method: 'PATCH', headers: technicien, body: { doc: { ...rec.doc, dates } } })).status, 200);
+  };
+  const relancer = async () => { const r = await api('/api/sokoyetu/relances', { method: 'POST', auth: true }); assert.equal(r.status, 200, r.texte); return r.json.relances; };
+  const notifs = async (moi) => (await api('/api/sokoyetu/notifications', { method: 'POST', headers: moi, body: {} })).json.notifications.filter((n) => n.type === 'panier');
+
+  assert.equal((await api('/api/sokoyetu/relances', { method: 'POST' })).status, 403);
+  const a = await compte('0881239876', [{ productId: 't-montre', qty: 1 }, { productId: 't-sac', qty: 2 }]);
+  await relancer();
+  assert.deepEqual(await notifs(a.moi), [], 'panier tout frais : rien');
+  await vieillir(a.id, 30);
+  assert.ok((await relancer()) >= 1);
+  assert.deepEqual((await notifs(a.moi)).map((n) => [n.titre, n.texte, n.url]),
+    [['Votre panier vous attend', '« Montre d’essai » et un autre article vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.', '/panier']]);
+  const rec = (await api(`/api/collections/clients/records/${a.id}`, { auth: true })).json;
+  assert.ok(rec.relance > Date.now() - 60000, 'date du rappel visible dans l’administration');
+  await relancer();
+  assert.equal((await notifs(a.moi)).length, 1, 'une seule fois');
+  // Un autre article ajouté puis laissé : pas de second rappel dans la semaine.
+  assert.equal((await api('/api/sokoyetu/compte', { method: 'POST', headers: a.moi, body: { panier: [{ productId: 't-montre', qty: 1 }, { productId: 't-sac', qty: 2 }, { productId: 't-chemise', color: 'Blanc', size: 'M', qty: 1 }] } })).status, 200);
+  await vieillir(a.id, 30);
+  await relancer();
+  assert.equal((await notifs(a.moi)).length, 1, 'au plus une fois par semaine');
+
+  // Le client qui a commandé depuis son dernier ajout au panier n'est pas relancé.
+  const b = await compteTechnique('0881239877', [{ productId: 't-sac', qty: 1 }]);
+  await vieillir(b.id, 30);
+  const items = [{ productId: 't-montre', qty: 1 }];
+  const total = (await api('/api/sokoyetu/devis', { method: 'POST', body: { items, zoneId: 'bukavu' } })).json.total;
+  const r = await commander(saisie({ token: secret(), customer: { name: 'Client Fidèle', phone: '0881239877' }, items, discountCode: '', total, payment: { method: 'mpesa', phone: '0881239877' } }), b.moi);
+  assert.equal(r.status, 200, r.texte);
+  await relancer();
+  assert.deepEqual(await notifs(b.moi), []);
+  // Rappel désactivé dans les réglages : personne n'est relancé.
+  const c = await compteTechnique('0881239878', [{ productId: 't-sac', qty: 1 }]);
+  await vieillir(c.id, 30);
+  const cfg = (await api('/api/collections/config/records/store', { auth: true })).json.doc;
+  assert.equal((await ecrire('config', 'store', { ...cfg, cartReminder: { enabled: false, hours: 24 } })).status, 200);
+  assert.equal(await relancer(), 0);
+  assert.equal((await ecrire('config', 'store', cfg)).status, 200);
+  assert.equal(await relancer(), 1);
+  assert.equal((await notifs(c.moi)).length, 1);
+});

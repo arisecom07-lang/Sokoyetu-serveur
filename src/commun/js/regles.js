@@ -58,6 +58,8 @@ const CONFIG_DEFAUT = {
   payment: { provider: '', holdMinutes: 30 },
   /* Frais de service de la boutique, ajoutés au montant du panier (articles, après réduction). */
   serviceFeePct: 2,
+  /* Relance des paniers : le client avec compte qui laisse son panier reçoit une notification gratuite, hours heures après. */
+  cartReminder: { enabled: true, hours: 24 },
   legal: { company: '', address: '', email: '', rccm: '', idnat: '', nif: '', texts: {}, updatedAt: 0 },
   analytics: { provider: '', id: '' },
   setup: {}
@@ -166,6 +168,8 @@ function config(brut) {
   c.payment = estObjet(c.payment) ? c.payment : {};
   c.payment.provider = FOURNISSEURS[c.payment.provider] ? c.payment.provider : '';
   c.payment.holdMinutes = Math.min(120, Math.max(5, int(c.payment.holdMinutes) || 30));
+  const r = estObjet(c.cartReminder) ? c.cartReminder : {};
+  c.cartReminder = { enabled: r.enabled !== false, hours: Math.min(72, Math.max(2, int(r.hours) || 24)) };
   return c;
 }
 const zoneDe = (cfg, id) => (cfg.zones || []).find((z) => z.id === id) || null;
@@ -850,7 +854,10 @@ const TEXTES_NOTIFICATIONS = {
     expiree: ['Paiement non reçu', 'Commande #{numero} annulée : le paiement n’est pas arrivé à temps.'],
     remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).'],
     stock: ['De retour en stock', '« {titre} » ({option}) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !'],
-    promo: ['{titre}', '{texte}']
+    promo: ['{titre}', '{texte}'],
+    panier: ['Votre panier vous attend', (d) => (int(d.autres)
+      ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.`
+      : `« ${d.titre} » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.`)]
   }
 };
 /* Une notification ({ type, details }) en { titre, texte } dans la langue demandée (le français à défaut) ; null si type inconnu. */
@@ -858,8 +865,32 @@ function texteNotification(n, langue) {
   const t = ((TEXTES_NOTIFICATIONS[langue] || {})[n && n.type]) || (TEXTES_NOTIFICATIONS.fr[n && n.type]);
   if (!t) return null;
   const d = (n && n.details) || {};
-  const remplir = (x) => x.replace(/\{(\w+)\}/g, (_, k) => (d[k] === undefined || d[k] === null ? '' : String(d[k]))).replace(/ \(\)/g, '');
+  const remplir = (x) => (typeof x === 'function' ? x(d) : x.replace(/\{(\w+)\}/g, (_, k) => (d[k] === undefined || d[k] === null ? '' : String(d[k]))).replace(/ \(\)/g, ''));
   return { titre: remplir(t[0]), texte: remplir(t[1]) };
+}
+
+/* ---------- Relance des paniers laissés (clients avec compte) ---------- */
+
+const RELANCE_PANIER_JOURS = 7;      // une relance par semaine au plus ; un panier laissé depuis plus longtemps n'est plus relancé
+/*
+ * Le moment est-il venu de rappeler son panier à ce client ? { titre, autres, depuis } (premier article encore disponible,
+ * nombre d'autres, date du dernier ajout au panier), sinon null.
+ * doc : compte (docCompte) ; relance : date de la dernière relance ; commandeDepuis(t) : le client a commandé depuis t ;
+ * produit(id) : fiche du catalogue. Seuls les articles encore en vente et disponibles comptent.
+ */
+function relancePanier({ doc, cfg, relance, commandeDepuis, produit, maintenant }) {
+  const c = cfg && cfg.cartReminder;
+  if (!c || !c.enabled) return null;
+  const d = docCompte(doc); const now = maintenant || Date.now();
+  if (!d.panier.length) return null;
+  const depuis = Math.max.apply(null, d.panier.map((l) => int(d.dates['panier:' + l.productId])));
+  if (!depuis || now - depuis < int(c.hours) * 3600e3 || now - depuis > RELANCE_PANIER_JOURS * JOUR) return null;
+  if (int(relance) >= depuis || now - int(relance) < RELANCE_PANIER_JOURS * JOUR) return null;
+  if (commandeDepuis && commandeDepuis(depuis)) return null;
+  const dispo = d.panier.map((l) => ({ l, p: produit(l.productId) }))
+    .filter((x) => x.p && estEnVente(x.p) && (estImport(x.p) || stockDe(x.p, x.l.color, x.l.size) > 0));
+  if (!dispo.length) return null;
+  return { titre: dispo[0].p.title || 'Article', autres: dispo.length - 1, depuis };
 }
 
 /* ---------- « Prévenez-moi » au retour en stock, et annonces de la boutique ---------- */
@@ -909,5 +940,6 @@ module.exports = {
   MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte,
   MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage,
   evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification,
-  MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee
+  MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee,
+  RELANCE_PANIER_JOURS, relancePanier
 };
