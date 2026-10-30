@@ -56,6 +56,8 @@ node tests/captures.mjs [boutique|admin] [clair|sombre]   # captures dans le dos
 (cd dist/demo && python3 -m http.server 8095) ; node tests/demo.mjs
 BASE=http://127.0.0.1:8094 node tests/charge.mjs 80        # visiteurs simultanés, dernier exemplaire, même IP (base à part : DATA=.local/charge)
 BASE=http://127.0.0.1:8090 DATA=.local/pb_data node tests/sauvegarde.mjs   # sauvegarde.sh : maintenant, verifier, restaurer
+python3 outils/domaine.py etat | ip | github | droplet IP [--oui]   # DNS Namecheap : page d'attente (branche gh-pages, GitHub Pages) puis Droplet
+                                 # NAMECHEAP_API_USER / NAMECHEAP_API_KEY dans l'environnement, api.namecheap.com autorisé, IP autorisée chez Namecheap
 ```
 
 Pour arrêter un serveur local : `ps -eo pid,args | awk '$2 ~ /pocketbase$/ {print $1}' | xargs -r kill` (ne pas utiliser `pkill -f`, qui peut tuer le shell courant).
