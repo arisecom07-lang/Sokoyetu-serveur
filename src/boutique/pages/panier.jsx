@@ -18,11 +18,23 @@ export function devisLocal({ zoneId, remise } = {}) {
   return R.devis({ cfg: cfg.value, produit: (id) => m.get(id) || null, lignes: aCommander.value, zoneId: zoneId || (cfg.value.zones[0] || {}).id, code: remise ? remise.code : '', remise: remise ? { ...remise, active: true } : null, maintenant: Date.now() });
 }
 
+/* Prix à la pièce de chaque ligne (vente flash, prix de gros) : le palier compte les pièces cochées du même article. */
+export function prixPieces(lignes) {
+  const parArticle = {};
+  lignes.forEach((l) => { if (l.coche !== false) parArticle[l.productId] = (parArticle[l.productId] || 0) + R.int(l.qty); });
+  const now = Date.now();
+  return new Map(lignes.map((l) => {
+    const p = l.p || produitsParId.value.get(l.productId); if (!p) return [l.cle, { prix: 0, base: 0 }];
+    return [l.cle, { prix: R.prixUnitaire(p, l.color, l.size, l.coche === false ? l.qty : parArticle[l.productId], now), base: R.prixVariante(p, l.color, l.size) }];
+  }));
+}
+
 export function Panier() {
   const c = cfg.value; const lignes = lignesPanier.value;
   useEffect(() => { nettoyerPanier(); }, [catalogueAJour.value]);
   useSeo(() => ({ titre: 'Panier', noindex: true }), []);
   const dv = devisLocal();
+  const pieces = prixPieces(lignes);
   // Les problèmes du devis sont repérés par leur rang parmi les articles cochés.
   const cles = aCommander.value.map((l) => l.cle);
   const problemes = new Map(dv.problemes.filter((x) => x.ligne != null).map((x) => [cles[x.ligne], x]));
@@ -99,7 +111,7 @@ export function Panier() {
                     <div class="pl-bas">
                       <Quantite petit supprimer valeur={l.qty} max={Math.min(R.MAX_QTE, Math.max(l.qty, st))} libelle={`Quantité de ${p.title}`}
                         onChange={(q) => { changerQuantite(l.cle, q); if (q <= 0) toast('Article retiré du panier', { icone: 'poubelle' }); }} />
-                      <span class="prix">{dollars(R.num(p.price) * l.qty)}</span>
+                      <span class="pl-prix">{pieces.get(l.cle).prix < pieces.get(l.cle).base ? <span class="prix-barre">{dollars(pieces.get(l.cle).base * l.qty)}</span> : null}<span class="prix">{dollars(pieces.get(l.cle).prix * l.qty)}</span></span>
                     </div>
                   </div>
                 </li>

@@ -171,6 +171,22 @@ export async function ficheIA(image, mediaType, hint) {
   return requete('sokoyetu/ia/produit', { method: 'POST', delai: 100000, corps: { image, mediaType, hint, shop: c.name, city: c.city, collections: rayons.value.map((x) => ({ id: x.id, name: x.name })) } });
 }
 
+/* Import depuis un fournisseur : lecture de la page (et fiche rédigée par l'assistant si ia), copie d'une photo par son adresse. */
+/* Import en masse : le serveur limite le nombre de demandes par minute ; on patiente puis on reprend au lieu d'abandonner. */
+async function patienter(fn) {
+  for (let essai = 0; ; essai++) {
+    try { return await fn(); } catch (e) { if (e.code !== 'limite' || essai >= 6) throw e; await new Promise((r) => setTimeout(r, 10000)); }
+  }
+}
+export async function lireFournisseur(url, ia, hint) {
+  const c = cfg.value;
+  return patienter(() => requete('sokoyetu/import/lien', { method: 'POST', delai: 120000, corps: { url, ia: !!ia, hint, shop: c.name, city: c.city, collections: rayons.value.map((x) => ({ id: x.id, name: x.name })) } }));
+}
+export const copierPhoto = (url) => patienter(() => requete('sokoyetu/import/photo', { method: 'POST', delai: 60000, corps: { url } }));
+/* Photo ajoutée à une fiche : l'assistant renvoie le cadre de l'article ({ cadre } en millièmes, ou { cadre: null }).
+   Plusieurs photos d'un coup peuvent dépasser la limite de demandes à l'assistant : on patiente, comme pour l'import. */
+export const cadreIA = (image, mediaType, hint) => patienter(() => requete('sokoyetu/ia/cadre', { method: 'POST', delai: 60000, corps: { image, mediaType, hint } }));
+
 /* Catalogue d'exemple : pour découvrir la boutique avant d'ajouter ses propres articles. */
 export async function chargerExemple() {
   const r = await fetch((typeof __DEMO__ !== 'undefined' && __DEMO__ ? '' : '/') + 'exemple-catalogue.json', { cache: 'no-store' });

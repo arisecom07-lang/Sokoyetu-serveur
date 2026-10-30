@@ -129,7 +129,7 @@ function commandePublique(doc) {
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
 }
-function produitPublic(doc) { const d = R.copie(doc); delete d.cost; return d; }
+function produitPublic(doc) { const d = R.copie(doc); delete d.cost; delete d.supplier; return d; }
 function vue(col, rec, gerant) {
   if (!rec) return null;
   const r = { id: rec.id, collectionId: col, collectionName: col, created: new Date(rec.created).toISOString(), updated: new Date(rec.updated).toISOString(), doc: R.copie(rec.doc) };
@@ -321,7 +321,7 @@ async function serveur(chemin, method, corps) {
     const code = R.valider.codePromo(corps.discountCode);
     const d = R.devis({ cfg: cfg(), produit, lignes: corps.items, zoneId: corps.zoneId, code: corps.discountCode, remise: code ? remiseParCode(b, code) : null, maintenant: Date.now() });
     d.lignes.forEach((l) => { delete l.cost; });
-    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, zoneId: d.zone ? d.zone.id : '' };
+    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' };
   }
   if (p === 'sokoyetu/commander') {
     if (corps.website) throw new ErreurApi(400, 'Vérification impossible. Rechargez la page et réessayez.');
@@ -400,6 +400,24 @@ async function serveur(chemin, method, corps) {
   if (p === 'sokoyetu/audience') { exigerGerant(); return resumeDemo(q.get('jours'), q.get('graphe')); }
   if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant(); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
+  // Import depuis un fournisseur : la démo ne peut pas lire les sites chinois, elle montre un exemple de lecture.
+  if (p === 'sokoyetu/import/lien') {
+    exigerGerant();
+    const url = String((corps && corps.url) || '').trim();
+    if (!/^https?:\/\/([a-z0-9-]+\.)*(1688|alibaba|aliexpress|taobao|tmall|temu|shein|made-in-china|dhgate)\.(com|us)\//i.test(url)) throw new ErreurApi(400, 'Collez le lien d’une page produit (1688, Alibaba, AliExpress, Taobao…).', { code: 'bad_url' });
+    await pause(900);
+    return {
+      url, title: '女士夏季连衣裙 中长款 酒红色 收腰显瘦', description: '', images: ['photos/p01-1.webp', 'photos/p01-1-s.webp'], price: 45, currency: 'CNY', ia: '',
+      fiche: corps && corps.ia ? { title: 'Robe midi bordeaux cintrée', description: 'Une robe d’été mi-longue, cintrée à la taille, qui allonge la silhouette. Légère et facile à porter, du bureau aux sorties.\n\n(Exemple de la démonstration : sur votre serveur, l’assistant lit la vraie page du fournisseur.)', details: 'Matière : Polyester (probable)\nLongueur : Mi-mollet\nCoupe : Cintrée', colors: [{ name: 'Bordeaux', hex: '#7A1F2B' }], sizes: ['S', 'M', 'L', 'XL'], collectionIds: [], newCollection: '', tags: 'robe, été, bordeaux, femme', alt: 'Robe midi bordeaux, vue de face' } : null
+    };
+  }
+  if (p === 'sokoyetu/import/photo') {
+    exigerGerant();
+    const url = String((corps && corps.url) || '').trim();
+    if (!url) throw new ErreurApi(400, 'Adresse de photo invalide.', { code: 'bad_url' });
+    await pause(200);
+    return { type: 'url', src: url };
+  }
   throw new ErreurApi(404, 'Adresse inconnue dans la démonstration.');
 }
 
@@ -566,6 +584,12 @@ export async function envoyerPhoto(blob) {
   const b = base(); b.cols.media[id] = { id, doc: {}, file: f, created: Date.now(), updated: Date.now() }; enregistrer(b);
   await pause(250);
   return { type: 'pb', id, f };
+}
+/* Vidéos de la démo : gardées le temps de la visite seulement (trop lourdes pour la mémoire du navigateur). */
+export async function envoyerVideo(fichier) {
+  exigerGerant();
+  await pause(400);
+  return { type: 'blob', src: URL.createObjectURL(fichier), video: true };
 }
 const memoire = new Map();
 export function urlFichierServeur(m) {
