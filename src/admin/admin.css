@@ -302,6 +302,10 @@ a.kpi:active { transform: scale(.985); }
 .tp-badge.bouton { background: rgba(255, 255, 255, .94); color: #1E1611; box-shadow: var(--ombre-1); }
 .tp-actions { position: absolute; right: 5px; top: 5px; display: grid; gap: 5px; }
 .tp-actions .btn-icone.mini { background: rgba(255, 255, 255, .94); color: #1E1611; box-shadow: var(--ombre-1); }
+.tp-ia.btn-icone.mini { position: absolute; left: 5px; top: 36px; background: rgba(255, 255, 255, .94); color: #1E1611; box-shadow: var(--ombre-1); }
+.tp-ia.btn-icone.mini.retouchee { background: var(--marque); color: #fff; }
+.tp-ia.btn-icone.mini:disabled { opacity: .55; }
+.tp-retouche { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255, 255, 255, .62); }
 .tp-couleur { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; padding: 0 8px; border: 0; background: rgba(255, 255, 255, .94); color: #1E1611; font-size: 12px; font-weight: 650; -webkit-appearance: none; appearance: none; text-align: center; text-overflow: ellipsis; }
 .tuile-photo.ajout { display: grid; place-content: center; justify-items: center; gap: 6px; padding: 8px; text-align: center; border: 1.5px dashed var(--ligne-saisie); background: transparent; color: var(--marque-texte); font-size: var(--t-s); font-weight: 700; cursor: pointer; transition: background-color var(--rapide), border-color var(--rapide); }
 .tuile-photo.ajout:hover { background: var(--marque-doux); border-color: var(--marque); }

@@ -323,6 +323,18 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
   }
 }, LIMITE.photo);
 
+// Photo ajoutée à une fiche : l'assistant repère l'article, l'administration recadre et éclaire la photo.
+routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e);
+  const IA = require(`${__hooks}/lib/ia.js`);
+  try { return e.json(200, IA.cadre(S.corps(e))); }
+  catch (err) {
+    if (err && err.code) return e.json(err.status || 502, { code: err.code, message: 'Assistant indisponible (' + err.code + ').' });
+    throw err;
+  }
+}, LIMITE.photo);
+
 // Import depuis un fournisseur (1688, Alibaba…) : titre, photos et prix d'usine ; avec ia=true, l'assistant rédige la fiche en français.
 routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);

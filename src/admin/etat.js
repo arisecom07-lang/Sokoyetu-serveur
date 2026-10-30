@@ -226,6 +226,9 @@ export async function lireFournisseur(url, ia, hint) {
   return patienter(() => requete('sokoyetu/import/lien', { method: 'POST', delai: 120000, corps: { url, ia: !!ia, hint, shop: c.name, city: c.city, collections: rayons.value.map((x) => ({ id: x.id, name: x.name })) } }));
 }
 export const copierPhoto = (url) => patienter(() => requete('sokoyetu/import/photo', { method: 'POST', delai: 60000, corps: { url } }));
+/* Photo ajoutée à une fiche : l'assistant renvoie le cadre de l'article ({ cadre } en millièmes, ou { cadre: null }).
+   Plusieurs photos d'un coup peuvent dépasser la limite de demandes à l'assistant : on patiente, comme pour l'import. */
+export const cadreIA = (image, mediaType, hint) => patienter(() => requete('sokoyetu/ia/cadre', { method: 'POST', delai: 60000, corps: { image, mediaType, hint } }));
 
 /* Catalogue d'exemple : pour découvrir la boutique avant d'ajouter ses propres articles. */
 export async function chargerExemple() {

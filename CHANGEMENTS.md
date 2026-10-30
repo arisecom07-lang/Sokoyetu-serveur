@@ -1,3 +1,22 @@
+# Sokoyetu — photos produits cadrées par l'assistant IA (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Chaque photo ajoutée à une fiche est retouchée automatiquement** quand l'assistant IA est activé : l'assistant (Claude, le même que pour les fiches) repère l'article sur la photo, puis l'administration la recadre au format de la boutique (4:5), l'article **centré et en grand**, et corrige la lumière (fond plus clair, contraste, couleurs un peu plus vives). Une photo prise de loin, de travers ou trop sombre ressort comme les photos de la démo.
+- Avec **« Choisir une photo »** de l'assistant, un seul appel fait tout : la fiche est rédigée et la photo cadrée.
+- **La photo d'origine est toujours gardée** : le bouton ✦ sur chaque photo passe de la version retouchée à l'originale et inversement.
+- Les photos déjà en ligne peuvent être cadrées une par une avec le même bouton ✦ (« Cadrer avec l'assistant »).
+- Le cadrage se coupe dans la carte Photos (« Cadrage automatique par l'assistant »), le choix est retenu sur l'appareil.
+- Aucun nouveau service ni nouvelle clé : la retouche se fait dans le navigateur. Limite : le fond d'origine est conservé (l'assistant ne dessine pas de nouveau fond).
+
+## Détails techniques
+
+- `lib/ia.js` : le schéma de la fiche demande aussi `cadre` `{ gauche, haut, droite, bas }` en millièmes (`nettoyerCadre` : ordre, bornes, refus sous 3 %) ; nouvelle fonction `cadre` et route `POST /api/sokoyetu/ia/cadre` (administration, limite `/api/sokoyetu/ia/` existante). Appel à l'API factorisé (`appeler`) ; `ANTHROPIC_URL` pour un faux service en essai (`tests/claude-simule.mjs`).
+- `src/admin/cadrage.js` : `calculerCadrage` (marge 9 %, zoom limité, le cadre glisse dans la photo avant d'ajouter du fond), `tableLumiere` (niveaux auto, gain ≤ ×1,55, gamma doux), `cadrerPhoto` (canvas, fond = médiane du pourtour avec fondu, WebP 1600 px au plus).
+- Image de la fiche : `{ type, id, f, w, h, orig }` quand elle est retouchée, `{ …, retouche }` quand l'originale est choisie. Tests : `tests/cadrage.test.js`.
+
+---
+
 # Sokoyetu — ajout des produits comme sur Shein et Temu (octobre 2026)
 
 ## Ce qui change pour vous
