@@ -4,7 +4,7 @@ Sokoyetu, ce sont **deux applications séparées** qui partagent la même base d
 
 | Adresse | Pour qui | Contenu |
 |---|---|---|
-| **https://sokoyakwetu.com** | vos clients | la boutique, en français, anglais, swahili ou lingala : rayons, articles, panier, paiement Mobile Money (ou carte Visa / Mastercard) dans l'application, reçu, suivi de commande, notifications, avis, discussion avec la boutique, cagnotte |
+| **https://sokoyakwetu.com** | vos clients | la boutique : rayons, articles, panier, paiement Mobile Money (ou carte Visa / Mastercard) dans l'application, reçu, suivi de commande, notifications, avis, discussion avec la boutique, cagnotte |
 | **https://admin.sokoyakwetu.com** | vous et votre équipe | l'administration : commandes payées en direct, préparation, livraisons, produits, stock, messages et avis des clients, réglages |
 
 La boutique ne contient aucun lien ni aucun code de l'administration. Depuis l'administration, le bouton **Voir la boutique** ouvre le site comme vos clients le voient.
@@ -246,7 +246,7 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 
 ---
 
-## 11. Vos clients : notifications, avis, discussion, fidélité, langues et équipe
+## 11. Vos clients : notifications, avis, discussion, fidélité et équipe
 
 Rien à brancher : tout fonctionne dès la mise en ligne, sans frais (ni SMS, ni WhatsApp).
 
@@ -257,7 +257,6 @@ Rien à brancher : tout fonctionne dès la mise en ligne, sans frais (ni SMS, ni
 - **Avis des clients** : seuls les clients qui ont reçu l'article le notent, avec leur prénom et l'initiale de leur nom ; rappel gratuit 2 jours après la livraison. Page **Avis** : répondre publiquement, masquer un avis abusif avec un motif (jamais parce qu'il est négatif). Vérification avant publication en option : **Réglages → Général → Avis des clients**.
 - **Discussion** : le client pose une question sur un article ou une commande depuis la boutique ; vous répondez dans **Messages** (alerte et carillon à chaque message), il est prévenu par notification.
 - **Cagnotte et parrainage** (fermés au départ, avec les comptes clients de la section 6) : **Réglages → Général → Fidélité et parrainage**. Chaque commande livrée rapporte au client un pourcentage de ses articles (2 % proposé), qu'il utilise sur ses commandes suivantes jusqu'à la moitié des articles. Chaque client a un lien de parrainage : son proche reçoit un cadeau sur sa première commande (2 $ dès 10 $ d'achat, proposé), le parrain une récompense (3 $) quand elle est livrée. Le code de parrainage se tape aussi dans la case du code promo. Geste de la boutique : fiche du client → **Offrir**.
-- **Langues** : la boutique se lit en **français, anglais, swahili ou lingala** (choix dans le pied de page ou **Mon compte → Langue** ; proposé une fois à un téléphone réglé dans l'une de ces langues). Les notifications arrivent dans la langue choisie. Ce que vous écrivez vous-même (articles, rayons, bannières, slogan ou bandeau modifiés) reste tel que vous l'avez écrit, et les pages légales restent en français (la boutique le signale) ; les textes d'origine de la boutique sont traduits. L'administration reste en français. **Faites relire les traductions** par une personne dont c'est la langue, surtout le lingala et le swahili (fichiers `src/boutique/langues/`).
 - **Équipe** (propriétaire) : **Plus → Équipe**. Un **vendeur** gère commandes, produits, clients, messages et avis (ni réglages, ni réductions, ni remboursements) ; un **livreur** ne voit que ses livraisons (adresse, Appeler, Itinéraire, « Je pars livrer », « Livrée »). Un mot de passe provisoire s'affiche une seule fois : transmettez-le, la personne le change dans **Mon compte**.
 
 ---
@@ -268,8 +267,7 @@ Rien à brancher : tout fonctionne dès la mise en ligne, sans frais (ni SMS, ni
 npm install
 npm run build        # → dist/sokoyetu-serveur.zip (le paquet à déposer sur GitHub)
 npm run demo         # → dist/demo/ (démonstration sans serveur, données dans le navigateur)
-npm test             # règles métier, icônes, import, cadrage des photos, langues, signature des notifications
-node outils/langues.cjs        # textes de la boutique encore sans traduction (anglais, swahili, lingala)
+npm test             # règles métier, icônes, import, cadrage des photos, signature des notifications
 bash outils/serveur-local.sh   # vrai serveur local (paiement en mode test) : http://localhost:8090 et http://admin.localhost:8090
 ```
 

@@ -17,7 +17,7 @@ const DUREE_TOURNEE = 40000;
 
 /* Empreinte du jeton d'appareil envoyé par la boutique ('' si absent ou invalide). */
 const empreinte = (jeton) => (R.valider.jeton(jeton) ? $security.sha256('appareil:' + jeton) : '');
-const LANGUES = ['fr', 'en', 'sw', 'ln'];
+const LANGUES = Object.keys(R.TEXTES_NOTIFICATIONS); // langues des textes : le français pour l'instant
 const langue = (l) => (LANGUES.indexOf(String(l || '')) >= 0 ? String(l) : 'fr');
 
 /* Qui demande : compte connecté et/ou appareil (jeton dans le corps de la demande). */

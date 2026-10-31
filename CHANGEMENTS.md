@@ -1,10 +1,9 @@
-# Sokoyetu 3.0.0 — clients prévenus, avis, discussion, fidélité, carte bancaire, équipe et quatre langues (octobre 2026)
+# Sokoyetu 3.0.0 — clients prévenus, avis, discussion, fidélité, carte bancaire et équipe (octobre 2026)
 
 ## Ce qui change pour vous
 
 - **Le client est prévenu à chaque étape de sa commande**, gratuitement (ni SMS ni WhatsApp) : paiement reçu, préparation, en route ou prête au retrait, livrée, annulée, remboursée. Dans la **cloche** de la boutique et, s'il l'accepte, en **notification sur son téléphone**, même boutique fermée. Le client sans compte est prévenu aussi, sur le téléphone qui a commandé.
 - **Avis et notes** : seuls les clients qui ont reçu l'article le notent (de 1 à 5 étoiles, avec un commentaire s'il le veut). La note s'affiche sur chaque article ; la fiche montre la moyenne, la répartition et les avis. Rappel gratuit 2 jours après la livraison. Page **Avis** dans l'administration : répondre publiquement, masquer un avis abusif avec un motif.
-- **La boutique en anglais, swahili et lingala** : choix dans le pied de page ou **Mon compte → Langue**, proposé une fois aux téléphones réglés dans l'une de ces langues. Les notifications arrivent dans la langue choisie.
 - **« Prévenez-moi »** sur un article épuisé (ou une seule couleur, une seule taille) : le client est prévenu dès que le stock revient. **Annonces** de promotions et de nouveautés aux clients qui les acceptent (**Clients → Annonces aux clients**, 3 par jour au plus).
 - **Paniers laissés** : un client avec compte qui oublie son panier reçoit un rappel gratuit, une fois (**Réglages → Général**).
 - **Paiement par carte Visa / Mastercard** sur la page sécurisée de FlexPay : le client n'a aucun numéro à saisir. Fermé tant que vous ne l'ouvrez pas (**Réglages → Paiements**).
@@ -15,7 +14,6 @@
 ## Bon à savoir
 
 - **Notifications du téléphone** : vérifiées avec un faux service de notification, jamais encore avec de vrais téléphones. À essayer dès la mise en ligne (HTTPS obligatoire) : passer une commande de test et laisser la boutique fermée. Sur iPhone, le client doit d'abord installer l'application.
-- **Traductions** : à faire relire par une personne dont c'est la langue, surtout le lingala et le swahili (fichiers `src/boutique/langues/`). Restent en français : ce que vous écrivez (articles, rayons, bannières, slogan ou bandeau modifiés), les pages légales (la boutique le signale) et l'administration.
 - **Carte** : demandez à FlexPay d'ouvrir le paiement par carte (VPOS) et confirmez avec eux l'adresse de leur page de paiement (`paiement.sh carte 'https://…'` si elle diffère). Les frais de service sont les mêmes que pour le Mobile Money.
 - **Paiement plus sûr** : un paiement n'est reconnu que s'il porte la référence et au moins le montant de sa commande, en dollars.
 - **Cagnotte et parrainage** demandent les comptes clients (section 6 du LISEZMOI). Le code de parrainage se tape aussi dans la case du code promo.
@@ -29,8 +27,8 @@ Dans la console du Droplet : `sudo /opt/sokoyetu/mise-a-jour.sh`. Ensuite, selon
 
 - Migrations : `sokoyetu_equipe` (`admins.role`, `orders.etape`, règles des collections par rôle), `sokoyetu_notifications` (`sokoyetu_notifications`, `sokoyetu_abonnements`, `sokoyetu_cles`, `orders.appareil`), `sokoyetu_alertes` (`sokoyetu_alertes`, `sokoyetu_annonces`), `sokoyetu_relances` (`clients.relance`), `sokoyetu_discussions` (collection `discussions`, `sokoyetu_messages`), `sokoyetu_avis` (collection `avis`), `sokoyetu_fidelite` (`sokoyetu_cagnotte`, `clients.parrain_code`).
 - Serveur : `lib/equipe.js`, `lib/notifications.js`, `lib/push.js` et `lib/p256.js` (Web Push sans contenu, signature ES256 en JavaScript pur), `lib/alertes.js`, `lib/discussions.js`, `lib/avis.js`, `lib/fidelite.js` ; tâches `sokoyetu-notifications` (chaque minute) et `sokoyetu-relances` (chaque heure). Carte : `FLEXPAY_CARTE_URL`, `paiement.sh carte`, page de test `/paiement/{id}/carte-test` en simulation.
-- Boutique : `src/commun/js/langue.js` et `src/boutique/langues/` (dictionnaires anglais, swahili, lingala ; `node outils/langues.cjs` liste les textes sans traduction), `src/boutique/notifications.js`, pages Notifications, Discussion, Mes avis, Ma cagnotte. Administration : pages Équipe, Livraisons, Messages, Avis, Annonces.
-- Essais : `tests/regles.test.js`, `tests/langues.test.js`, `tests/push.test.js` (signature vérifiée par OpenSSL), `tests/serveur.test.mjs`, `tests/push.mjs` (faux service de notification), `tests/demo.mjs` (tous les parcours, changement de langue), `tests/accessibilite.mjs` (nouvelles pages, autres langues), `tests/flexpay-simule.mjs` (carte).
+- Boutique : `src/boutique/notifications.js`, pages Notifications, Discussion, Mes avis, Ma cagnotte. Administration : pages Équipe, Livraisons, Messages, Avis, Annonces.
+- Essais : `tests/regles.test.js`, `tests/push.test.js` (signature vérifiée par OpenSSL), `tests/serveur.test.mjs`, `tests/push.mjs` (faux service de notification), `tests/demo.mjs` (tous les parcours), `tests/accessibilite.mjs` (nouvelles pages), `tests/flexpay-simule.mjs` (carte).
 
 ---
 
