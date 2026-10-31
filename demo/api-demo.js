@@ -6,6 +6,7 @@
 // Comptes clients en mode test, comme SOKOYETU_WHATSAPP=simulation : le code de connexion s'affiche à l'écran.
 import R from '../src/commun/js/regles.js';
 import { Local } from '../src/commun/js/stockage.js';
+import { traduireMessage } from '../src/commun/js/langue.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
@@ -20,7 +21,8 @@ const uid = () => Array.from({ length: 15 }, () => 'abcdefghijklmnopqrstuvwxyz01
 const jeton = () => Array.from({ length: 40 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]).join('');
 
 export class ErreurApi extends Error {
-  constructor(status, message, extra) { super(message); this.status = status; Object.assign(this, extra || {}); }
+  // Messages du « serveur » en français, comme le vrai ; la boutique les affiche dans la langue choisie quand ils sont connus.
+  constructor(status, message, extra) { super(traduireMessage(message)); this.status = status; Object.assign(this, extra || {}); }
 }
 
 /* ---------- Base de données de la démo ---------- */

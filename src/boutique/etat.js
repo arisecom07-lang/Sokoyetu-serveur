@@ -3,6 +3,7 @@ import { signal, computed, batch, effect } from '@preact/signals';
 import R from '../commun/js/regles.js';
 import { requete, lireCatalogue, TempsReel, versLigne, Auth, prolongerSession } from '../commun/js/api.js';
 import { Local, Session } from '../commun/js/stockage.js';
+import { t } from '../commun/js/langue.js';
 
 /* Reprise des données de l'ancienne version de la boutique (même appareil). */
 (function reprendre() {
@@ -70,7 +71,7 @@ export async function chargerCatalogue() {
     return true;
   } catch (e) {
     horsLigne.value = e.code === 'reseau' && !!enCache;
-    if (!catalogueDisponible.value) catalogueErreur.value = e.code === 'reseau' ? (navigator.onLine === false ? 'Pas de connexion internet.' : 'Le serveur ne répond pas.') : 'La boutique est momentanément indisponible.';
+    if (!catalogueDisponible.value) catalogueErreur.value = e.code === 'reseau' ? (navigator.onLine === false ? t('Pas de connexion internet.') : t('Le serveur ne répond pas.')) : t('La boutique est momentanément indisponible.');
     reprise = setTimeout(chargerCatalogue, [5000, 15000, 45000][essai++] || 60000);
     return false;
   }

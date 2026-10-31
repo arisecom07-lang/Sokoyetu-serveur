@@ -5,6 +5,7 @@ import { requete, DEMO } from '../commun/js/api.js';
 import { Local } from '../commun/js/stockage.js';
 import { secret } from '../commun/js/outils.js';
 import { commandes, client } from './etat.js';
+import { langue as langueChoisie } from '../commun/js/langue.js';
 
 /* Jeton de cet appareil, tiré au sort une fois (le serveur n'en garde que l'empreinte). */
 export function jetonAppareil() {
@@ -12,7 +13,8 @@ export function jetonAppareil() {
   if (!/^[A-Za-z0-9]{32}$/.test(j || '')) { j = secret(32); Local.ecrire('appareil', j); }
   return j;
 }
-export const langue = () => 'fr';
+/* Les notifications s'écrivent dans la langue de la boutique sur ce téléphone (le serveur les rédige à la lecture). */
+export const langue = () => langueChoisie.peek();
 
 export const notifications = signal(Local.lire('notifications', []) || []);
 export const nonLues = computed(() => notifications.value.filter((n) => !n.lu).length);
@@ -42,7 +44,9 @@ export function chargerNotifications() {
   if (enCours) return enCours;
   enCours = (async () => {
     try {
-      const r = await requete('sokoyetu/notifications', { method: 'POST', corps: { appareil: jetonAppareil(), langue: langue() } });
+      const k = langue();
+      const r = await requete('sokoyetu/notifications', { method: 'POST', corps: { appareil: jetonAppareil(), langue: k } });
+      if (k !== langue()) { bientot(0); return; } // langue changée pendant la lecture : la liste est relue dans la nouvelle
       const l = (r && r.notifications) || [];
       garderAlertes(r && r.alertes);
       montrerSurLeTelephone(l.filter((n) => !n.lu && !deja.has(n.id)));
@@ -155,6 +159,14 @@ export function suivreNotifications() {
     const id = client.value ? client.value.id : '';
     if (id === compte) return;
     compte = id; bientot(200);
+    abonnementActuel().then((sub) => sub && enregistrer(sub)).catch(() => { });
+  });
+  // Autre langue : la liste est relue dans celle-ci, et le téléphone sera prévenu dans celle-ci aussi.
+  let vue = langueChoisie.peek();
+  effect(() => {
+    const k = langueChoisie.value;
+    if (k === vue) return;
+    vue = k; bientot(200);
     abonnementActuel().then((sub) => sub && enregistrer(sub)).catch(() => { });
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bientot(300); });

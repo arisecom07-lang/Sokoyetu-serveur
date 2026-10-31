@@ -10,14 +10,18 @@ const ADMIN = process.env.ADMIN || 'http://admin.localhost:8090';
 const theme = process.argv[2] || 'clair';
 
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'fr-FR', reducedMotion: 'reduce', bypassCSP: true });
-await ctx.addInitScript((sombre) => { try { localStorage.setItem('sokoyetu:consentement', '{"mesure":false}'); if (sombre) localStorage.setItem('sokoyetu:theme', '"sombre"'); } catch (e) { } }, theme === 'sombre');
-const p = await ctx.newPage();
+// Téléphone réglé en français (locale), sauf pour vérifier la langue proposée aux autres.
+async function contexte(locale) {
+  const c = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale, reducedMotion: 'reduce', bypassCSP: true });
+  await c.addInitScript((sombre) => { try { localStorage.setItem('sokoyetu:consentement', '{"mesure":false}'); if (sombre) localStorage.setItem('sokoyetu:theme', '"sombre"'); } catch (e) { } }, theme === 'sombre');
+  return c;
+}
+const p = await (await contexte('fr-FR')).newPage();
 let total = 0;
-async function controler(nom, url, attendre, avant) {
-  await p.goto(url); await p.waitForSelector(attendre); if (avant) await avant(); await p.waitForTimeout(500);
-  await p.addScriptTag({ content: axe });
-  const r = await p.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })).violations.map((v) => ({ id: v.id, impact: v.impact, aide: v.help, cibles: v.nodes.slice(0, 4).map((n) => n.target.join(' ') + (n.any[0] ? ' — ' + n.any[0].message : '')) })));
+async function controler(nom, url, attendre, avant, pg = p) {
+  await pg.goto(url); await pg.waitForSelector(attendre); if (avant) await avant(); await pg.waitForTimeout(500);
+  await pg.addScriptTag({ content: axe });
+  const r = await pg.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })).violations.map((v) => ({ id: v.id, impact: v.impact, aide: v.help, cibles: v.nodes.slice(0, 4).map((n) => n.target.join(' ') + (n.any[0] ? ' — ' + n.any[0].message : '')) })));
   total += r.length;
   console.log(`${r.length ? '✗' : '✓'} ${nom}${r.length ? '' : ' : aucune violation'}`);
   for (const v of r) console.log(`   [${v.impact}] ${v.id} : ${v.aide}\n      ${v.cibles.join('\n      ')}`);
@@ -93,6 +97,17 @@ await controler('Boutique · commande avec la cagnotte', BASE + '/commander', '.
   await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-fidelite .case'); await p.click('.carte-fidelite .case'); await p.waitForSelector('.montants dt:text("Ma cagnotte")');
 });
 await controler('Boutique · lien de parrainage', BASE + '/?parrain=' + codeParrain, '.feuille .cadeau-bienvenue');
+// Langues : boutique en lingala, choix de la langue, page légale en anglais (son texte reste en français, annoncé),
+// langue proposée à un téléphone réglé en swahili.
+await p.evaluate(() => localStorage.setItem('sokoyetu:langue', '"ln"'));
+await controler('Boutique · accueil en lingala', BASE + '/', 'html[lang="ln"] .carte-produit');
+await controler('Boutique · choix de la langue', BASE + '/compte', '.page-compte', async () => { await p.click('.page-compte :text("Lokota")'); await p.waitForSelector('.feuille [role="radiogroup"]'); });
+await p.keyboard.press('Escape'); await p.waitForSelector('.feuille', { state: 'detached' });
+await p.evaluate(() => localStorage.setItem('sokoyetu:langue', '"en"'));
+await controler('Boutique · page légale en anglais', BASE + '/infos/conditions', 'html[lang="en"] .note-langue');
+await p.evaluate(() => localStorage.setItem('sokoyetu:langue', '"fr"'));
+const swahili = await (await contexte('sw-TZ')).newPage();
+await controler('Boutique · langue proposée (téléphone en swahili)', BASE + '/', '.proposition-langue', null, swahili);
 await controler('Admin · connexion', ADMIN + '/', '.connexion-carte');
 await p.fill('input[type=email]', 'admin@sokoyetu.test'); await p.fill('input[autocomplete="current-password"]', 'Sokoyetu-2026'); await p.click('button[type=submit]'); await p.waitForSelector('.kpis');
 await controler('Admin · tableau de bord', ADMIN + '/#/', '.kpis');

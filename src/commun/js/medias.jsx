@@ -2,6 +2,7 @@
 import { useRef, useState } from 'preact/hooks';
 import { urlFichierServeur } from './api.js';
 import { Icone } from './icones.jsx';
+import { t } from './langue.js';
 
 /* Photos d'exemple livrées avec le site (dossier photos/ de la boutique) : adresses absolues sur le site, relatives dans la démo. */
 const BASE = typeof __DEMO__ !== 'undefined' && __DEMO__ ? (typeof __APP__ !== 'undefined' && __APP__ === 'admin' ? '../boutique/' : '') : '/';

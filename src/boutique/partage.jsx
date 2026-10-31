@@ -6,6 +6,7 @@ import { ouvrirFeuille, fermerFeuille, toast } from '../commun/js/interface.jsx'
 import { copier, dollars, pluriel } from '../commun/js/outils.js';
 import { lien } from './routeur.js';
 import { mesurerEvenement } from './mesure.js';
+import { t, tx } from '../commun/js/langue.js';
 
 /* Adresse complète d'une page de la boutique (dans la démo, l'adresse garde son « # »). */
 export const adresseComplete = (chemin) => new URL(lien(chemin), location.href).href;
@@ -14,7 +15,7 @@ export const adresseComplete = (chemin) => new URL(lien(chemin), location.href).
 export const lienPanierPartage = (lignes) => adresseComplete('/panier/partage?' + R.lienPanier(lignes));
 
 /* Texte qui accompagne un panier partagé : « Voici mon panier Sokoyetu : 3 articles, $87.00. » (total estimé, comme sur la page). */
-export const textePanier = (nom, n, total) => (n ? `Voici mon panier ${nom} : ${pluriel(n, 'article')}, ${dollars(total)}.` : `Voici mon panier ${nom}.`);
+export const textePanier = (nom, n, total) => (n ? t('Voici mon panier {0} : {1}, {2}.', [nom, pluriel(n, 'article'), dollars(total)]) : t('Voici mon panier {0}.', [nom]));
 
 /*
  * partager({ titre, texte, url, type: 'produit' | 'panier', id })
@@ -28,24 +29,24 @@ export async function partager(o) {
   }
   const message = `${o.texte} ${o.url}`;
   const fid = ouvrirFeuille({
-    titre: o.type === 'panier' ? 'Partager le panier' : o.type === 'parrainage' ? 'Partager mon lien' : 'Partager cet article',
+    titre: o.type === 'panier' ? t('Partager le panier') : o.type === 'parrainage' ? t('Partager mon lien') : t('Partager cet article'),
     contenu: () => (
       <div class="partage">
         <div class="partage-choix">
           <a class="partage-option" data-app="whatsapp" href={'https://wa.me/?text=' + encodeURIComponent(message)} target="_blank" rel="noopener" onClick={() => { mesurer('whatsapp'); fermerFeuille(fid); }}>
-            <span class="partage-icone"><Icone n="bulle" /></span>WhatsApp
+            {tx('{0}WhatsApp', [<span class="partage-icone"><Icone n="bulle" /></span>])}
           </a>
           <a class="partage-option" data-app="facebook" href={'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(o.url)} target="_blank" rel="noopener" onClick={() => { mesurer('facebook'); fermerFeuille(fid); }}>
-            <span class="partage-icone"><Icone n="personnes" /></span>Facebook
+            {tx('{0}Facebook', [<span class="partage-icone"><Icone n="personnes" /></span>])}
           </a>
           <button type="button" class="partage-option" onClick={async () => {
-            if (await copier(o.url)) { mesurer('lien'); toast('Lien copié'); fermerFeuille(fid); }
-            else toast('Copie impossible : sélectionnez le lien ci-dessous', { icone: 'alerte', ton: 'danger' });
+            if (await copier(o.url)) { mesurer('lien'); toast(t('Lien copié')); fermerFeuille(fid); }
+            else toast(t('Copie impossible : sélectionnez le lien ci-dessous'), { icone: 'alerte', ton: 'danger' });
           }}>
-            <span class="partage-icone"><Icone n="lien" /></span>Copier le lien
+            {tx('{0}Copier le lien', [<span class="partage-icone"><Icone n="lien" /></span>])}
           </button>
         </div>
-        <input class="saisie partage-lien" readOnly value={o.url} aria-label="Lien à partager" onFocus={(e) => e.currentTarget.select()} />
+        <input class="saisie partage-lien" readOnly value={o.url} aria-label={t('Lien à partager')} onFocus={(e) => e.currentTarget.select()} />
       </div>
     )
   });

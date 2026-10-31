@@ -1,7 +1,10 @@
 // Sokoyetu — petits outils communs (formats, dates, téléphone, presse-papiers).
 import R from './regles.js';
+import { t, locale } from './langue.js';
 
-export const { num, int, arrondi, chiffres, pluriel, slug, copie } = R;
+export const { num, int, arrondi, chiffres, slug, copie } = R;
+// « 3 articles », dans la langue choisie (la boutique) ; en français dans l'administration.
+export { pluriel } from './langue.js';
 
 export const JOUR = 864e5;
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -32,15 +35,15 @@ export function francs(v, cfg) {
 }
 
 export const debutJour = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
-export const date = (t, o = { day: 'numeric', month: 'short' }) => new Date(t).toLocaleDateString('fr-FR', o);
-export const dateHeure = (t) => new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-export function ilya(t) {
-  const s = (Date.now() - t) / 1000;
-  if (s < 60) return 'à l’instant';
-  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
-  if (s < 86400 * 7) return `il y a ${Math.floor(s / 86400)} j`;
-  return date(t);
+export const date = (quand, o = { day: 'numeric', month: 'short' }) => new Date(quand).toLocaleDateString(locale(), o);
+export const dateHeure = (quand) => new Date(quand).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+export function ilya(quand) {
+  const s = (Date.now() - quand) / 1000;
+  if (s < 60) return t('à l’instant');
+  if (s < 3600) return t('il y a {0} min', [Math.floor(s / 60)]);
+  if (s < 86400) return t('il y a {0} h', [Math.floor(s / 3600)]);
+  if (s < 86400 * 7) return t('il y a {0} j', [Math.floor(s / 86400)]);
+  return date(quand);
 }
 
 /* 0991234567 → « 099 123 4567 » ; +243991234567 → « +243 99 123 4567 » */

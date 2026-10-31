@@ -1,6 +1,7 @@
 // Sokoyetu — erreurs dans le navigateur : signalées au journal du serveur, et un écran clair (jamais une page blanche).
 import { Component } from 'preact';
 import { Icone } from './icones.jsx';
+import { t } from './langue.js';
 
 const DEMO = typeof __DEMO__ !== 'undefined' && __DEMO__;
 const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '';
@@ -13,7 +14,7 @@ let envoyes = 0;
  */
 export function signalerErreur(e, genre = 'erreur') {
   try {
-    const message = String((e && (e.message || e.reason)) || e || 'Erreur inconnue').slice(0, 300);
+    const message = String((e && (e.message || e.reason)) || e || t('Erreur inconnue')).slice(0, 300);
     const cle = genre + '|' + message;
     if (DEMO || envoyes >= 5 || vus.has(cle)) return;
     vus.add(cle); envoyes++;
@@ -48,11 +49,11 @@ export function EcranErreur({ accueil = '/', onReessayer }) {
   return (
     <div class="ecran-erreur" role="alert">
       <div class="vide-icone" aria-hidden="true"><Icone n="alerte" /></div>
-      <h1>Cette page a rencontré un problème</h1>
-      <p class="attenue">Rien n’est perdu : votre panier et vos commandes sont gardés. Le problème nous a été signalé automatiquement.</p>
+      <h1>{t('Cette page a rencontré un problème')}</h1>
+      <p class="attenue">{t('Rien n’est perdu : votre panier et vos commandes sont gardés. Le problème nous a été signalé automatiquement.')}</p>
       <div class="rangee-l centre">
-        <button class="btn btn-primaire" onClick={() => (onReessayer ? onReessayer() : location.reload())}><Icone n="actualiser" />Recharger la page</button>
-        <a class="btn btn-secondaire" href={accueil}>Retour à l’accueil</a>
+        <button class="btn btn-primaire" onClick={() => (onReessayer ? onReessayer() : location.reload())}><Icone n="actualiser" />{t('Recharger la page')}</button>
+        <a class="btn btn-secondaire" href={accueil}>{t('Retour à l’accueil')}</a>
       </div>
     </div>
   );

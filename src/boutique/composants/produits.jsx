@@ -8,6 +8,7 @@ import { toast, LogoOperateur } from '../../commun/js/interface.jsx';
 import { lien } from '../routeur.js';
 import { cfg, favoris, basculerFavori, produits, rayonsParId, catalogueErreur, chargerCatalogue } from '../etat.js';
 import { NoteCarte } from './avis.jsx';
+import { t, tx } from '../../commun/js/langue.js';
 
 export const lienProduit = (p) => lien(`/p/${encodeURIComponent(p.id)}/${slug(p.title)}`);
 export const lienRayon = (c) => lien(`/c/${encodeURIComponent(c.id)}/${slug(c.name)}`);
@@ -31,7 +32,7 @@ export function CompteARebours({ fin, court }) {
   const j = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
   const d2 = (n) => String(n).padStart(2, '0');
   if (court) return <span class="rebours num">{j ? `${j} j ${d2(h)} h` : `${d2(h)}:${d2(m)}:${d2(x)}`}</span>;
-  return <span class="rebours num" role="timer">{j ? `${j} j ` : ''}{d2(h)} h {d2(m)} min {j ? '' : `${d2(x)} s`}</span>;
+  return <span class="rebours num" role="timer">{tx('{0}{1} h {2} min {3}', [j ? t('{0} j', [j]) + ' ' : '', d2(h), d2(m), j ? '' : t('{0} s', [d2(x)])])}</span>;
 }
 
 export const epuise = (p) => !R.estImport(p) && R.stockTotal(p) <= 0;
@@ -40,16 +41,16 @@ export const epuise = (p) => !R.estImport(p) && R.stockTotal(p) <= 0;
 export function delai(p, c = cfg.value) {
   if (R.estImport(p)) {
     const j = R.int(c.importDays) || 20; const now = Date.now();
-    return { court: `≈ ${j} jours`, titre: 'Importé de Chine pour vous', texte: `Livraison estimée entre le ${date(now + (j - 3) * JOUR, { day: 'numeric', month: 'long' })} et le ${date(now + (j + 4) * JOUR, { day: 'numeric', month: 'long' })}, dédouanement compris.`, icone: 'avion' };
+    return { court: t('≈ {0} jours', [j]), titre: t('Importé de Chine pour vous'), texte: t('Livraison estimée entre le {0} et le {1}, dédouanement compris.', [date(now + (j - 3) * JOUR, { day: 'numeric', month: 'long' }), date(now + (j + 4) * JOUR, { day: 'numeric', month: 'long' })]), icone: 'avion' };
   }
-  return { court: 'Livré en 24–48 h', titre: `En stock à ${c.city || 'Bukavu'}`, texte: 'Préparé dès la confirmation du paiement, livré sous 24 à 48 h.', icone: 'camion' };
+  return { court: t('Livré en 24–48 h'), titre: t('En stock à {0}', [c.city || 'Bukavu']), texte: t('Préparé dès la confirmation du paiement, livré sous 24 à 48 h.'), icone: 'camion' };
 }
 
 export function BoutonFavori({ p, classe = 'cp-favori' }) {
   const actif = favoris.value.has(p.id);
   return (
-    <button type="button" class={classe + (actif ? ' actif' : '')} aria-pressed={actif ? 'true' : 'false'} aria-label={actif ? `Retirer « ${p.title} » des favoris` : `Ajouter « ${p.title} » aux favoris`}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); const a = basculerFavori(p.id); toast(a ? 'Ajouté aux favoris' : 'Retiré des favoris', { icone: 'coeur' }); }}>
+    <button type="button" class={classe + (actif ? ' actif' : '')} aria-pressed={actif ? 'true' : 'false'} aria-label={actif ? t('Retirer « {0} » des favoris', [p.title]) : t('Ajouter « {0} » aux favoris', [p.title])}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); const a = basculerFavori(p.id); toast(a ? t('Ajouté aux favoris') : t('Retiré des favoris'), { icone: 'coeur' }); }}>
       <Icone n="coeur" plein={actif} />
     </button>
   );
@@ -68,14 +69,14 @@ export function CarteProduit({ p, prioritaire, rang = 0 }) {
           <Photo m={images[0]} alt={p.title} prioritaire={prioritaire} />
           {images[1] && survol ? <Photo m={images[1]} alt="" classe="cp-media-2" /> : null}
           <div class="cp-badges">
-            {fini ? <span class="cp-badge epuise">Épuisé</span> : pa.flash ? <span class="cp-badge flash"><Icone n="horloge" />−{remise} %</span> : remise ? <span class="cp-badge promo">−{remise} %</span> : null}
-            {R.estImport(p) && !fini ? <span class="cp-badge import"><Icone n="avion" />Chine</span> : null}
+            {fini ? <span class="cp-badge epuise">{t('Épuisé')}</span> : pa.flash ? <span class="cp-badge flash"><Icone n="horloge" />−{remise} %</span> : remise ? <span class="cp-badge promo">−{remise} %</span> : null}
+            {R.estImport(p) && !fini ? <span class="cp-badge import"><Icone n="avion" />{t('Chine')}</span> : null}
           </div>
         </div>
         <div class="cp-corps">
           <h3 class="cp-titre">{p.title}</h3>
-          <div class="cp-prix">{pa.des ? <small class="prix-des">dès</small> : null}<span class={'prix' + (remise ? ' prix-promo' : '')}>{dollars(pa.prix)}</span>{remise ? <span class="prix-barre">{dollars(pa.barre)}</span> : null}</div>
-          {pa.flash && !fini ? <p class="cp-flash"><Icone n="horloge" />Fin dans <CompteARebours fin={pa.flash.fin} court /></p> : null}
+          <div class="cp-prix">{pa.des ? <small class="prix-des">{t('dès')}</small> : null}<span class={'prix' + (remise ? ' prix-promo' : '')}>{dollars(pa.prix)}</span>{remise ? <span class="prix-barre">{dollars(pa.barre)}</span> : null}</div>
+          {pa.flash && !fini ? <p class="cp-flash"><Icone n="horloge" />{t('Fin dans')}{' '}<CompteARebours fin={pa.flash.fin} court /></p> : null}
           <NoteCarte p={p} />
           <p class="cp-delai"><Icone n={d.icone} />{d.court}</p>
         </div>
@@ -91,9 +92,9 @@ export function ErreurCatalogue() {
   return (
     <div class="etat-erreur" role="alert">
       <div class="vide-icone" aria-hidden="true"><Icone n="alerte" /></div>
-      <h2>Impossible d’afficher les articles</h2>
-      <p>{catalogueErreur.value} Vérifiez votre connexion : nous réessayons tout seuls.</p>
-      <div class="rangee-l"><button class={'btn btn-primaire' + (essai ? ' charge' : '')} disabled={essai} onClick={async () => { setEssai(true); await chargerCatalogue(); setEssai(false); }}><Icone n="actualiser" />Réessayer</button></div>
+      <h2>{t('Impossible d’afficher les articles')}</h2>
+      <p>{tx('{0} Vérifiez votre connexion : nous réessayons tout seuls.', [catalogueErreur.value])}</p>
+      <div class="rangee-l"><button class={'btn btn-primaire' + (essai ? ' charge' : '')} disabled={essai} onClick={async () => { setEssai(true); await chargerCatalogue(); setEssai(false); }}><Icone n="actualiser" />{t('Réessayer')}</button></div>
     </div>
   );
 }
@@ -101,7 +102,7 @@ export function ErreurCatalogue() {
 export function SqueletteGrille({ n = 8 }) {
   if (catalogueErreur.value) return <ErreurCatalogue />;
   return (
-    <div class="grille-produits" aria-busy="true" aria-label="Chargement des articles">
+    <div class="grille-produits" aria-busy="true" aria-label={t('Chargement des articles')}>
       {Array.from({ length: n }, (_, i) => <div key={i} class="cp-squelette"><div class="squelette" style={{ aspectRatio: '4 / 5' }} /><div class="squelette" style={{ height: 14, width: '80%', marginTop: 12 }} /><div class="squelette" style={{ height: 16, width: '40%', marginTop: 8 }} /></div>)}
     </div>
   );
@@ -116,8 +117,8 @@ export function GrilleProduits({ liste, parPage = 12, prioritaires = 2, vide = n
       <div class="grille-produits">{liste.slice(0, n).map((p, i) => <CarteProduit key={p.id} p={p} prioritaire={i < prioritaires} rang={i} />)}</div>
       {liste.length > n ? (
         <div class="voir-plus">
-          <p class="discret petit">{n} sur {pluriel(liste.length, 'article')}</p>
-          <button class="btn btn-secondaire" onClick={() => setN(n + parPage)}>Voir plus d’articles<Icone n="bas" /></button>
+          <p class="discret petit">{tx('{0} sur {1}', [n, pluriel(liste.length, 'article')])}</p>
+          <button class="btn btn-secondaire" onClick={() => setN(n + parPage)}>{t('Voir plus d’articles')}<Icone n="bas" /></button>
         </div>
       ) : null}
     </>
@@ -134,5 +135,5 @@ export function photoRayon(c) {
 export const nomRayon = (id) => (rayonsParId.value.get(id) || {}).name || '';
 
 export function PuceOperateur({ m }) {
-  return <span class="operateur"><LogoOperateur m={m} taille={22} />{m.label}</span>;
+  return <span class="operateur"><LogoOperateur m={m} taille={22} />{t(m.label)}</span>;
 }

@@ -5,6 +5,7 @@ import { toast } from '../commun/js/interface.jsx';
 import { Local } from '../commun/js/stockage.js';
 import { JOUR } from '../commun/js/outils.js';
 import { cfg } from './etat.js';
+import { t, tx } from '../commun/js/langue.js';
 
 const DEMO = typeof __DEMO__ !== 'undefined' && __DEMO__;
 export const estIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -16,7 +17,7 @@ export const installable = computed(() => !DEMO && !autonome() && (!!invite.valu
 export const miseAJour = signal(null);
 
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); invite.value = e; });
-window.addEventListener('appinstalled', () => { invite.value = null; toast('Application installée', { icone: 'mobile' }); });
+window.addEventListener('appinstalled', () => { invite.value = null; toast(t('Application installée'), { icone: 'mobile' }); });
 
 export async function installer() {
   const e = invite.value; if (!e) return;
@@ -31,10 +32,10 @@ export function CarteInstallation() {
     <section class="conteneur section">
       <div class="carte-installation">
         <img src={(DEMO ? '' : '/') + 'icone-192.png'} alt="" width="52" height="52" />
-        <div><b>Installez l’application {c.name}</b><p>Un geste depuis l’écran d’accueil, rapide même avec une connexion faible.</p></div>
+        <div><b>{tx('Installez l’application {0}', [c.name])}</b><p>{t('Un geste depuis l’écran d’accueil, rapide même avec une connexion faible.')}</p></div>
         <div class="rangee">
-          <button class="btn btn-primaire btn-s" onClick={installer}>Installer</button>
-          <button class="btn-icone" aria-label="Plus tard" onClick={() => { Local.ecrire('installMasque', Date.now() + 21 * JOUR); masque.value = true; }}><Icone n="fermer" /></button>
+          <button class="btn btn-primaire btn-s" onClick={installer}>{t('Installer')}</button>
+          <button class="btn-icone" aria-label={t('Plus tard')} onClick={() => { Local.ecrire('installMasque', Date.now() + 21 * JOUR); masque.value = true; }}><Icone n="fermer" /></button>
         </div>
       </div>
     </section>
@@ -57,8 +58,8 @@ export function BarreMiseAJour() {
   if (!miseAJour.value) return null;
   return (
     <div class="barre-maj" role="status">
-      <Icone n="actualiser" /><span>Nouvelle version disponible</span>
-      <button class="btn btn-s btn-doux" onClick={() => { window.__majDemandee = true; try { miseAJour.value.postMessage('skipWaiting'); } catch (e) { location.reload(); } }}>Mettre à jour</button>
+      <Icone n="actualiser" /><span>{t('Nouvelle version disponible')}</span>
+      <button class="btn btn-s btn-doux" onClick={() => { window.__majDemandee = true; try { miseAJour.value.postMessage('skipWaiting'); } catch (e) { location.reload(); } }}>{t('Mettre à jour')}</button>
     </div>
   );
 }

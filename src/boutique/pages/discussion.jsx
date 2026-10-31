@@ -15,11 +15,12 @@ import { lienProduit } from '../composants/produits.jsx';
 import { fil, filCharge, luParBoutique, chargerFil, envoyerMessage } from '../discussion.js';
 import { ActiverNotifications } from './notifications.jsx';
 import { useSeo } from './commun.jsx';
+import { t, tx, aTraduire } from '../../commun/js/langue.js';
 
 const SUGGESTIONS = {
-  produit: ['Est-il toujours disponible ?', 'Avez-vous d’autres tailles ou couleurs ?', 'Quel est le délai de livraison ?'],
-  commande: ['Quand ma commande arrivera-t-elle ?', 'Je voudrais changer l’adresse de livraison.', 'J’ai une question sur un article reçu.'],
-  general: ['Comment se passe la livraison ?', 'Comment payer par Mobile Money ?', 'Puis-je retirer ma commande en boutique ?']
+  produit: [aTraduire('Est-il toujours disponible ?'), aTraduire('Avez-vous d’autres tailles ou couleurs ?'), aTraduire('Quel est le délai de livraison ?')],
+  commande: [aTraduire('Quand ma commande arrivera-t-elle ?'), aTraduire('Je voudrais changer l’adresse de livraison.'), aTraduire('J’ai une question sur un article reçu.')],
+  general: [aTraduire('Comment se passe la livraison ?'), aTraduire('Comment payer par Mobile Money ?'), aTraduire('Puis-je retirer ma commande en boutique ?')]
 };
 
 /* L'article ou la commande dont parle un message. */
@@ -37,7 +38,7 @@ function Pieces({ m }) {
       {m.commande ? (
         <a class="bulle-piece" href={lien('/suivi/' + m.commande.id)}>
           <span class="bulle-piece-icone"><Icone n="recu" /></span>
-          <span class="bulle-piece-texte"><b>Commande #{m.commande.numero || (o && o.number) || ''}</b><small>{o ? R.statutClient(o).label : 'Voir le suivi'}</small></span>
+          <span class="bulle-piece-texte"><b>{tx('Commande #{0}', [m.commande.numero || (o && o.number) || ''])}</b><small>{o ? t(R.statutClient(o).label) : t('Voir le suivi')}</small></span>
         </a>
       ) : null}
     </>
@@ -45,7 +46,7 @@ function Pieces({ m }) {
 }
 
 export function Discussion() {
-  useSeo(() => ({ titre: 'Discussion avec la boutique', noindex: true }), []);
+  useSeo(() => ({ titre: t('Discussion avec la boutique'), noindex: true }), []);
   const c = cfg.value; const cl = client.value;
   const [sujet, setSujet] = useState(() => ({ produit: route.value.query.get('p') || '', commande: route.value.query.get('c') || '' }));
   const [texte, setTexte] = useState('');
@@ -102,14 +103,14 @@ export function Discussion() {
   const commande = sujet.commande ? commandes.value.get(sujet.commande) : null;
   const messages = envoi ? [...fil.value, envoi] : fil.value;
   const demanderNom = !cl && !R.nettoyer(profil.value.name, 60) && !fil.value.length;
-  const idees = !texte.trim() && (produit || commande || !fil.value.length) ? SUGGESTIONS[produit ? 'produit' : commande ? 'commande' : 'general'] : [];
+  const idees = !texte.trim() && (produit || commande || !fil.value.length) ? SUGGESTIONS[produit ? 'produit' : commande ? 'commande' : 'general'].map((x) => t(x)) : [];
 
   const ajuster = (el) => { if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 150) + 'px'; };
   async function envoyer(e) {
     if (e) e.preventDefault();
     const x = texte.trim();
     if (!x || envoi) return;
-    if (x.length > R.MAX_MESSAGE) { toast(`Message trop long : ${R.MAX_MESSAGE} caractères au plus.`, { icone: 'alerte', ton: 'danger' }); return; }
+    if (x.length > R.MAX_MESSAGE) { toast(t('Message trop long : {0} caractères au plus.', [R.MAX_MESSAGE]), { icone: 'alerte', ton: 'danger' }); return; }
     const piece = { produit: produit ? produit.id : '', commande: commande ? commande.id : '' };
     setEnvoi({ id: 'envoi', auteur: 'client', texte: x, produit: piece.produit, commande: commande ? { id: commande.id, numero: commande.number } : null, cree: Date.now(), envoi: true });
     setTexte(''); requestAnimationFrame(() => ajuster(zone.current));
@@ -118,47 +119,47 @@ export function Discussion() {
       setSujet({ produit: '', commande: '' }); setEcrit(true);
     } catch (err) {
       setTexte((t) => t || x);
-      toast(err.message || 'Message non envoyé. Vérifiez la connexion, puis réessayez.', { icone: 'alerte', ton: 'danger', duree: 5000 });
+      toast(err.message || t('Message non envoyé. Vérifiez la connexion, puis réessayez.'), { icone: 'alerte', ton: 'danger', duree: 5000 });
     }
     setEnvoi(null);
   }
 
   return (
     <>
-      <EntetePage titre="Discussion" sous={`avec ${c.name}`} repli="/compte" />
+      <EntetePage titre={t('Discussion')} sous={t('avec {0}', [c.name])} repli="/compte" />
       <main id="contenu" class="page conteneur page-discussion">
         <div class="discussion">
           {!messages.length ? (
             <section class="discussion-intro">
               <span class="discussion-logo" aria-hidden="true"><Cabas taille={44} /></span>
-              <h2>Écrivez à {c.name}</h2>
-              <p>Une question sur un article, une taille, une livraison ou une commande ? La boutique vous répond ici, dans l’application, et vous êtes prévenu par une notification gratuite.</p>
+              <h2>{tx('Écrivez à {0}', [c.name])}</h2>
+              <p>{t('Une question sur un article, une taille, une livraison ou une commande ? La boutique vous répond ici, dans l’application, et vous êtes prévenu par une notification gratuite.')}</p>
             </section>
           ) : null}
           {!messages.length && !filCharge.value ? <div class="squelette" style={{ height: 64, width: '70%', justifySelf: 'end' }} /> : null}
           {messages.length ? <FilMessages messages={messages} moi="client" lu={luParBoutique.value} autre={c.name} piece={(m) => <Pieces m={m} />} /> : null}
-          {ecrit ? <ActiverNotifications discret titre="Soyez prévenu de la réponse" texte="Une notification gratuite sur ce téléphone dès que la boutique répond, même application fermée." /> : null}
+          {ecrit ? <ActiverNotifications discret titre={t('Soyez prévenu de la réponse')} texte={t('Une notification gratuite sur ce téléphone dès que la boutique répond, même application fermée.')} /> : null}
         </div>
         <form class="composeur" ref={formulaire} onSubmit={envoyer} noValidate>
           <div class="composeur-in">
             {produit || commande ? (
               <div class="composeur-sujet">
                 {produit ? <span class="bulle-piece-photo"><Photo m={R.imagePrincipale(produit)} alt="" tailles="36px" /></span> : <span class="bulle-piece-icone"><Icone n="recu" /></span>}
-                <span class="composeur-sujet-texte"><small>À propos de</small><b>{produit ? produit.title : `la commande #${commande.number}`}</b></span>
-                <button type="button" class="btn-icone" aria-label="Ne pas joindre" onClick={() => setSujet({ produit: '', commande: '' })}><Icone n="fermer" /></button>
+                <span class="composeur-sujet-texte"><small>{t('À propos de')}</small><b>{produit ? produit.title : t('la commande #{0}', [commande.number])}</b></span>
+                <button type="button" class="btn-icone" aria-label={t('Ne pas joindre')} onClick={() => setSujet({ produit: '', commande: '' })}><Icone n="fermer" /></button>
               </div>
             ) : null}
             {idees.length ? (
-              <div class="composeur-idees" role="group" aria-label="Questions fréquentes">
+              <div class="composeur-idees" role="group" aria-label={t('Questions fréquentes')}>
                 {idees.map((x) => <button key={x} type="button" class="puce" onClick={() => { setTexte(x); requestAnimationFrame(() => { ajuster(zone.current); zone.current && zone.current.focus(); }); }}>{x}</button>)}
               </div>
             ) : null}
-            {demanderNom ? <input class="saisie composeur-nom" value={nom} onInput={(e) => setNom(e.currentTarget.value)} maxlength="60" placeholder="Votre prénom (facultatif)" aria-label="Votre prénom (facultatif)" autocomplete="given-name" /> : null}
+            {demanderNom ? <input class="saisie composeur-nom" value={nom} onInput={(e) => setNom(e.currentTarget.value)} maxlength="60" placeholder={t('Votre prénom (facultatif)')} aria-label={t('Votre prénom (facultatif)')} autocomplete="given-name" /> : null}
             <div class="composeur-ligne">
-              <textarea ref={zone} class="saisie" rows="1" value={texte} maxlength={R.MAX_MESSAGE} placeholder="Votre message…" aria-label="Votre message"
+              <textarea ref={zone} class="saisie" rows="1" value={texte} maxlength={R.MAX_MESSAGE} placeholder={t('Votre message…')} aria-label={t('Votre message')}
                 onInput={(e) => { setTexte(e.currentTarget.value); ajuster(e.currentTarget); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer: fine)').matches) envoyer(e); }} />
-              <button type="submit" class={classes('btn btn-primaire composeur-envoyer', envoi && 'charge')} disabled={!texte.trim()} aria-label="Envoyer"><Icone n="papier" /></button>
+              <button type="submit" class={classes('btn btn-primaire composeur-envoyer', envoi && 'charge')} disabled={!texte.trim()} aria-label={t('Envoyer')}><Icone n="papier" /></button>
             </div>
           </div>
         </form>

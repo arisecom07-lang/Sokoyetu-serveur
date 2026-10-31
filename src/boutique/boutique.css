@@ -482,7 +482,8 @@ html:not(.vt) .appli { animation: fondu var(--moyen) ease both; }
 /* ---------- Pages d'information ---------- */
 .texte-legal { line-height: 1.65; color: var(--encre-2); }
 .texte-legal h2 { font-size: 17px; font-weight: 750; color: var(--encre); margin: var(--e6) 0 var(--e2); }
-.texte-legal h2:first-child { margin-top: 0; }
+.texte-legal h2:first-child, .texte-legal .note-langue + h2 { margin-top: 0; }
+.texte-legal .note-langue { margin-bottom: var(--e5); line-height: 1.5; }
 .texte-legal p + p { margin-top: var(--e3); }
 
 /* ---------- Pied de page ---------- */
@@ -500,11 +501,19 @@ body[data-bas="barre"] .pied { padding-bottom: calc(96px + env(safe-area-inset-b
 .pied h2 { font-size: 12.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--or); font-weight: 800; margin-bottom: 8px; }
 .pied nav a, .pied nav button { text-align: left; font-size: 14px; padding: 8px 0; color: color-mix(in srgb, var(--sur-ebene) 86%, transparent); }
 .pied nav a:hover, .pied nav button:hover { color: var(--sur-ebene); text-decoration: underline; }
+/* Langue : chaque nom écrit dans sa langue ; en ligne sur le téléphone, en colonne sur l'ordinateur. */
+.pied-langues { display: flex; flex-wrap: wrap; gap: 0 20px; align-content: start; }
+.pied-langues h2 { flex-basis: 100%; }
+.pied-langues button { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; padding: 8px 0; color: color-mix(in srgb, var(--sur-ebene) 86%, transparent); }
+.pied-langues button:hover { color: var(--sur-ebene); text-decoration: underline; }
+.pied-langues button[aria-pressed="true"] { color: var(--sur-ebene); font-weight: 750; }
+.pied-langues .ic { --ic: 15px; color: var(--or); }
 .pied-bas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: var(--e8); padding-top: var(--e5); border-top: 1px solid rgba(255, 255, 255, .1); font-size: 13px; }
 :root[data-theme="dark"] .pied { background: #0F0C0A; color: rgba(246, 239, 232, .75); }
 :root[data-theme="dark"] .pied .marque, :root[data-theme="dark"] .pied nav a:hover, :root[data-theme="dark"] .pied nav button:hover { color: #F6EFE8; }
 :root[data-theme="dark"] .pied .marque-slogan { color: rgba(246, 239, 232, .7); }
-:root[data-theme="dark"] .pied nav a, :root[data-theme="dark"] .pied nav button { color: rgba(246, 239, 232, .82); }
+:root[data-theme="dark"] .pied nav a, :root[data-theme="dark"] .pied nav button, :root[data-theme="dark"] .pied-langues button { color: rgba(246, 239, 232, .82); }
+:root[data-theme="dark"] .pied-langues button[aria-pressed="true"], :root[data-theme="dark"] .pied-langues button:hover { color: #F6EFE8; }
 :root[data-theme="dark"] .pied .operateur { color: #F6EFE8; }
 
 /* ---------- Petits éléments flottants ---------- */
@@ -650,7 +659,8 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
   .compte-grille { grid-template-columns: 1fr 1fr; }
   .page-compte, .page-merci { max-width: 960px; }
 
-  .pied-in { grid-template-columns: 1.6fr 1fr 1fr; gap: var(--e10); }
+  .pied-in { grid-template-columns: 1.6fr 1fr 1fr .8fr; gap: var(--e10); }
+  .pied-langues { display: grid; gap: 2px; justify-items: start; }
 }
 
 @media (min-width: 1200px) {
