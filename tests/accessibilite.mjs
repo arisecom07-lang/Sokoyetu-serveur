@@ -61,6 +61,12 @@ await controler('Boutique · retrouver une commande', BASE + '/compte/retrouver'
 await controler('Boutique · discussion avec la boutique', BASE + '/discussion?p=ex-p08', '.page-discussion .composeur-sujet', async () => {
   await p.fill('.composeur textarea', 'Bonjour, existe-t-elle en XL ?'); await p.click('.composeur-envoyer'); await p.waitForSelector('.bulle-moi:not(.en-envoi)');
 });
+// Avis : la commande payée est remise ; « Mes avis » propose l'article, l'avis paraît ensuite sur sa fiche.
+for (const action of ['shipped', 'delivered']) await fetch(BASE + '/api/sokoyetu/commandes/' + payee.id, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ action }) });
+await controler('Boutique · mes avis', BASE + '/avis', '.liste-a-noter .etoile-rapide');
+await controler('Boutique · donner son avis', BASE + '/avis', '.liste-a-noter .etoile-rapide', async () => { await p.click('.etoile-rapide >> nth=3'); await p.waitForSelector('.formulaire-avis'); });
+await p.fill('.formulaire-avis textarea', 'Bon son, facile à brancher.'); await p.click('.formulaire-avis button[type=submit]'); await p.waitForSelector('#donnes-titre');
+await controler('Boutique · avis sur l’article', BASE + '/p/ex-p15/enceinte-de-bureau-bluetooth', '#avis .avis');
 await controler('Admin · connexion', ADMIN + '/', '.connexion-carte');
 await p.fill('input[type=email]', 'admin@sokoyetu.test'); await p.fill('input[autocomplete="current-password"]', 'Sokoyetu-2026'); await p.click('button[type=submit]'); await p.waitForSelector('.kpis');
 await controler('Admin · tableau de bord', ADMIN + '/#/', '.kpis');
@@ -73,6 +79,11 @@ await controler('Admin · compte', ADMIN + '/#/compte', '.menu');
 await controler('Admin · clients', ADMIN + '/#/clients', '.page, .liste');
 await controler('Admin · messages des clients', ADMIN + '/#/messages', '.ligne-discussion', async () => { await p.click('.ligne-discussion >> nth=0'); await p.waitForSelector('.messagerie-fil .bulle'); });
 await controler('Admin · audience', ADMIN + '/#/audience', '.kpis');
+await controler('Admin · avis des clients', ADMIN + '/#/avis', '.avis-admin', async () => { await p.click('.avis-admin button:has-text("Répondre")'); await p.waitForSelector('.avis-admin textarea'); });
+await controler('Admin · masquer un avis', ADMIN + '/#/avis', '.avis-admin', async () => {
+  if (await p.locator('.avis-admin button:has-text("Annuler")').count()) await p.click('.avis-admin button:has-text("Annuler")');
+  await p.click('.avis-admin button:has-text("Masquer")'); await p.waitForSelector('.feuille [role="radiogroup"]');
+});
 await b.close();
 console.log(total ? `\n${total} problème(s) d’accessibilité.` : '\nAucune violation d’accessibilité détectée.');
 process.exit(total ? 1 : 0);

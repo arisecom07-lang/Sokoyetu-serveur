@@ -178,11 +178,13 @@ function construireCatalogue(app) {
     payment: { provider: cfg.payment.provider, holdMinutes: cfg.payment.holdMinutes, test: cfg.payment.provider === 'simulation' },
     accounts: { open: codes.pret, test: codes.test, channels: codes.canaux }
   });
+  // Note moyenne et nombre d'avis publiés de chaque article (lib/avis.js).
+  const notes = cfg.reviews.enabled ? require(`${__hooks}/lib/avis.js`).resumes(app) : {};
   return {
     config,
     collections: liste('collections', 'id != ""'),
     banners: liste('banners', 'id != ""'),
-    products: liste('products', 'active = true').map(S.produitPublic)
+    products: liste('products', 'active = true').map((d) => Object.assign(S.produitPublic(d), notes[d.id] ? { avis: notes[d.id] } : {}))
   };
 }
 

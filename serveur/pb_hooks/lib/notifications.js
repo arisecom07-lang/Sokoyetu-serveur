@@ -157,7 +157,7 @@ function pousser(app) {
   let n = 0; const debut = Date.now();
   try {
     const l = arrayOf(new DynamicModel({ endpoint: '', derniere: 0, urgent: 0, echecs: 0 }));
-    app.db().newQuery(`SELECT a.endpoint AS endpoint, MAX(n.cree) AS derniere, MAX(n.type NOT IN ('promo', 'panier')) AS urgent, a.echecs AS echecs
+    app.db().newQuery(`SELECT a.endpoint AS endpoint, MAX(n.cree) AS derniere, MAX(n.type NOT IN ('promo', 'panier', 'avis', 'avis_reponse')) AS urgent, a.echecs AS echecs
       FROM sokoyetu_abonnements a JOIN sokoyetu_notifications n
         ON ((n.client != '' AND n.client = a.client) OR (n.appareil != '' AND n.appareil = a.appareil))
       WHERE n.lu = 0 AND n.cree > a.pousse AND n.cree > a.curseur AND n.cree > {:depuis}

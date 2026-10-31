@@ -231,11 +231,14 @@ routerAdd('POST', '/api/sokoyetu/compte', (e) => {
 cronAdd('sokoyetu-relances', '23 * * * *', () => {
   try { require(`${__hooks}/lib/comptes.js`).relancerPaniers($app); }
   catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Relance des paniers impossible', { module: 'comptes', erreur: String(err) }); }
+  // « Votre avis compte » : quelques jours après la livraison (voir lib/avis.js).
+  try { require(`${__hooks}/lib/avis.js`).rappeler($app); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Rappel des avis impossible', { module: 'avis', erreur: String(err) }); }
 });
-// La même relance tout de suite (tableau technique, essais) : { relances } clients prévenus.
+// Les mêmes rappels tout de suite (tableau technique, essais) : { relances, avis } clients prévenus.
 routerAdd('POST', '/api/sokoyetu/relances', (e) => {
   require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'reglages');
-  return e.json(200, { relances: require(`${__hooks}/lib/comptes.js`).relancerPaniers(e.app) });
+  return e.json(200, { relances: require(`${__hooks}/lib/comptes.js`).relancerPaniers(e.app), avis: require(`${__hooks}/lib/avis.js`).rappeler(e.app) });
 });
 
 // Le client supprime son compte (ses commandes restent, détachées du compte).
@@ -305,6 +308,26 @@ routerAdd('POST', '/api/sokoyetu/discussion/envoyer', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
   const b = S.corps(e);
   return e.json(200, D.envoyer(e.app, D.qui(e, b), b));
+}, LIMITE.petite);
+
+/* ---------- Boutique : avis et notes des clients sur les articles (voir lib/avis.js) ---------- */
+
+// Avis publiés d'un article : ?produit=…&page=0&note=5 (une seule note) ; résumé (moyenne, nombre, répartition).
+routerAdd('GET', '/api/sokoyetu/avis', (e) => {
+  const q = e.requestInfo().query || {};
+  return e.json(200, require(`${__hooks}/lib/avis.js`).publics(e.app, q['produit'], q['page'], q['note']));
+});
+// Articles reçus que ce client peut noter : { appareil, suivis: [{ id, t }] } (commandes suivies sur ce téléphone).
+routerAdd('POST', '/api/sokoyetu/avis/a-donner', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const A = require(`${__hooks}/lib/avis.js`);
+  const b = S.corps(e);
+  return e.json(200, A.aDonner(e.app, A.qui(e, b), b));
+}, LIMITE.petite);
+// Le client donne ou modifie son avis : { appareil, commande, t, produit, note, texte }.
+routerAdd('POST', '/api/sokoyetu/avis/donner', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const A = require(`${__hooks}/lib/avis.js`);
+  const b = S.corps(e);
+  return e.json(200, A.donner(e.app, A.qui(e, b), b));
 }, LIMITE.petite);
 
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
@@ -396,6 +419,7 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
   require(`${__hooks}/lib/notifications.js`).effacer(e.app, clients, appareils);
   require(`${__hooks}/lib/alertes.js`).effacer(e.app, clients, appareils);
   require(`${__hooks}/lib/discussions.js`).effacer(e.app, clients, appareils, tel);
+  require(`${__hooks}/lib/avis.js`).effacer(e.app, clients, tel);
   const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   return e.json(200, { effacees: n, comptes });
 }, LIMITE.petite);
@@ -497,6 +521,15 @@ routerAdd('DELETE', '/api/sokoyetu/equipe/{id}', (e) => {
   require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'equipe');
   return e.json(200, require(`${__hooks}/lib/equipe.js`).retirer(e.app, e.request.pathValue('id'), e.auth ? e.auth.id : ''));
 });
+
+/* ---------- Administration : avis des clients (propriétaire et vendeurs, voir lib/avis.js) ---------- */
+// La liste se lit dans la collection « avis » (temps réel) ; ici, { action: 'publier' | 'masquer', motif } ou { reponse }.
+routerAdd('POST', '/api/sokoyetu/avis/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'avis');
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, require(`${__hooks}/lib/avis.js`).moderer(e.app, e.request.pathValue('id'), S.corps(e), auteur));
+}, LIMITE.petite);
 
 /* ---------- Administration : messages des clients (propriétaire et vendeurs, voir lib/discussions.js) ---------- */
 // La liste des discussions se lit dans la collection « discussions » (temps réel) ; ici, une discussion et ses messages.

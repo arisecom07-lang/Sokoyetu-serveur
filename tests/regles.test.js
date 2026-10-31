@@ -415,3 +415,42 @@ test('discussion : message nettoyé, article ou commande joints par identifiant,
   assert.equal(R.texteNotification({ type: 'message', details: { texte: 'Oui, en XL aussi.' } }, 'fr').texte, 'Oui, en XL aussi.');
   assert.ok(R.peut('vendeur', 'messages') && R.peut('proprietaire', 'messages') && !R.peut('livreur', 'messages'));
 });
+
+test('avis : note de 1 à 5, nom public, résumé, articles à noter et rappel après la livraison', () => {
+  assert.deepEqual(R.config({}).reviews, { enabled: true, moderation: false, reminder: true });
+  assert.deepEqual(R.config({ reviews: { enabled: 0, moderation: 'oui', reminder: false } }).reviews, { enabled: true, moderation: false, reminder: false });
+  assert.deepEqual(R.avisNettoye({ note: 4, texte: '  Très   bien,\tbonne qualité \n\n\n\n Merci \u0007' }), { note: 4, texte: 'Très bien, bonne qualité\n\nMerci' });
+  assert.deepEqual(R.avisNettoye({ note: '5' }), { note: 5, texte: '' });
+  for (const note of [0, 6, 3.5, 'x', null]) assert.throws(() => R.avisNettoye({ note }), /Choisissez une note/);
+  assert.equal(R.avisNettoye({ note: 2, texte: 'é'.repeat(5000) }).texte.length, R.MAX_AVIS);
+  assert.equal(R.nomPublic('aline zawadi furaha'), 'Aline F.');
+  assert.equal(R.nomPublic('GRÂCE MAPENDO'), 'Grâce M.');
+  assert.equal(R.nomPublic('Patient'), 'Patient');
+  assert.equal(R.nomPublic('  0991234567 '), 'Client', 'jamais de numéro à la place du nom');
+  assert.deepEqual(R.resumeAvis({ 5: 3, 4: 1, 1: 1 }), { note: 4, nombre: 5, repartition: { 5: 3, 4: 1, 3: 0, 2: 0, 1: 1 } });
+  assert.deepEqual(R.resumeAvis({}), { note: 0, nombre: 0, repartition: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } });
+  assert.equal(R.resumeAvis({ 5: 2, 4: 1 }).note, 4.7);
+  // Publié tout de suite ; vérifié d'abord quand la boutique l'a choisi, ou quand un avis masqué est réécrit.
+  assert.equal(R.etatAvis(R.config({}), null), 'publie');
+  assert.equal(R.etatAvis(R.config({ reviews: { moderation: true } }), null), 'attente');
+  assert.equal(R.etatAvis(R.config({}), { etat: 'masque' }), 'attente');
+  assert.equal(R.etatAvis(R.config({}), { etat: 'publie' }), 'publie');
+  assert.equal(R.optionAchetee('Bordeaux', 'M'), 'Bordeaux, taille M');
+  assert.equal(R.optionAchetee('', 'XL'), 'Taille XL');
+  // Seuls les articles d'une commande livrée, une fois chacun.
+  const t0 = Date.UTC(2026, 9, 30, 8);
+  const o = { fulfillment: 'delivered', deliveredAt: t0 - 3 * R.JOUR, items: [{ productId: 'robe', title: 'Robe', color: 'Noir', size: 'M' }, { productId: 'robe', title: 'Robe', color: 'Noir', size: 'L' }, { productId: 'sac', title: 'Sac' }, { productId: '../x', title: 'Pirate' }] };
+  assert.deepEqual(R.articlesANoter(o), [{ produit: 'robe', titre: 'Robe', variante: 'Noir, taille M' }, { produit: 'sac', titre: 'Sac', variante: '' }]);
+  assert.deepEqual(R.articlesANoter({ ...o, fulfillment: 'shipped' }), []);
+  const cfgAvis = R.config({});
+  assert.deepEqual(R.rappelAvis({ cfg: cfgAvis, o, notes: () => false, maintenant: t0 }), { titre: 'Robe', autres: 1 });
+  assert.deepEqual(R.rappelAvis({ cfg: cfgAvis, o, notes: (id) => id === 'robe', maintenant: t0 }), { titre: 'Sac', autres: 0 });
+  assert.equal(R.rappelAvis({ cfg: cfgAvis, o, notes: () => true, maintenant: t0 }), null, 'tout est noté');
+  assert.equal(R.rappelAvis({ cfg: cfgAvis, o: { ...o, deliveredAt: t0 - R.JOUR }, maintenant: t0 }), null, 'trop tôt');
+  assert.equal(R.rappelAvis({ cfg: cfgAvis, o: { ...o, deliveredAt: t0 - 20 * R.JOUR }, maintenant: t0 }), null, 'trop tard');
+  assert.equal(R.rappelAvis({ cfg: R.config({ reviews: { reminder: false } }), o, maintenant: t0 }), null, 'rappel désactivé');
+  assert.equal(R.texteNotification({ type: 'avis', details: { titre: 'Robe', autres: 0 } }, 'fr').texte, '« Robe » vous plaît ? Donnez votre avis en un geste : il aide les autres clients.');
+  assert.equal(R.texteNotification({ type: 'avis', details: { titre: 'Robe', autres: 2 } }, 'fr').texte, '« Robe » et 2 autres articles vous plaisent ? Donnez votre avis en un geste : il aide les autres clients.');
+  assert.equal(R.texteNotification({ type: 'avis_reponse', details: { titre: 'Robe', texte: 'Merci !' } }, 'fr').texte, 'Votre avis sur « Robe » : Merci !');
+  assert.ok(R.peut('vendeur', 'avis') && R.peut('proprietaire', 'avis') && !R.peut('livreur', 'avis'));
+});

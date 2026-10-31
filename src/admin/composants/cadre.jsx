@@ -3,7 +3,7 @@ import { Icone } from '../../commun/js/icones.jsx';
 import { Cabas } from '../../commun/js/logo.jsx';
 import { classes } from '../../commun/js/outils.js';
 import { route, lien, retour } from '../routeur.js';
-import { cfg, aTraiter, aLivrer, aRepondre, compte, peut, role } from '../etat.js';
+import { cfg, aTraiter, aLivrer, aRepondre, avisAVerifier, compte, peut, role } from '../etat.js';
 
 /* La boutique est une application séparée : son adresse se déduit de celle de l'administration. */
 export function adresseBoutique(chemin = '/') {
@@ -19,6 +19,7 @@ const SECTIONS = [
   ['/commandes', 'commandes', 'Commandes', 'recu', 'commandes'],
   ['/messages', 'messages', 'Messages', 'bulle', 'messages'],
   ['/produits', 'produits', 'Produits', 'etiquette', 'produits'],
+  ['/avis', 'avis', 'Avis', 'etoile', 'avis'],
   ['/clients', 'clients', 'Clients', 'personnes', 'clients'],
   ['/audience', 'audience', 'Audience', 'oeil', 'audience'],
   ['/rayons', 'rayons', 'Rayons', 'rayons', 'catalogue'],
@@ -45,7 +46,7 @@ export function BarreLaterale() {
       <nav>
         {sections().map(([chemin, cle, texte, icone]) => (
           <a key={cle} href={lien(chemin)} aria-current={actif === cle ? 'page' : undefined}>
-            <Icone n={icone} /><span>{texte}</span>{cle === 'commandes' && n ? <span class="pastille-compte">{n}</span> : cle === 'livraisons' && aLivrer.value ? <span class="pastille-compte">{aLivrer.value}</span> : cle === 'messages' && aRepondre.value ? <span class="pastille-compte">{aRepondre.value}</span> : null}
+            <Icone n={icone} /><span>{texte}</span>{cle === 'commandes' && n ? <span class="pastille-compte">{n}</span> : cle === 'livraisons' && aLivrer.value ? <span class="pastille-compte">{aLivrer.value}</span> : cle === 'messages' && aRepondre.value ? <span class="pastille-compte">{aRepondre.value}</span> : cle === 'avis' && avisAVerifier.value ? <span class="pastille-compte">{avisAVerifier.value}</span> : null}
           </a>
         ))}
       </nav>
@@ -66,7 +67,7 @@ export function NavBasAdmin() {
     ? [['/', 'livraisons', 'Livraisons', 'camion'], ['/compte', 'plus', 'Compte', 'personne']]
     : [['/', 'tableau', 'Accueil', 'accueil'], ['/commandes', 'commandes', 'Commandes', 'recu'], ['/messages', 'messages', 'Messages', 'bulle'], ['/produits', 'produits', 'Produits', 'etiquette'], ['/plus', 'plus', 'Plus', 'rayons']];
   // Les clients (fiches, comptes) se trouvent dans « Plus » sur le téléphone : les messages, plus pressants, ont leur onglet.
-  const dansPlus = ['clients', 'audience', 'rayons', 'bannieres', 'remises', 'reglages', 'equipe', 'annonces', 'plus'].includes(actif);
+  const dansPlus = ['clients', 'avis', 'audience', 'rayons', 'bannieres', 'remises', 'reglages', 'equipe', 'annonces', 'plus'].includes(actif);
   const pastille = (cle) => (cle === 'commandes' || cle === 'livraisons' ? n : cle === 'messages' ? aRepondre.value : 0);
   return (
     <nav class="nav-bas seulement-mobile" aria-label="Navigation">

@@ -9,7 +9,7 @@ import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
 import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, comptes, discussions, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
+import { cfg, clients, comptes, discussions, avis, avisAVerifier, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
 
@@ -137,6 +137,7 @@ export function Plus() {
         <p class="intertitre">Suivi</p>
         <div class="menu">
           {peut('clients') ? item(lien('/clients'), 'personnes', 'Clients', `${pluriel(clients.value.length, 'client')}${comptes.value.length ? ` · ${pluriel(comptes.value.length, 'compte')}` : ''}`) : null}
+          {peut('avis') ? item(lien('/avis'), 'etoile', 'Avis des clients', avisAVerifier.value ? pluriel(avisAVerifier.value, 'avis à vérifier', 'avis à vérifier') : avis.value.length ? pluriel(avis.value.filter((a) => a.etat === 'publie').length, 'avis publié', 'avis publiés') : 'Notes et commentaires des articles reçus') : null}
           {peut('audience') ? item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article') : null}
           {peut('journal') ? item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site') : null}
         </div>

@@ -75,8 +75,8 @@ export function EnteteBoutique({ classe, accueil }) {
           {lienNav('/', 'Accueil', nom === 'accueil')}{lienNav('/categories', 'Rayons', nom === 'rayons' || nom === 'rayon')}{lienNav('/nouveautes', 'Nouveautés', nom === 'nouveautes')}
         </nav>
         <div class="entete-actions">
-          <div class="seulement-ordi"><RechercheOrdi /></div>
-          <a href={lien('/recherche')} class="btn-icone seulement-mobile" aria-label="Rechercher"><Icone n="recherche" /></a>
+          <div class="recherche-large"><RechercheOrdi /></div>
+          <a href={lien('/recherche')} class="btn-icone recherche-icone" aria-label="Rechercher"><Icone n="recherche" /></a>
           <BoutonNotifications />
           <a href={lien('/favoris')} class="btn-icone" aria-label={nf ? `Favoris, ${nf}` : 'Favoris'}><Icone n="coeur" />{nf ? <span class="pastille-compte">{nf}</span> : null}</a>
           <a href={lien('/compte')} class="btn-icone seulement-ordi" aria-label="Mon compte"><Icone n="personne" /></a>
@@ -106,7 +106,7 @@ export function EntetePage({ titre, sous, repli = '/', actions, cacherTitreOrdi,
 }
 
 const ONGLETS = [['/', 'accueil', 'Accueil', 'accueil'], ['/categories', 'rayons', 'Rayons', 'rayons'], ['/nouveautes', 'nouveautes', 'Nouveautés', 'etincelle'], ['/panier', 'panier', 'Panier', 'sac'], ['/compte', 'compte', 'Compte', 'personne']];
-const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte', notifications: 'compte', discussion: 'compte' };
+const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte', notifications: 'compte', discussion: 'compte', avis: 'compte' };
 
 export function NavBas() {
   const nom = route.value.nom; const actif = DANS_ONGLET[nom] || nom; const n = nbArticles.value;

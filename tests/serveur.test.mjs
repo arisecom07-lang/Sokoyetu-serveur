@@ -912,3 +912,131 @@ test('discussion avec la boutique : le client écrit, l’équipe répond, le cl
   assert.equal((await equipe(d5, { method: 'DELETE' })).status, 200);
   assert.equal((await equipe(d5)).status, 404);
 });
+
+test('avis : seul le client qui a reçu l’article le note ; l’équipe répond ou masque ; rappel gratuit après la livraison', async () => {
+  const appareil = secret();
+  const technicien = { Authorization: technique };
+  const aDonner = async (corps = {}, headers = {}) => { const r = await api('/api/sokoyetu/avis/a-donner', { method: 'POST', headers, body: { appareil, ...corps } }); assert.equal(r.status, 200, r.texte); return r.json.articles; };
+  const donner = (corps, headers = {}) => api('/api/sokoyetu/avis/donner', { method: 'POST', headers, body: { appareil, ...corps } });
+  const publics = async (q) => { const r = await api('/api/sokoyetu/avis?' + q); assert.equal(r.status, 200, r.texte); return r.json; };
+  const moderer = (id, corps, headers) => api('/api/sokoyetu/avis/' + id, { method: 'POST', auth: !headers, headers: headers || {}, body: corps });
+  const notifs = async (type, a = appareil, headers = {}) => (await api('/api/sokoyetu/notifications', { method: 'POST', headers, body: { appareil: a } })).json.notifications.filter((n) => n.type === type);
+  const relancer = async () => { const r = await api('/api/sokoyetu/relances', { method: 'POST', auth: true }); assert.equal(r.status, 200, r.texte); return r.json.avis; };
+  const notes = async () => Object.fromEntries((await api('/api/sokoyetu/catalogue')).json.products.filter((p) => p.avis).map((p) => [p.id, p.avis]));
+  assert.equal((await ecrire('products', 't-jupe', { title: 'Jupe d’essai', price: 18, status: 'active', source: 'local', options: { colors: [{ name: 'Rouge' }], sizes: ['S', 'M'] }, variants: { 'Rouge|S': 5, 'Rouge|M': 5 }, images: [] })).status, 200);
+
+  // Commande payée sur cet appareil : jupe rouge M et montre.
+  const items = [{ productId: 't-jupe', color: 'Rouge', size: 'M', qty: 1 }, { productId: 't-montre', qty: 1 }];
+  const total = (await api('/api/sokoyetu/devis', { method: 'POST', body: { items, zoneId: 'bukavu' } })).json.total;
+  const t = secret();
+  const o = await commander(saisie({ token: t, customer: { name: 'benjamin lukusa', phone: '0841112233' }, items, discountCode: '', total, payment: { method: 'mpesa', phone: '0841112233' }, appareil }));
+  assert.equal(o.status, 200, o.texte);
+  const id = o.json.id, numero = o.json.order.number;
+  await attendre(id, t, 'paid');
+  // Pas encore reçue : rien à noter, avis refusé.
+  assert.deepEqual(await aDonner(), []);
+  assert.equal((await donner({ commande: id, t, produit: 't-jupe', note: 5 })).status, 400);
+  for (const action of ['preparing', 'shipped', 'delivered']) assert.equal((await api(`/api/sokoyetu/commandes/${id}`, { method: 'POST', auth: true, body: { action } })).status, 200);
+
+  // Reçue : chaque article est à noter, depuis cet appareil ou avec le lien de suivi (autre téléphone).
+  const l = await aDonner();
+  assert.deepEqual(l.map((a) => [a.produit, a.titre, a.variante, a.commande, a.numero, a.avis]), [['t-jupe', 'Jupe d’essai', 'Rouge, taille M', id, numero, null], ['t-montre', 'Montre d’essai', '', id, numero, null]]);
+  assert.ok(l[0].livree > Date.now() - 120000);
+  assert.deepEqual((await aDonner({ appareil: secret(), suivis: [{ id, t }] })).map((a) => a.produit), ['t-jupe', 't-montre']);
+  assert.deepEqual(await aDonner({ appareil: secret(), suivis: [{ id, t: secret() }] }), [], 'mauvais jeton de suivi : rien');
+  assert.equal((await donner({ commande: id, produit: 't-jupe', texte: 'Sans note' })).status, 400);
+  assert.equal((await donner({ commande: id, produit: 't-robe', note: 4 })).status, 400, 'article absent de la commande');
+  assert.equal((await donner({ appareil: secret(), commande: id, produit: 't-jupe', note: 4 })).status, 404, 'commande d’un autre');
+  const r = await donner({ commande: id, produit: 't-jupe', note: 4, texte: '  Belle jupe,   tissu léger. ' });
+  assert.equal(r.status, 200, r.texte);
+  assert.deepEqual((({ nom, note, texte, variante, etat, motif }) => [nom, note, texte, variante, etat, motif])(r.json.avis), ['Benjamin L.', 4, 'Belle jupe, tissu léger.', 'Rouge, taille M', 'publie', '']);
+  // Un avis par article et par téléphone : avec le lien de suivi, il est modifié.
+  const r2 = await donner({ appareil: secret(), commande: id, t, produit: 't-jupe', note: 5, texte: 'Finalement parfaite.' });
+  assert.equal(r2.status, 200, r2.texte);
+  assert.equal(r2.json.avis.id, r.json.avis.id);
+  assert.deepEqual((await aDonner()).map((a) => [a.produit, a.avis && a.avis.note]), [['t-jupe', 5], ['t-montre', null]]);
+
+  // Publié : lu par tous, sans téléphone ni commande ; note moyenne dans le catalogue public.
+  const p = await publics('produit=t-jupe');
+  assert.deepEqual([p.resume, p.suite], [{ note: 5, nombre: 1, repartition: { 5: 1, 4: 0, 3: 0, 2: 0, 1: 0 } }, false]);
+  assert.deepEqual(Object.keys(p.avis[0]).sort(), ['cree', 'id', 'nom', 'note', 'reponse', 'reponseLe', 'texte', 'variante']);
+  assert.deepEqual((await publics('produit=t-jupe&note=3')).avis, []);
+  assert.deepEqual((await publics('produit=../x')).avis, []);
+  assert.deepEqual((await notes())['t-jupe'], { note: 5, nombre: 1 });
+
+  // Rappel gratuit : pas le jour de la livraison ; 3 jours après, une fois, pour l'article qui reste à noter.
+  await relancer();
+  assert.deepEqual(await notifs('avis'), [], 'trop tôt');
+  const rec = (await api(`/api/collections/orders/records/${id}`, { headers: technicien })).json;
+  assert.equal((await api(`/api/collections/orders/records/${id}`, { method: 'PATCH', headers: technicien, body: { doc: { ...rec.doc, deliveredAt: Date.now() - 3 * 864e5 } } })).status, 200);
+  assert.ok((await relancer()) >= 1);
+  assert.deepEqual((await notifs('avis')).map((n) => [n.titre, n.texte, n.url]), [['Votre avis compte', '« Montre d’essai » vous plaît ? Donnez votre avis en un geste : il aide les autres clients.', '/avis']]);
+  await relancer();
+  assert.equal((await notifs('avis')).length, 1, 'une seule fois');
+
+  // Vérification avant publication choisie par la boutique : l'avis attend l'équipe.
+  const cfg = (await api('/api/collections/config/records/store', { auth: true })).json.doc;
+  assert.equal((await ecrire('config', 'store', { ...cfg, reviews: { enabled: true, moderation: true, reminder: true } })).status, 200);
+  const m = await donner({ commande: id, produit: 't-montre', note: 2, texte: 'Arrivée rayée. Appelez-moi au 0841112233.' });
+  assert.equal(m.status, 200, m.texte);
+  assert.equal(m.json.avis.etat, 'attente');
+  assert.equal((await publics('produit=t-montre')).resume.nombre, 0, 'pas encore publié');
+  assert.equal((await ecrire('config', 'store', cfg)).status, 200);
+
+  // L'équipe voit tous les avis (jamais l'appareil) ; un visiteur, rien.
+  assert.deepEqual((await api('/api/collections/avis/records')).json.items, []);
+  const montre = (await api('/api/collections/avis/records?sort=-cree', { auth: true })).json.items.find((x) => x.produit === 't-montre');
+  assert.deepEqual([montre.telephone, montre.numero, montre.commande, montre.etat, montre.appareil], ['0841112233', numero, id, 'attente', undefined]);
+  assert.equal((await moderer(montre.id, { action: 'n-importe' })).status, 400);
+  assert.equal((await moderer('inconnu', { action: 'publier' })).status, 404);
+  // Masqué (données personnelles) : le client voit le motif ; réécrit, son avis repasse par la vérification.
+  const mq = await moderer(montre.id, { action: 'masquer', motif: 'personnel' });
+  assert.equal(mq.status, 200, mq.texte);
+  assert.deepEqual([mq.json.avis.etat, mq.json.avis.motif], ['masque', 'personnel']);
+  const vu = (await aDonner()).find((a) => a.produit === 't-montre').avis;
+  assert.deepEqual([vu.etat, vu.motif], ['masque', 'Données personnelles (téléphone, adresse…)']);
+  assert.equal((await donner({ commande: id, produit: 't-montre', note: 3, texte: 'Arrivée rayée, mais la boutique me l’a échangée.' })).json.avis.etat, 'attente');
+  assert.equal((await moderer(montre.id, { action: 'publier' })).json.avis.etat, 'publie');
+  // Réponse publique : le client est prévenu une fois, même si la réponse est retouchée.
+  const rp = await moderer(montre.id, { reponse: '  Merci Benjamin, désolés pour la rayure !  ' });
+  assert.deepEqual([rp.json.avis.reponse, rp.json.avis.reponse_par], ['Merci Benjamin, désolés pour la rayure !', 'admin@sokoyetu.test']);
+  assert.equal((await moderer(montre.id, { reponse: 'Merci Benjamin !' })).status, 200);
+  assert.deepEqual((await notifs('avis_reponse')).map((n) => [n.titre, n.texte, n.url]), [['La boutique vous a répondu', 'Votre avis sur « Montre d’essai » : Merci Benjamin, désolés pour la rayure !', '/p/t-montre/montre-d-essai']]);
+  const pub = (await publics('produit=t-montre')).avis[0];
+  assert.deepEqual([pub.note, pub.reponse, pub.nom], [3, 'Merci Benjamin !', 'Benjamin L.']);
+  const n2 = await notes();
+  assert.deepEqual([n2['t-jupe'], n2['t-montre']], [{ note: 5, nombre: 1 }, { note: 3, nombre: 1 }]);
+
+  // Le livreur ne voit pas les avis et ne peut pas y répondre.
+  const membre = await api('/api/sokoyetu/equipe', { method: 'POST', auth: true, body: { name: 'Jean Bisimwa', email: 'livreur-avis@sokoyetu.test', role: 'livreur' } });
+  assert.equal(membre.status, 200, membre.texte);
+  let x;
+  for (let i = 0; i < 9; i++) { x = await api('/api/collections/admins/auth-with-password', { method: 'POST', body: { identity: 'livreur-avis@sokoyetu.test', password: membre.json.motDePasse } }); if (x.status !== 429) break; await pause(2000); }
+  assert.equal(x.status, 200, x.texte);
+  const livreur = { Authorization: x.json.token };
+  assert.deepEqual((await api('/api/collections/avis/records', { headers: livreur })).json.items, []);
+  assert.equal((await moderer(montre.id, { reponse: 'Bonjour' }, livreur)).status, 403);
+
+  // Avec un compte : commande passée connecté, notée depuis n'importe quel téléphone du compte.
+  const mdp = secret() + secret();
+  const c = await api('/api/collections/clients/records', { method: 'POST', headers: technicien, body: { phone: '0842223344', name: 'Aline Furaha', password: mdp, passwordConfirm: mdp, verified: true, doc: { panier: [], favoris: [], profil: {} } } });
+  assert.equal(c.status, 200, c.texte);
+  const moi = { Authorization: (await api(`/api/collections/clients/impersonate/${c.json.id}`, { method: 'POST', headers: technicien, body: {} })).json.token };
+  const t2 = secret(); const items2 = [{ productId: 't-jupe', color: 'Rouge', size: 'S', qty: 1 }];
+  const total2 = (await api('/api/sokoyetu/devis', { method: 'POST', body: { items: items2, zoneId: 'bukavu' } })).json.total;
+  const o2 = await commander(saisie({ token: t2, customer: { name: 'Aline Furaha', phone: '0842223344' }, items: items2, discountCode: '', total: total2, payment: { method: 'mpesa', phone: '0842223344' } }), moi);
+  assert.equal(o2.status, 200, o2.texte);
+  await attendre(o2.json.id, t2, 'paid');
+  for (const action of ['shipped', 'delivered']) assert.equal((await api(`/api/sokoyetu/commandes/${o2.json.id}`, { method: 'POST', auth: true, body: { action } })).status, 200);
+  assert.deepEqual((await aDonner({ appareil: secret() }, moi)).map((a) => [a.produit, a.variante]), [['t-jupe', 'Rouge, taille S']]);
+  const ra = await donner({ appareil: secret(), commande: o2.json.id, produit: 't-jupe', note: 3 }, moi);
+  assert.equal(ra.status, 200, ra.texte);
+  assert.deepEqual((await publics('produit=t-jupe')).resume, { note: 4, nombre: 2, repartition: { 5: 1, 4: 0, 3: 1, 2: 0, 1: 0 } });
+  // Compte supprimé : ses avis disparaissent ; effacement des données d'un client (son téléphone) : les siens aussi.
+  assert.equal((await api('/api/sokoyetu/compte/supprimer', { method: 'POST', headers: moi, body: {} })).status, 200);
+  assert.equal((await publics('produit=t-jupe')).resume.nombre, 1);
+  assert.equal((await api('/api/sokoyetu/clients/effacer', { method: 'POST', auth: true, body: { phone: '0841112233' } })).status, 200);
+  assert.deepEqual([(await publics('produit=t-jupe')).resume.nombre, (await publics('produit=t-montre')).resume.nombre], [0, 0]);
+  const reste = await notes();
+  assert.ok(!reste['t-jupe'] && !reste['t-montre'], 'notes retirées du catalogue');
+});

@@ -91,6 +91,7 @@ export async function charger() {
   if (echecs.length && !pret.value) throw echecs[0];
   if (peut('clients')) chargerComptes();
   if (peut('messages')) chargerDiscussions();
+  if (peut('avis')) chargerAvis();
   batch(() => {
     const avant = donnees.value; const d = {};
     COLLECTIONS.forEach((c, i) => { d[c] = res[i] || (c === 'config' ? null : avant[c]); });
@@ -154,6 +155,14 @@ export function suivreEnDirect() {
     const autres = discussions.value.filter((x) => x.id !== d.id);
     discussions.value = m.action === 'delete' ? autres : [d, ...autres].sort((a, b) => b.maj - a.maj);
     if (m.action !== 'delete' && d.auteur === 'client' && d.maj > ((avant && avant.maj) || 0)) surNouveauMessage(d);
+  });
+  // Un client donne son avis : la liste suit, et l'équipe le voit passer (toast).
+  if (peut('avis')) TempsReel.abonner('avis/*', (m) => {
+    if (!m || !m.record) return;
+    const a = versAvis(m.record);
+    const autres = avis.value.filter((x) => x.id !== a.id);
+    avis.value = m.action === 'delete' ? autres : [a, ...autres].sort((x, y) => y.cree - x.cree);
+    if (m.action === 'create') surNouvelAvis(a);
   });
   COLLECTIONS.filter(lisible).forEach((col) => TempsReel.abonner(col + '/*', (m) => {
     if (!m || !m.record) return;
@@ -281,6 +290,31 @@ export const marquerDiscussion = (id, action) => requete(`sokoyetu/discussions/$
 export async function supprimerDiscussion(id) {
   await requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'DELETE' });
   discussions.value = discussions.value.filter((x) => x.id !== id);
+}
+
+/* ---------- Avis des clients sur les articles (propriétaire et vendeurs, droit « avis ») ---------- */
+
+export const avis = signal([]);
+/* Avis qui attendent la vérification de la boutique (pastille du menu, tableau de bord). */
+export const avisAVerifier = computed(() => avis.value.filter((a) => a.etat === 'attente').length);
+const versAvis = (r) => ({
+  id: r.id, produit: r.produit || '', commande: r.commande || '', numero: r.numero || '', telephone: r.telephone || '', client: r.client || '', nom: r.nom || '',
+  note: R.num(r.note), texte: r.texte || '', variante: r.variante || '', etat: r.etat || 'publie', motif: r.motif || '',
+  reponse: r.reponse || '', reponse_par: r.reponse_par || '', reponse_le: R.num(r.reponse_le || r.reponseLe), cree: R.num(r.cree), maj: R.num(r.maj)
+});
+async function chargerAvis() {
+  try {
+    const j = await requete('collections/avis/records?sort=-cree&perPage=500&skipTotal=1');
+    avis.value = (j.items || []).map(versAvis);
+  } catch (e) { /* serveur sans avis (ancienne version) */ }
+}
+let surNouvelAvis = () => { };
+export function quandNouvelAvis(fn) { surNouvelAvis = fn; }
+/* { action: 'publier' } ; { action: 'masquer', motif } ; { reponse } ('' la retire). La liste suit sans attendre le temps réel. */
+export async function modererAvis(id, corps) {
+  const r = await requete(`sokoyetu/avis/${encodeURIComponent(id)}`, { method: 'POST', corps });
+  if (r && r.avis) avis.value = [versAvis(r.avis), ...avis.value.filter((x) => x.id !== id)].sort((x, y) => y.cree - x.cree);
+  return r && r.avis;
 }
 
 /* ---------- Clients qui attendent un article épuisé (« Prévenez-moi »), annonces aux clients (propriétaire) ---------- */

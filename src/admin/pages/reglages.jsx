@@ -181,6 +181,19 @@ function Formulaire({ section }) {
               )}</Champ> : null}
             </section>
             <section class="carte formulaire">
+              <h2 class="carte-titre"><Icone n="etoile" />Avis des clients</h2>
+              <Bascule actif={f.reviews.enabled} onClick={() => maj({ reviews: { ...f.reviews, enabled: !f.reviews.enabled } })} libelle="Avis et notes sur les articles"
+                sous="Seuls les clients qui ont reçu l’article peuvent le noter ; leurs avis s’affichent sur la fiche et la note sur chaque carte" />
+              {f.reviews.enabled ? (
+                <>
+                  <Bascule actif={f.reviews.moderation} onClick={() => maj({ reviews: { ...f.reviews, moderation: !f.reviews.moderation } })} libelle="Vérifier chaque avis avant publication"
+                    sous={f.reviews.moderation ? 'Un avis n’apparaît qu’une fois publié par la boutique (page Avis)' : 'Publiés tout de suite ; vous pouvez masquer un avis abusif'} />
+                  <Bascule actif={f.reviews.reminder} onClick={() => maj({ reviews: { ...f.reviews, reminder: !f.reviews.reminder } })} libelle="Demander son avis au client"
+                    sous="Notification gratuite, une fois par commande, 2 jours après la livraison" />
+                </>
+              ) : null}
+            </section>
+            <section class="carte formulaire">
               <h2 class="carte-titre"><Icone n="echange" />Échanges</h2>
               <Champ libelle="Politique d’échange" aide="Affichée sur chaque fiche article.">{(a) => <textarea class="saisie" {...a} rows="3" value={f.returns} onInput={champ('returns')} maxlength="600" />}</Champ>
             </section>

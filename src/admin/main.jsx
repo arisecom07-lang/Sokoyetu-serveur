@@ -8,7 +8,7 @@ import R from '../commun/js/regles.js';
 import { dollars } from '../commun/js/outils.js';
 import { Local } from '../commun/js/stockage.js';
 import { route, aller } from './routeur.js';
-import { compte, demarrer, verifierSession, quandNouvelleCommande, quandNouveauMessage, aTraiter, aLivrer, aRepondre, cfg, role, peut } from './etat.js';
+import { compte, demarrer, verifierSession, quandNouvelleCommande, quandNouveauMessage, quandNouvelAvis, aTraiter, aLivrer, aRepondre, cfg, role, peut, produitsParId } from './etat.js';
 import { BarreLaterale, NavBasAdmin } from './composants/cadre.jsx';
 import { Connexion, Tableau } from './pages/accueil.jsx';
 import { Commandes, Commande } from './pages/commandes.jsx';
@@ -24,9 +24,10 @@ import { Equipe, AccesReserve } from './pages/equipe.jsx';
 import { Livraisons } from './pages/livraisons.jsx';
 import { Annonces } from './pages/annonces.jsx';
 import { Messages } from './pages/messages.jsx';
+import { AvisClients } from './pages/avis.jsx';
 
 /* Droit nécessaire pour chaque page (regles.DROITS) : sans lui, « accès réservé » (le serveur refuse de toute façon). */
-const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe', annonces: 'annonces', messages: 'messages' };
+const DROIT_PAGE = { commandes: 'commandes', historique: 'commandes', produits: 'produits', clients: 'clients', audience: 'audience', rayons: 'catalogue', bannieres: 'catalogue', remises: 'remises', reglages: 'reglages', journal: 'journal', equipe: 'equipe', annonces: 'annonces', messages: 'messages', avis: 'avis' };
 function page(segs) {
   const [a, b] = segs;
   if (a === 'plus' || (a === 'reglages' && !b)) return role.value === 'livreur' ? Compte : Plus;
@@ -47,6 +48,7 @@ function page(segs) {
   if (a === 'journal') return Journal;
   if (a === 'annonces') return Annonces;
   if (a === 'messages') return Messages;
+  if (a === 'avis') return AvisClients;
   return role.value === 'livreur' ? Livraisons : Tableau;
 }
 
@@ -83,6 +85,13 @@ quandNouveauMessage((d) => {
   }
 });
 route.subscribe((r) => { if (alerteMessage && r.segs[0] === 'messages' && r.segs[1] === alerteMessage.id) { alerteMessage.retirer(); alerteMessage = null; } });
+
+// Un client donne son avis : l'équipe le voit passer (sans carillon : rien d'urgent), sauf si elle est déjà sur la page des avis.
+quandNouvelAvis((a) => {
+  if (route.value.segs[0] === 'avis' && !document.hidden) return;
+  const p = produitsParId.value.get(a.produit);
+  toast(`Nouvel avis ${a.note} ★ de ${a.nom}${p ? ` sur « ${R.apercuMessage(p.title, 40)} »` : ''}${a.etat === 'attente' ? ' · à vérifier' : ''}`, { icone: 'etoile', duree: 5000 });
+});
 
 function App() {
   const connecte = !!compte.value;

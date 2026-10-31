@@ -25,8 +25,9 @@ import { Infos } from './pages/infos.jsx';
 import { Introuvable } from './pages/introuvable.jsx';
 import { Notifications } from './pages/notifications.jsx';
 import { Discussion } from './pages/discussion.jsx';
+import { MesAvis } from './pages/avis.jsx';
 
-const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos, notifications: Notifications, discussion: Discussion };
+const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos, notifications: Notifications, discussion: Discussion, avis: MesAvis };
 /* Ce qui occupe le bas de l'écran du téléphone : navigation, barre d'action, ou les deux. */
 const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', 'panier-partage': 'barre', paiement: '', merci: '', recherche: '', discussion: 'barre' };
 

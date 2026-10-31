@@ -15,6 +15,7 @@ import { useSeo } from './commun.jsx';
 import { Introuvable } from './introuvable.jsx';
 import { ActiverNotifications } from './notifications.jsx';
 import { alerteActive, basculerAlerte } from '../notifications.js';
+import { NoteProduit, AvisProduit } from '../composants/avis.jsx';
 
 const selectionInitiale = (p) => {
   const cs = R.couleursDe(p), ts = R.taillesDe(p);
@@ -210,9 +211,10 @@ export function Produit() {
       titre: `${p.title} · ${dollars(prix)}`, image: img[0],
       description: `${p.title} à ${dollars(prix)}${R.estImport(p) ? ` · import Chine, livré en ~${c.importDays} jours` : ` · en stock à ${c.city}`}. ${String(p.description || '').slice(0, 120)}`,
       ld: { '@context': 'https://schema.org', '@type': 'Product', name: p.title, description: p.description || p.title, image: img, ...(p.sku ? { sku: p.sku } : {}), category: (p.collectionIds || []).map(nomRayon).filter(Boolean).join(', '),
+        ...(p.avis && p.avis.nombre && c.reviews.enabled ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: p.avis.note, reviewCount: p.avis.nombre, bestRating: 5, worstRating: 1 } } : {}),
         offers: { '@type': 'Offer', price: prix.toFixed(2), priceCurrency: 'USD', url: location.href, availability: 'https://schema.org/' + (R.estImport(p) ? 'PreOrder' : R.stockTotal(p) > 0 ? 'InStock' : 'OutOfStock'), seller: { '@type': 'Organization', name: (c.legal && c.legal.company) || c.name } } }
     };
-  }, [id, !!p, p && p.price]);
+  }, [id, !!p, p && p.price, p && p.avis && p.avis.nombre]);
 
   if (!p) {
     if (catalogueAJour.value) return <Introuvable texte="Cet article n’est plus en vente, ou le lien est incomplet." />;
@@ -265,7 +267,7 @@ export function Produit() {
         <button class="btn-icone flottant" onClick={() => retour('/')} aria-label="Retour"><Icone n="retour" /></button>
         <div class="rangee">
           <button class="btn-icone flottant" onClick={partagerArticle} aria-label="Partager cet article"><Icone n="partager" /></button>
-          <a class="btn-icone flottant" href={lien('/panier')} aria-label="Panier" data-cible-panier><Icone n="sac" />{nbArticles.value ? <span class="pastille-compte">{nbArticles.value}</span> : null}</a>
+          <a class="btn-icone flottant" href={lien('/panier')} aria-label={nbArticles.value ? `Panier, ${nbArticles.value} article${nbArticles.value > 1 ? 's' : ''}` : 'Panier'} data-cible-panier><Icone n="sac" />{nbArticles.value ? <span class="pastille-compte">{nbArticles.value > 99 ? '99+' : nbArticles.value}</span> : null}</a>
         </div>
       </div>
       <main id="contenu" class="page page-produit">
@@ -285,6 +287,7 @@ export function Produit() {
               {francs(pa.prix, c) ? <p class="produit-fc">{francs(pa.prix, c)}</p> : null}
               {pa.flash ? <p class="bandeau-flash"><Icone n="horloge" /><b>Vente flash −{pa.flash.pct} %</b><span>Se termine dans <CompteARebours fin={pa.flash.fin} /></span></p> : null}
               <h1 class="produit-titre">{p.title}</h1>
+              <NoteProduit p={p} />
               <div class="rangee-l">
                 {p.featured ? <span class="pastille ton-marque"><Icone n="etincelle" />Tendance</span> : null}
                 {imp ? <span class="pastille ton-info"><Icone n="avion" />Import Chine</span> : <span class="pastille ton-ok"><Icone n="boutique" />En stock à {c.city}</span>}
@@ -324,6 +327,7 @@ export function Produit() {
                 {details.length ? <dl class="caracteristiques">{details.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl> : null}
               </section>
             ) : null}
+            <AvisProduit p={p} />
           </div>
         </div>
         {similaires.length ? (

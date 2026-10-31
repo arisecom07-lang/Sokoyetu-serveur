@@ -16,6 +16,7 @@ import { useSeo } from './commun.jsx';
 import { ActiverNotifications } from './notifications.jsx';
 import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, oublierNotifications } from '../notifications.js';
 import { messagesNonLus, oublierDiscussion } from '../discussion.js';
+import { restantsANoter, chargerANoter, articleANoter } from '../avis.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
@@ -203,7 +204,7 @@ async function confirmerSuppression() {
 
 export function Compte() {
   const c = cfg.value; const pf = profil.value; const cl = client.value;
-  useEffect(() => { chargerCompte(); actualiserMesCommandes(); }, []);
+  useEffect(() => { chargerCompte(); actualiserMesCommandes(); chargerANoter().catch(() => { }); }, []);
   useSeo(() => ({ titre: 'Mon compte', noindex: true }), []);
   const liste = [...commandes.value.values()];
   const enCours = liste.filter((o) => o.status !== 'cancelled' && o.fulfillment !== 'delivered');
@@ -239,6 +240,7 @@ export function Compte() {
             {item({ href: lien('/compte/commandes'), icone: 'recu', titre: 'Mes commandes', sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : 'Reçus, suivi et historique' })}
             {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
             {item({ href: lien('/discussion'), icone: 'bulle', titre: 'Écrire à la boutique', sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : 'Une question ? Réponse ici, dans l’application' })}
+            {c.reviews.enabled ? item({ href: lien('/avis'), icone: 'etoile', titre: 'Mes avis', sous: restantsANoter.value ? pluriel(restantsANoter.value, 'article à noter', 'articles à noter') : 'Notez les articles reçus' }) : null}
             {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: 'Retrouver une commande', sous: 'Avec le numéro de votre reçu' })}
             {item({ href: lien('/favoris'), icone: 'coeur', titre: 'Mes favoris', sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : 'Vos coups de cœur' })}
             {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: 'Livraison et paiement', sous: 'Zones, délais, Mobile Money' })}
@@ -366,6 +368,20 @@ export function Retrouver() {
 
 const STATUT_PAIEMENT = { paid: 'Payé', pending: 'En attente de votre validation', failed: 'Non abouti', expired: 'Non reçu dans le délai', refunded: 'Remboursé' };
 
+/* Commande reçue : ses articles à noter (ou déjà notés), vers « Mes avis ». */
+function AvisCommande({ o }) {
+  const l = (o.items || []).map((i) => articleANoter(i.productId)).filter((a, k, t) => a && a.commande === o.id && t.indexOf(a) === k);
+  if (!l.length) return null;
+  const reste = l.filter((a) => !a.avis).length;
+  return (
+    <a class="carte encours avis-commande" href={lien('/avis')}>
+      <span class="menu-icone"><Icone n="etoile" /></span>
+      <span class="menu-texte"><b>{reste ? 'Votre avis compte' : 'Merci pour vos avis !'}</b><small>{reste ? `${pluriel(reste, 'article')} à noter : un geste suffit` : 'Voir ou modifier mes avis'}</small></span>
+      <Icone n="droite" classe="chevron" />
+    </a>
+  );
+}
+
 export function Suivi() {
   const id = route.value.params.id;
   const [verif, setVerif] = useState(false);
@@ -374,7 +390,7 @@ export function Suivi() {
     const t = (location.hash || '').replace(/^#\/?/, '').split('#').pop();
     if (R.valider.jeton(t)) { suivreCommande(id, t); try { history.replaceState(history.state, '', location.pathname); } catch (e) { } }
     // Ouverte depuis une notification sur un autre appareil du compte : les commandes du compte d'abord.
-    Promise.resolve(chargerCompte()).then(actualiserMesCommandes).then(() => setVerif(true));
+    Promise.resolve(chargerCompte()).then(actualiserMesCommandes).then(() => { setVerif(true); chargerANoter({ force: true }).catch(() => { }); });
   }, [id]);
   useSeo(() => ({ titre: 'Suivi de commande', noindex: true }), []);
   const o = commandes.value.get(id);
@@ -442,6 +458,7 @@ export function Suivi() {
               <h2 class="carte-titre"><Icone n="repere" />{R.estRetraitCmd(o) ? 'Retrait' : 'Livraison'}</h2>
               <dl class="infos"><dt>Zone</dt><dd>{o.shipping.zoneName}</dd>{o.shipping.address ? <><dt>Adresse</dt><dd>{o.shipping.address}</dd></> : null}{o.shipping.landmark ? <><dt>Repère</dt><dd>{o.shipping.landmark}</dd></> : null}{livraison ? <><dt>Prévue</dt><dd>{livraison}</dd></> : null}<dt>Contact</dt><dd>{o.customer.name} · {telephone(o.customer.phone)}</dd></dl>
             </section>
+            {cfg.value.reviews.enabled && o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <AvisCommande o={o} /> : null}
             <a class="carte encours question" href={lien('/discussion?c=' + encodeURIComponent(o.id))}>
               <span class="menu-icone"><Icone n="bulle" /></span>
               <span class="menu-texte"><b>Une question sur cette commande ?</b><small>Écrivez à la boutique : elle vous répond ici, dans l’application</small></span>

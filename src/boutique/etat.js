@@ -83,6 +83,9 @@ function appliquer(col, m) {
   // Le paiement et les comptes ouverts viennent du serveur (catalogue), pas du document des réglages : ils sont gardés.
   if (cle === 'config') { if (m.record.id === 'store') catalogue.value = { ...c, config: m.action === 'delete' ? null : { ...ligne, payment: c.config && c.config.payment, accounts: c.config && c.config.accounts } }; }
   else {
+    // La note des avis vient du catalogue (le serveur la calcule), pas de l'article : elle est gardée.
+    const ancien = col === 'products' ? c.products.find((x) => x.id === ligne.id) : null;
+    if (ancien && ancien.avis && !ligne.avis) ligne.avis = ancien.avis;
     const autres = c[cle].filter((x) => x.id !== ligne.id);
     const garder = m.action !== 'delete' && !(col === 'products' && m.record.active === false);
     catalogue.value = { ...c, [cle]: garder ? [...autres, ligne] : autres };

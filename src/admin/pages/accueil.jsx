@@ -8,7 +8,7 @@ import { Local } from '../../commun/js/stockage.js';
 import { DEMO } from '../../commun/js/api.js';
 import { dollars, date, debutJour, JOUR, pluriel, ilya, classes } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, erreurChargement, demarrer, paiementServeur, sante, lireAudience, peut, aRepondre } from '../etat.js';
+import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, erreurChargement, demarrer, paiementServeur, sante, lireAudience, peut, aRepondre, avis, avisAVerifier } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
 import { statutPaiement, statutPreparation, avecPoints } from './commandes.jsx';
@@ -105,6 +105,9 @@ export function Tableau() {
   const nPaiement = os.filter(R.enAttentePaiement).length, nPrep = os.filter(R.aPreparer).length, nLiv = os.filter(R.aExpedier).length;
   const nPoints = os.filter(avecPoints).length;
   const nMessages = peut('messages') ? aRepondre.value : 0;
+  // Avis à vérifier, et notes basses (3 étoiles ou moins) encore sans réponse de la boutique.
+  const nAvis = peut('avis') ? avisAVerifier.value : 0;
+  const nNotesBasses = peut('avis') ? avis.value.filter((a) => a.etat === 'publie' && a.note <= 3 && !a.reponse).length : 0;
   const p = paiementServeur.value;
   const faibles = produits.value.filter((p) => R.estEnVente(p) && !R.estImport(p) && R.stockTotal(p) <= R.int(c.lowStock));
   const top = {};
@@ -147,9 +150,11 @@ export function Tableau() {
             <EnDirectBoutique />
             <section class="carte">
               <h2 class="carte-titre"><Icone n="coche" />À faire</h2>
-              {nPrep || nLiv || faibles.length || nPoints || nMessages ? (
+              {nPrep || nLiv || faibles.length || nPoints || nMessages || nAvis || nNotesBasses ? (
                 <div class="a-faire">
                   {nMessages ? <a href={lien('/messages')}><span class="af-n ton-alerte">{nMessages}</span><b>{nMessages > 1 ? 'Clients qui attendent une réponse' : 'Client qui attend une réponse'}</b><Icone n="droite" /></a> : null}
+                  {nAvis ? <a href={lien('/avis')}><span class="af-n ton-alerte">{nAvis}</span><b>Avis à vérifier avant publication</b><Icone n="droite" /></a> : null}
+                  {nNotesBasses ? <a href={lien('/avis')}><span class="af-n ton-info">{nNotesBasses}</span><b>{nNotesBasses > 1 ? 'Avis déçus sans réponse' : 'Avis déçu sans réponse'}</b><Icone n="droite" /></a> : null}
                   {nPoints ? <a href={lien('/commandes?f=points')}><span class="af-n ton-danger">{nPoints}</span><b>Commande{nPoints > 1 ? 's' : ''} payée{nPoints > 1 ? 's' : ''} avec un point à vérifier</b><Icone n="droite" /></a> : null}
                   {nPrep ? <a href={lien('/commandes?f=preparer')}><span class="af-n ton-info">{nPrep}</span><b>Commande{nPrep > 1 ? 's' : ''} à préparer</b><Icone n="droite" /></a> : null}
                   {nLiv ? <a href={lien('/commandes?f=expediees')}><span class="af-n ton-marque">{nLiv}</span><b>Commande{nLiv > 1 ? 's' : ''} en route à livrer</b><Icone n="droite" /></a> : null}

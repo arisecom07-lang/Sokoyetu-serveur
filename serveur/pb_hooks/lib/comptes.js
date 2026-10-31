@@ -159,6 +159,8 @@ function supprimer(app, rec) {
   try { require(`${__hooks}/lib/notifications.js`).detacher(app, rec.id); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Notifications du compte non détachées', { module: 'comptes', erreur: String(e) }); }
   // Sa discussion avec la boutique disparaît (elle n'appartenait qu'au compte).
   try { require(`${__hooks}/lib/discussions.js`).effacer(app, [rec.id], [], ''); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Discussion du compte non effacée', { module: 'comptes', erreur: String(e) }); }
+  // Ses avis aussi (donnés connecté, ou avec le téléphone du compte).
+  try { require(`${__hooks}/lib/avis.js`).effacer(app, [rec.id], rec.getString('phone')); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Avis du compte non effacés', { module: 'comptes', erreur: String(e) }); }
 }
 
 /* Droit à l'effacement demandé à la boutique (administration) : le compte de ce téléphone disparaît aussi. */

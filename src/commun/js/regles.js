@@ -60,6 +60,9 @@ const CONFIG_DEFAUT = {
   serviceFeePct: 2,
   /* Relance des paniers : le client avec compte qui laisse son panier reçoit une notification gratuite, hours heures après. */
   cartReminder: { enabled: true, hours: 24 },
+  /* Avis des clients : achats livrés seulement ; moderation : chaque avis attend la vérification de la boutique ;
+     reminder : notification gratuite quelques jours après la livraison pour demander l'avis du client. */
+  reviews: { enabled: true, moderation: false, reminder: true },
   legal: { company: '', address: '', email: '', rccm: '', idnat: '', nif: '', texts: {}, updatedAt: 0 },
   analytics: { provider: '', id: '' },
   setup: {}
@@ -170,6 +173,8 @@ function config(brut) {
   c.payment.holdMinutes = Math.min(120, Math.max(5, int(c.payment.holdMinutes) || 30));
   const r = estObjet(c.cartReminder) ? c.cartReminder : {};
   c.cartReminder = { enabled: r.enabled !== false, hours: Math.min(72, Math.max(2, int(r.hours) || 24)) };
+  const av = estObjet(c.reviews) ? c.reviews : {};
+  c.reviews = { enabled: av.enabled !== false, moderation: av.moderation === true, reminder: av.reminder !== false };
   return c;
 }
 const zoneDe = (cfg, id) => (cfg.zones || []).find((z) => z.id === id) || null;
@@ -856,6 +861,10 @@ const TEXTES_NOTIFICATIONS = {
     stock: ['De retour en stock', '« {titre} » ({option}) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !'],
     promo: ['{titre}', '{texte}'],
     message: ['Réponse de la boutique', '{texte}'],
+    avis: ['Votre avis compte', (d) => (int(d.autres)
+      ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous plaisent ? Donnez votre avis en un geste : il aide les autres clients.`
+      : `« ${d.titre} » vous plaît ? Donnez votre avis en un geste : il aide les autres clients.`)],
+    avis_reponse: ['La boutique vous a répondu', 'Votre avis sur « {titre} » : {texte}'],
     panier: ['Votre panier vous attend', (d) => (int(d.autres)
       ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.`
       : `« ${d.titre} » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.`)]
@@ -943,6 +952,70 @@ function apercuMessage(texte, max) {
   return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
 }
 
+/* ---------- Avis et notes des clients (achats livrés seulement) ---------- */
+
+const MAX_AVIS = 600;                // caractères d'un avis, ou de la réponse de la boutique
+const AVIS_PAR_PAGE = 10;
+const RAPPEL_AVIS_JOURS = [2, 14];   // rappel gratuit au client entre 2 et 14 jours après la livraison
+/* Raisons de masquer un avis (montrées au client qui l'a écrit) : jamais parce qu'il est négatif. */
+const MOTIFS_AVIS = {
+  injurieux: 'Propos injurieux ou déplacés',
+  personnel: 'Données personnelles (téléphone, adresse…)',
+  hors_sujet: 'Sans rapport avec l’article',
+  faux: 'Avis douteux (pas l’avis d’un client)',
+  autre: 'Ne respecte pas les règles des avis'
+};
+const texteLong = (s) => nettoyer(s, MAX_AVIS + 200).replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_AVIS);
+/* Avis saisi : { note (1 à 5 étoiles), texte (facultatif) }, ou ErreurCommande. */
+function avisNettoye(b) {
+  const x = estObjet(b) ? b : {};
+  const note = Number(x.note);
+  if (!(note >= 1 && note <= 5 && Math.round(note) === note)) throw new ErreurCommande('Choisissez une note, de 1 à 5 étoiles.', 'note');
+  return { note, texte: texteLong(x.texte) };
+}
+/* Réponse publique de la boutique à un avis ('' : réponse retirée). */
+const reponseAvisNettoyee = (s) => texteLong(s);
+/* Nom montré sous un avis : « Aline F. » (prénom et initiale du nom), jamais le nom complet ni le téléphone. */
+function nomPublic(nom) {
+  const mots = nettoyer(nom, 80).replace(/\s+/g, ' ').split(' ').filter((m) => /[A-Za-zÀ-ÖØ-öø-ÿ]/.test(m));
+  if (!mots.length) return 'Client';
+  const premier = mots[0] === mots[0].toUpperCase() ? mots[0].charAt(0) + mots[0].slice(1).toLowerCase() : mots[0].charAt(0).toUpperCase() + mots[0].slice(1);
+  return mots.length > 1 ? `${premier} ${mots[mots.length - 1].charAt(0).toUpperCase()}.` : premier;
+}
+/* Moyenne et nombre d'avis depuis la répartition { 5: n, 4: n, … } : { note (à 0,1 près), nombre, repartition }. */
+function resumeAvis(compte) {
+  const rep = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }; let somme = 0, n = 0;
+  [1, 2, 3, 4, 5].forEach((v) => { const k = Math.max(0, int(compte && compte[v])); rep[v] = k; somme += v * k; n += k; });
+  return { note: n ? Math.round((somme / n) * 10) / 10 : 0, nombre: n, repartition: rep };
+}
+/* État d'un avis enregistré : publié tout de suite, sauf quand la boutique vérifie les avis, ou qu'un avis masqué est réécrit. */
+const etatAvis = (cfg, avant) => ((cfg.reviews && cfg.reviews.moderation) || (avant && avant.etat === 'masque') ? 'attente' : 'publie');
+/* Option achetée, montrée sous un avis : « Bordeaux, taille M », « Taille M » ou « Bordeaux ». */
+function optionAchetee(couleur, taille) {
+  const c = nettoyer(couleur, 40); const t = nettoyer(taille, 30);
+  return [c, t ? (c ? 'taille ' : 'Taille ') + t : ''].filter(Boolean).join(', ');
+}
+/* Articles d'une commande livrée que le client peut noter : un par article, avec l'option achetée. */
+function articlesANoter(o) {
+  if (!o || o.fulfillment !== 'delivered') return [];
+  const vus = {}; const l = [];
+  (o.items || []).forEach((i) => {
+    if (!i || !valider.identifiant(i.productId) || vus[i.productId]) return;
+    vus[i.productId] = true;
+    l.push({ produit: i.productId, titre: String(i.title || 'Article').slice(0, 120), variante: optionAchetee(i.color, i.size) });
+  });
+  return l;
+}
+/* Rappel « Votre avis compte » d'une commande livrée : { titre, autres } (articles pas encore notés), sinon null. */
+function rappelAvis({ cfg, o, notes, maintenant }) {
+  const r = cfg && cfg.reviews;
+  if (!r || !r.enabled || !r.reminder || !o || o.fulfillment !== 'delivered') return null;
+  const age = (maintenant || Date.now()) - int(o.deliveredAt);
+  if (!int(o.deliveredAt) || age < RAPPEL_AVIS_JOURS[0] * JOUR || age > RAPPEL_AVIS_JOURS[1] * JOUR) return null;
+  const reste = articlesANoter(o).filter((a) => !(notes && notes(a.produit)));
+  return reste.length ? { titre: reste[0].titre, autres: reste.length - 1 } : null;
+}
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
@@ -960,5 +1033,6 @@ module.exports = {
   evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification,
   MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee,
   RELANCE_PANIER_JOURS, relancePanier,
-  MAX_MESSAGE, MESSAGES_PAR_JOUR, messageNettoye, apercuMessage
+  MAX_MESSAGE, MESSAGES_PAR_JOUR, messageNettoye, apercuMessage,
+  MAX_AVIS, AVIS_PAR_PAGE, RAPPEL_AVIS_JOURS, MOTIFS_AVIS, avisNettoye, reponseAvisNettoyee, nomPublic, resumeAvis, etatAvis, optionAchetee, articlesANoter, rappelAvis
 };

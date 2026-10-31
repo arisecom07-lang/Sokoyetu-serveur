@@ -95,6 +95,29 @@ await client.bringToFront();
 await client.waitForSelector('.bulle-autre:has-text("il existe en noir")', { timeout: 10000 });
 etape('discussion avec la boutique : question sur un article, réponse de l’équipe reçue dans la boutique');
 
+// Avis : commande livrée, le client note la montre dans « Mes avis », l'avis paraît sur l'article, l'équipe répond.
+await admin.goto(BASE + '/admin/index.html#/commandes'); await admin.click(`.liste .ligne:has-text("#${numero}")`);
+await admin.click('button:has-text("Marquer comme expédiée")'); await admin.waitForSelector('.toast:has-text("Marquée comme expédiée")');
+await admin.click('button:has-text("Marquer comme livrée")'); await admin.waitForSelector('.toast:has-text("Marquée comme livrée")');
+await client.bringToFront();
+await client.goto(BASE + '/boutique/index.html#/avis'); await client.waitForSelector('.liste-a-noter .a-noter:has-text("Montre classique")');
+await client.click('.a-noter:has-text("Montre classique") .etoile-rapide >> nth=4'); await client.waitForSelector('.feuille .formulaire-avis');
+assert.equal(await client.locator('.formulaire-avis .choix-etoile[aria-checked="true"]').count(), 1);
+await client.fill('.formulaire-avis textarea', 'Très belle montre, le cuir est souple.'); await client.click('.formulaire-avis button[type=submit]');
+await client.waitForSelector('.toast:has-text("Merci ! Votre avis est publié")'); await client.waitForSelector('#donnes-titre');
+await client.goto(BASE + '/boutique/index.html#/p/ex-p17/montre-classique-bracelet-cuir'); await client.waitForSelector('#avis .avis:has-text("Très belle montre")');
+assert.equal((await client.locator('.note-produit').innerText()).replace(/\s+/g, ' ').trim(), '5 2 avis');
+await client.screenshot({ path: SORTIE + 'demo-avis.png' });
+await admin.bringToFront();
+await admin.waitForSelector('.toast:has-text("Nouvel avis 5 ★ de Amani B.")', { timeout: 8000 });
+await admin.goto(BASE + '/admin/index.html#/avis'); await admin.click('.avis-admin:has-text("Très belle montre") button:has-text("Répondre")');
+await admin.fill('.avis-admin textarea', 'Merci Amani, portez-la bien !'); await admin.click('.avis-admin button:has-text("Publier la réponse")');
+await admin.waitForSelector('.toast:has-text("Réponse publiée")');
+await admin.screenshot({ path: SORTIE + 'demo-avis-admin.png' });
+await client.bringToFront();
+await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.notif-texte b:text("La boutique vous a répondu")');
+etape('avis : commande livrée, le client note l’article, l’avis paraît sur sa fiche, la boutique répond et le client est prévenu');
+
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.
 const envelopper = async (route) => { const r = await route.fetch(); route.fulfill({ response: r, headers: { ...r.headers(), 'content-type': 'text/html; charset=utf-8' }, body: '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + (await r.text()) + '</body></html>' }); };

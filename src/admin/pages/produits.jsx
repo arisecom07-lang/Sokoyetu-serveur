@@ -8,7 +8,8 @@ import { Local } from '../../commun/js/stockage.js';
 import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer, ouvrirFeuille, fermerFeuille, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { dollars, pluriel, uid, classes, normaliser, copie, slug } from '../../commun/js/outils.js';
 import { lien, route, aller, garder } from '../routeur.js';
-import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, cadreIA, gererErreur, attentes, chargerAttentes } from '../etat.js';
+import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, cadreIA, gererErreur, attentes, chargerAttentes, avis, peut } from '../etat.js';
+import { noteFr } from '../../commun/js/etoiles.jsx';
 import { cadrerPhoto } from '../cadrage.js';
 import { TetePage, BarreEnregistrer, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement } from './accueil.jsx';
@@ -398,6 +399,7 @@ function FormulaireProduit() {
               <h2 class="carte-titre"><Icone n="plusieurs" />Autres actions</h2>
               <div class="pile">
                 {R.estEnVente(source) ? <a class="btn btn-secondaire btn-bloc" href={adresseBoutique(`/p/${id}/${slug(source.title)}`)} target="_blank" rel="noopener"><Icone n="oeil" />Voir dans la boutique</a> : null}
+                <LienAvis id={id} />
                 <a class="btn btn-secondaire btn-bloc" href={lien(`/produits/${id}/copie`)}><Icone n="dupliquer" />Dupliquer</a>
                 <button class="btn btn-danger btn-bloc" onClick={supprimerProduit}><Icone n="poubelle" />Supprimer</button>
               </div>
@@ -408,6 +410,16 @@ function FormulaireProduit() {
       <BarreEnregistrer modifie={modifie} occupe={occupe} desactive={envois > 0} onEnregistrer={enregistrer} onAnnuler={() => aller('/produits')} libelle={nouveauProduit || duplique ? 'Ajouter le produit' : 'Enregistrer'} />
     </>
   );
+}
+
+/* Avis des clients sur cet article (note moyenne des avis publiés) : mène à la page Avis, filtrée sur l'article. */
+function LienAvis({ id }) {
+  if (!peut('avis')) return null;
+  const l = avis.value.filter((a) => a.produit === id);
+  if (!l.length) return null;
+  const publies = l.filter((a) => a.etat === 'publie');
+  const note = publies.length ? publies.reduce((t, a) => t + a.note, 0) / publies.length : 0;
+  return <a class="btn btn-secondaire btn-bloc" href={lien('/avis?produit=' + encodeURIComponent(id))}><Icone n="etoile" />Avis des clients{publies.length ? ` · ${noteFr(Math.round(note * 10) / 10)} ★ (${publies.length})` : ` (${l.length})`}</a>;
 }
 
 /* La fiche n'est montée qu'une fois les données chargées (ouverture directe par un lien). */
