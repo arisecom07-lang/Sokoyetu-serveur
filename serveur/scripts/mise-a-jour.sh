@@ -20,7 +20,7 @@ for d in pb_public pb_admin pb_hooks pb_migrations; do [ -d "$T/s/$d" ] || { ech
 
 systemctl stop sokoyetu
 echo "==> Sauvegarde de la base avant mise à jour"
-mkdir -p "$DIR/sauvegardes"; chmod 700 "$DIR/sauvegardes"
+mkdir -p "$DIR/sauvegardes"; chmod 711 "$DIR/sauvegardes"
 (umask 077; tar -czf "$DIR/sauvegardes/avant-maj-$(date +%Y%m%d-%H%M).tar.gz" --exclude=pb_data/backups --exclude=pb_data/.autocert_cache -C "$DIR" pb_data)
 ls -1t "$DIR"/sauvegardes/avant-maj-*.tar.gz | tail -n +4 | xargs -r rm -f
 
@@ -33,8 +33,8 @@ rm -rf "${DIR:?}/pb_public"; cp -r "$T/s/pb_public" "$DIR/pb_public"
 for f in "$T"/s/*.sh; do n=$(basename "$f"); [ "$n" = installer.sh ] && continue; install -m 700 "$f" "$DIR/.$n.nouveau" && mv -f "$DIR/.$n.nouveau" "$DIR/$n"; done
 cp "$T/s/LISEZMOI.md" "$DIR/LISEZMOI.md" 2>/dev/null || true
 echo "$PAQUET" > "$DIR/.paquet"
-chown -R sokoyetu:sokoyetu "$DIR"
-[ -f "$DIR/sokoyetu.env" ] && chown root:root "$DIR/sokoyetu.env" && chmod 600 "$DIR/sokoyetu.env"
+# Droits : la boutique n'écrit que dans sa base ; programme, code et scripts à root (voir securite.sh).
+bash "$DIR/securite.sh" droits || { echo "    Droits des fichiers à revoir : sudo $DIR/securite.sh droits"; chown -R sokoyetu:sokoyetu "$DIR/pb_data"; }
 
 echo "==> Mise à jour de la base"
 sudo -u sokoyetu "$DIR/pocketbase" migrate up --dir="$DIR/pb_data" --hooksDir="$DIR/pb_hooks" --migrationsDir="$DIR/pb_migrations"
@@ -43,6 +43,7 @@ systemctl start sokoyetu; sleep 3
 if systemctl is-active --quiet sokoyetu; then
   D=$(cat "$DIR/.domaine" 2>/dev/null || echo sokoyakwetu.com)
   echo "==> Mise à jour terminée. Boutique : https://$D · Administration : https://admin.$D"
+  [ -f /etc/systemd/system/sokoyetu.service.d/securite.conf ] || echo "    Conseil : protégez le serveur (une seule fois) : sudo $DIR/securite.sh"
 else
   journalctl -u sokoyetu -n 30 --no-pager; exit 1
 fi

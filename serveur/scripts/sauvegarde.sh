@@ -16,7 +16,9 @@ UTILISATEUR="${SOKOYETU_UTILISATEUR:-sokoyetu}"
 ESSAI="${SOKOYETU_ESSAI:-}"   # essais hors serveur : ni sudo ni systemctl
 
 [ -n "$ESSAI" ] || [ "$(id -u)" = 0 ] || { echo "Lancez ce script avec sudo."; exit 1; }
-mkdir -p "$SAUV"; chmod 700 "$SAUV"
+mkdir -p "$SAUV"; chmod 711 "$SAUV"   # copies d'avant mise à jour : root seulement ; verification.json lisible par la boutique
+# Ce qui touche aux sauvegardes (faites à partir de la base de la boutique) tourne avec les droits du service, jamais de root.
+COMME_SERVICE=(); [ -n "$ESSAI" ] || COMME_SERVICE=(setpriv --reuid="$UTILISATEUR" --regid="$UTILISATEUR" --init-groups --)
 proprietaire() { [ -n "$ESSAI" ] || chown -R "$UTILISATEUR:$UTILISATEUR" "$@"; }
 taille() { du -sh "$1" 2>/dev/null | cut -f1; }
 
@@ -70,7 +72,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
 # Écrit le résultat de la vérification (lu par l'administration) ; $1 = ok (true/false), $2 = fichier, $3 = message.
 resultat() {
   python3 -I -c "import json,sys,time; print(json.dumps({'quand': int(time.time()*1000), 'ok': sys.argv[1] == 'true', 'fichier': sys.argv[2], 'message': sys.argv[3]}, ensure_ascii=False))" "$1" "$2" "$3" > "$SAUV/verification.json"
-  proprietaire "$SAUV/verification.json"
+  chmod 644 "$SAUV/verification.json"
 }
 
 verifier() {
@@ -90,10 +92,11 @@ verifier() {
   echo "==> Vérification de $nom ($(taille "$f"))"
   local copie; copie=$(extraire "$f" "$T") || { resultat false "$nom" "Fichier illisible."; exit 1; }
   [ -f "$copie/data.db" ] || { resultat false "$nom" "La sauvegarde ne contient pas la base (data.db)."; echo "✗ data.db absent de la sauvegarde."; exit 1; }
+  [ -n "$ESSAI" ] || { chmod 711 "$T"; proprietaire "$copie"; }
 
   # 1. La base est intacte, et voici ce qu'elle contient.
   local bilan
-  if ! bilan=$(python3 -I - "$copie/data.db" <<'PY'
+  if ! bilan=$("${COMME_SERVICE[@]}" python3 -I - "$copie/data.db" <<'PY'
 import sqlite3, sys
 db = sqlite3.connect('file:' + sys.argv[1] + '?mode=ro', uri=True)
 etat = db.execute('PRAGMA integrity_check').fetchone()[0]
@@ -112,7 +115,7 @@ PY
   # 2. PocketBase redémarre sur cette copie (migrations à jour), sans les règles de la boutique ni ses tâches.
   mkdir -p "$T/vide"
   local PORT=$(( 18000 + RANDOM % 1000 ))
-  "$PB" serve --http="127.0.0.1:$PORT" --dir="$copie" --hooksDir="$T/vide" --migrationsDir="$DIR/pb_migrations" --publicDir="$T/vide" > "$T/pb.log" 2>&1 &
+  "${COMME_SERVICE[@]}" "$PB" serve --http="127.0.0.1:$PORT" --dir="$copie" --hooksDir="$T/vide" --migrationsDir="$DIR/pb_migrations" --publicDir="$T/vide" > "$T/pb.log" 2>&1 &
   PID=$!
   local ok=false
   for i in $(seq 1 60); do

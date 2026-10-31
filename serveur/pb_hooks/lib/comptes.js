@@ -83,10 +83,16 @@ function verifierCode(app, saisie, saisieCode, nom) {
   if (!code) throw new ErreurCompte(`Le code compte ${R.CODE_CHIFFRES} chiffres.`, 400, { champ: 'code' });
   const x = ligneCode(app, tel); const now = Date.now();
   if (!x || !x.empreinte || now > x.expire) throw new ErreurCompte('Ce code a expiré. Demandez-en un nouveau.', 400, { champ: 'code', expire: true });
-  if (x.essais >= ESSAIS) throw new ErreurCompte('Trop d’essais avec ce code. Demandez-en un nouveau.', 400, { champ: 'code', expire: true });
+  const trop = () => new ErreurCompte('Trop d’essais avec ce code. Demandez-en un nouveau.', 400, { champ: 'code', expire: true });
+  if (x.essais >= ESSAIS) throw trop();
+  // Chaque essai est compté avant d'être vérifié, en une seule écriture : des essais envoyés au même instant ne
+  // dépassent jamais ESSAIS (un nouveau code change l'empreinte et remet le compteur à zéro).
+  const compte = app.db().newQuery('UPDATE sokoyetu_codes SET essais = essais + 1 WHERE telephone = {:t} AND empreinte = {:e} AND essais < {:m}')
+    .bind({ t: tel, e: x.empreinte, m: ESSAIS }).execute();
+  if (Number(compte.rowsAffected()) !== 1) throw trop();
   if (empreinte(tel, code, x.sel) !== x.empreinte) {
-    app.db().newQuery('UPDATE sokoyetu_codes SET essais = essais + 1 WHERE telephone = {:t}').bind({ t: tel }).execute();
-    const reste = ESSAIS - x.essais - 1;
+    const apres = ligneCode(app, tel);
+    const reste = ESSAIS - (apres && apres.empreinte === x.empreinte ? apres.essais : ESSAIS);
     throw new ErreurCompte(reste > 0 ? `Code incorrect. Encore ${reste} essai${reste > 1 ? 's' : ''}.` : 'Code incorrect. Demandez un nouveau code.', 400, { champ: 'code', expire: reste <= 0 });
   }
   let rec = null;

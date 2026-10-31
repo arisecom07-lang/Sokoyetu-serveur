@@ -14,7 +14,7 @@ https://github.com/arisecom07-lang/Sokoyetu-serveur/raw/main/sokoyetu-serveur.zi
 ```
 
 - Installation et mise à jour, pas à pas depuis un téléphone : [LISEZMOI.md](LISEZMOI.md)
-- Ce qui a changé (version 3.2 : l'adresse de livraison enregistrée une seule fois, ville, commune et quartier en listes ; version 3.1 : une recherche qui comprend les fautes, avec suggestions et recherches populaires ; version 3.0 : clients prévenus, avis, carte bancaire, discussion, équipe, fidélité) : [CHANGEMENTS.md](CHANGEMENTS.md)
+- Ce qui a changé (version 3.3 : sécurité renforcée de la boutique et du serveur, script `securite.sh` ; version 3.2 : l'adresse de livraison enregistrée une seule fois, ville, commune et quartier en listes ; version 3.1 : une recherche qui comprend les fautes, avec suggestions et recherches populaires ; version 3.0 : clients prévenus, avis, carte bancaire, discussion, équipe, fidélité) : [CHANGEMENTS.md](CHANGEMENTS.md)
 - Notes techniques pour reprendre le code : [A-LIRE-CLAUDE-CODE.md](A-LIRE-CLAUDE-CODE.md)
 
 Reconstruire le paquet : `npm install && npm run build` (résultat dans `dist/sokoyetu-serveur.zip`, à copier à la racine).

@@ -396,6 +396,7 @@ cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/alertes.js`).purger($app);
   require(`${__hooks}/lib/discussions.js`).purger($app);
   require(`${__hooks}/lib/serveur.js`).purgerCompteurs($app);
+  require(`${__hooks}/lib/securite.js`).purger($app);
 });
 
 /* ---------- Surveillance : erreurs, état du serveur, alerte si le site tombe (voir lib/journal.js) ---------- */
@@ -698,6 +699,17 @@ onRecordUpdateRequest((e) => {
   S.champsCommande(e.record, S.lire(e.record));
   return e.next();
 }, 'orders');
+
+/* ---------- Comptes de l'administration et du tableau technique (voir lib/securite.js) ---------- */
+
+// Mots de passe refusés : après plusieurs échecs, le compte se verrouille un moment, d'où que viennent les essais.
+onRecordAuthWithPasswordRequest((e) => require(`${__hooks}/lib/securite.js`).connexion(e), 'admins', '_superusers');
+// Un membre de l'équipe ne change jamais lui-même son rôle (la règle de la collection le refuse déjà) : seul le
+// propriétaire le change, page « Équipe » (routes /api/sokoyetu/equipe, qui n'utilisent pas cette API).
+onRecordUpdateRequest((e) => {
+  if (!e.hasSuperuserAuth() && e.record.getString('role') !== e.record.original().getString('role')) throw new ForbiddenError('Seul le propriétaire change les rôles de l’équipe (page « Équipe »).');
+  return e.next();
+}, 'admins');
 
 /* ---------- Ce que les clients ne voient jamais : coûts d'achat, notes internes, contrôles ---------- */
 

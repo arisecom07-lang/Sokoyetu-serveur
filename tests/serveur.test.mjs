@@ -396,6 +396,13 @@ test('compte client : code sur WhatsApp ou par SMS (mode test), connexion, panie
   // Code de secours par SMS (WhatsApp absent du téléphone) : un autre numéro, tout de suite.
   const sms = await api('/api/sokoyetu/compte/code', { method: 'POST', body: { telephone: '0821234567', canal: 'sms' } });
   assert.deepEqual([sms.json.canal, sms.json.canaux], ['sms', ['whatsapp', 'sms']]);
+  // Attaque : 8 codes faux envoyés au même instant. Jamais plus de 5 essais comptés ; le bon code est ensuite refusé.
+  const faux8 = Array.from({ length: 8 }, (_, i) => String((Number(sms.json.code) + 1 + i) % 1e6).padStart(6, '0'));
+  const rafale = await Promise.all(faux8.map((code) => api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '0821234567', code } })));
+  assert.ok(rafale.every((x) => x.status === 400), rafale.map((x) => x.status).join(','));
+  assert.ok(rafale.filter((x) => /Code incorrect/.test(x.json.message)).length <= 5, rafale.map((x) => x.json.message).join(' | '));
+  const apresRafale = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '0821234567', code: sms.json.code } });
+  assert.deepEqual([apresRafale.status, apresRafale.json.expire], [400, true], 'le bon code ne passe plus après 5 essais');
   const faux = await api('/api/sokoyetu/compte/connexion', { method: 'POST', body: { telephone: '0991234567', code: c.json.code === '000000' ? '111111' : '000000' } });
   assert.deepEqual([faux.status, faux.json.champ], [400, 'code']);
   assert.match(faux.json.message, /Encore 4 essais/);
@@ -651,6 +658,14 @@ test('équipe : vendeur et livreur ajoutés par le propriétaire, chacun limité
   assert.equal((await api('/api/sokoyetu/audience', { headers: vendeur })).status, 200);
   assert.equal((await api('/api/sokoyetu/journal', { headers: vendeur })).status, 403);
   assert.equal((await api('/api/sokoyetu/equipe', { headers: vendeur })).status, 403);
+  // Attaque : le livreur et le vendeur essaient de changer leur propre rôle par l'API des collections (JSON et formulaire).
+  for (const [qui, h, id] of [['livreur', livreur, l.json.membre.id], ['vendeur', vendeur, v.json.membre.id]]) {
+    for (const role of ['proprietaire', '', 'nimportequoi']) assert.notEqual((await api(`/api/collections/admins/records/${id}`, { method: 'PATCH', headers: h, body: { role } })).status, 200, `${qui} → « ${role} »`);
+    const fd = new FormData(); fd.append('role', 'proprietaire');
+    assert.notEqual((await fetch(`${BASE}/api/collections/admins/records/${id}`, { method: 'PATCH', headers: h, body: fd })).status, 200, `${qui} → formulaire`);
+    assert.equal((await api('/api/sokoyetu/equipe', { headers: h })).status, 403, `${qui} n’a toujours pas accès à l’équipe`);
+  }
+  assert.deepEqual((await equipe()).json.membres.map((m) => m.role), ['proprietaire', 'vendeur', 'livreur'], 'rôles inchangés');
 
   // Le propriétaire : nouveau mot de passe, changement de rôle, retrait ; la boutique garde toujours un propriétaire.
   const proprio = avant[0].id;
@@ -667,6 +682,59 @@ test('équipe : vendeur et livreur ajoutés par le propriétaire, chacun limité
   assert.equal((await equipe('/' + l.json.membre.id, { method: 'DELETE' })).status, 200);
   assert.equal((await api('/api/collections/orders/records', { headers: livreur })).json.items.length, 0, 'membre retiré : plus aucun accès');
   assert.deepEqual((await equipe()).json.membres.map((m) => m.role), ['proprietaire', 'proprietaire']);
+});
+
+test('sécurité : mot de passe de 10 caractères, compte verrouillé après 10 mots de passe refusés, copie de photo, en-têtes', async () => {
+  // Connexion : la limite par adresse (5 essais en 15 secondes) répond 429 ; on patiente alors. Le verrou du compte répond 429 aussi.
+  const connexion = async (identity, password, col = 'admins') => {
+    for (let i = 0; ; i++) {
+      const r = await api(`/api/collections/${col}/auth-with-password`, { method: 'POST', body: { identity, password } });
+      if (r.status !== 429 || /verrouillé/.test((r.json && r.json.message) || '') || i === 12) return r;
+      await pause(2000);
+    }
+  };
+  const m = await api('/api/sokoyetu/equipe', { method: 'POST', auth: true, body: { name: 'Compte Essai', email: 'verrou@sokoyetu.test', role: 'vendeur' } });
+  assert.equal(m.status, 200, m.texte);
+  const moi = await connexion('verrou@sokoyetu.test', m.json.motDePasse);
+  assert.equal(moi.status, 200, moi.texte);
+  const h = { Authorization: moi.json.token }; const fiche = `/api/collections/admins/records/${m.json.membre.id}`;
+  // Le membre garde la main sur son nom et son mot de passe (10 caractères au moins), jamais sur son rôle.
+  assert.equal((await api(fiche, { method: 'PATCH', headers: h, body: { name: 'Compte Verrou' } })).status, 200);
+  assert.equal((await api(fiche, { method: 'PATCH', headers: h, body: { name: 'Compte Verrou', role: 'vendeur' } })).status !== 200, true, 'même son rôle actuel ne s’envoie pas');
+  assert.equal((await api(fiche, { method: 'PATCH', headers: h, body: { oldPassword: m.json.motDePasse, password: 'court-123', passwordConfirm: 'court-123' } })).status, 400);
+  const nouveau = 'Verrou-Essai-2026';
+  assert.equal((await api(fiche, { method: 'PATCH', headers: h, body: { oldPassword: m.json.motDePasse, password: nouveau, passwordConfirm: nouveau } })).status, 200);
+  // Attaque : 10 mots de passe faux. Le compte se verrouille : même le bon mot de passe est refusé, avec un message clair.
+  for (let i = 0; i < 10; i++) assert.equal((await connexion('verrou@sokoyetu.test', 'Mauvais-' + i)).status, 400, 'essai ' + i);
+  const bloque = await connexion('Verrou@Sokoyetu.test ', nouveau);
+  assert.equal(bloque.status, 429, bloque.texte);
+  assert.match(bloque.json.message, /verrouillé encore 1[45] minutes/);
+  // Les autres comptes ne sont pas touchés ; le propriétaire voit l'alerte dans le journal.
+  assert.equal((await connexion('admin@sokoyetu.test', 'Sokoyetu-2026')).status, 200);
+  assert.equal((await connexion('technique@sokoyetu.test', 'Technique-2026', '_superusers')).status, 200);
+  // (le journal du serveur est écrit par lots, environ 3 secondes plus tard)
+  let alerte = null;
+  for (let i = 0; i < 6 && !alerte; i++) { await pause(3500); alerte = ((await api('/api/sokoyetu/journal?jours=1', { auth: true })).json.erreurs || []).find((x) => /Compte verrouillé/.test(x.message)); }
+  assert.ok(alerte, 'alerte au journal');
+  assert.deepEqual([alerte.details.module, alerte.details.compte, alerte.niveau], ['securite', 'verrou@sokoyetu.test', 'alerte']);
+  // Un compte inexistant se comporte comme un vrai : rien n'est révélé.
+  assert.equal((await connexion('personne@sokoyetu.test', 'Mauvais-0')).status, 400);
+
+  // Copie de photo : jamais vers le réseau du serveur, même par une adresse déguisée.
+  for (const url of ['https://exemple.com@127.0.0.1/a.jpg', 'https://localhost./a.jpg', 'https://169.254.169.254/latest/meta-data', 'https://0x7f000001/a.jpg', 'https://100.100.100.200/a.jpg', 'https://exemple.com:8090/a.jpg']) {
+    const r = await api('/api/sokoyetu/import/photo', { method: 'POST', auth: true, body: { url } });
+    assert.deepEqual([r.status, r.json.code], [400, 'bad_url'], url);
+  }
+
+  // En-têtes : pas d'affichage dans le cadre d'un autre site, types de fichiers jamais devinés, scripts de la boutique seulement.
+  for (const chemin of ['/', '/p/t-robe/robe', '/api/sokoyetu/catalogue']) {
+    const r = await fetch(BASE + chemin);
+    assert.equal(r.headers.get('x-content-type-options'), 'nosniff', chemin);
+    assert.match(r.headers.get('x-frame-options') || '', /SAMEORIGIN|DENY/, chemin);
+    if (!chemin.startsWith('/api/')) assert.match(r.headers.get('content-security-policy') || '', /frame-ancestors 'none'/, chemin);
+  }
+  const csp = (await fetch(BASE + '/')).headers.get('content-security-policy');
+  assert.ok(/frame-ancestors 'none'/.test(csp) && !/script-src[^;]*'unsafe-inline'/.test(csp), csp);
 });
 
 test('notifications gratuites : chaque étape prévient l’appareil qui a commandé et le compte, puis le téléphone', async () => {

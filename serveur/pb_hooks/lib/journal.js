@@ -44,7 +44,7 @@ function lire(app, jours, limite) {
   return l.map((x) => {
     let d = {}; try { d = JSON.parse(String(x.data || '{}')) || {}; } catch (e) { d = {}; }
     const garde = {};
-    ['type', 'module', 'app', 'genre', 'page', 'source', 'ligne', 'pile', 'version', 'agent', 'commande', 'erreur', 'detail', 'method', 'url', 'status', 'error', 'details'].forEach((k) => {
+    ['type', 'module', 'app', 'genre', 'page', 'source', 'ligne', 'pile', 'version', 'agent', 'commande', 'compte', 'ip', 'erreur', 'detail', 'method', 'url', 'status', 'error', 'details'].forEach((k) => {
       if (d[k] !== undefined && d[k] !== null && d[k] !== '') garde[k] = typeof d[k] === 'object' ? JSON.stringify(d[k]).slice(0, 1000) : d[k];
     });
     return { id: x.id, niveau: Number(x.level) >= 8 ? 'erreur' : 'alerte', message: String(x.message), quand: Date.parse(String(x.created).replace(' ', 'T')) || 0, details: garde };

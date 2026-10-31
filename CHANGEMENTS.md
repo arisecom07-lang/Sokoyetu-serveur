@@ -1,3 +1,44 @@
+# Sokoyetu 3.3.0 — sécurité renforcée de la boutique et du serveur (octobre 2026)
+
+Un audit complet a été fait (droits d'accès, routes du serveur, connexions, paiements, pages, fichiers, installation du serveur), et chaque faille a été vérifiée par une vraie tentative d'attaque sur un serveur d'essai avant d'être corrigée. Les tentatives sont maintenant rejouées à chaque essai automatique.
+
+## Failles corrigées
+
+- **Grave — un vendeur ou un livreur pouvait se donner les droits du propriétaire.** En modifiant son propre compte par l'API de la base, un membre de l'équipe pouvait changer son rôle, puis voir les réglages, les codes promo, l'équipe, et faire des remboursements. C'est refusé : seul le propriétaire change les rôles (page Équipe). Un rôle inconnu n'a plus que les droits du livreur.
+- **Serveur : les scripts lancés par root appartenaient au compte de la boutique.** Quelqu'un qui aurait pris le contrôle de la boutique aurait pu les modifier, puis prendre la main sur tout le serveur à la vérification des sauvegardes du dimanche. Désormais, le programme, le code et les scripts sont à root ; la boutique n'écrit que dans sa base, et la vérification des sauvegardes tourne avec les droits de la boutique, jamais ceux de root.
+- **Copie de photos par adresse** : une adresse déguisée (`site.com@127.0.0.1`, `localhost.`, adresse chiffrée, réseau partagé…) pouvait faire interroger le réseau interne du serveur. Elle est refusée, et le serveur isolé ne peut plus joindre ce réseau du tout.
+- **Mots de passe de l'administration** : ils pouvaient être essayés sans fin depuis beaucoup d'adresses à la fois. Après 10 mots de passe refusés en 15 minutes, le compte est verrouillé 15 minutes (alerte dans Santé et journal). Le serveur exige maintenant 10 caractères, comme l'administration.
+- **Codes de connexion des clients** : des essais envoyés au même instant pouvaient dépasser la limite de 5. Chaque essai est maintenant compté avant d'être vérifié.
+
+## Déjà solide (vérifié)
+
+Paiements toujours revérifiés auprès de FlexPay ; clés gardées sur le serveur ; aucune injection possible dans la base ; aucun script glissé dans un texte ne s'exécute dans les pages ; notifications envoyées seulement aux services officiels (Google, Apple, Mozilla, Microsoft) ; appareils et codes gardés en empreintes ; photos et vidéos seulement dans la médiathèque.
+
+## Nouveau : `securite.sh`, la protection du serveur
+
+`sudo /opt/sokoyetu/securite.sh` : droits des fichiers, service de la boutique isolé (le score d'exposition de systemd passe de 6,1 « moyen » à 3,2 « bon »), pare-feu, fail2ban pour SSH, mises à jour de sécurité d'Ubuntu automatiques. `etat` affiche le bilan ; `ssh-cles` passe SSH en connexion par clé seulement (refusé s'il n'y a aucune clé). Voir LISEZMOI, section 12.
+
+## Après la fusion
+
+Dans la console du Droplet :
+
+```bash
+sudo /opt/sokoyetu/mise-a-jour.sh
+sudo /opt/sokoyetu/securite.sh
+```
+
+## Détails techniques
+
+- Migration `1794400000_sokoyetu_securite.js` : `admins.updateRule` = `id = @request.auth.id && @request.body.role:isset = false` ; mot de passe des `admins` : 10 caractères au moins ; rôles inconnus ramenés à `livreur` ; table `sokoyetu_echecs`.
+- `lib/securite.js` : `onRecordAuthWithPasswordRequest` sur `admins` et `_superusers` (verrou de 15 minutes après 10 échecs en 15 minutes par compte, écrit en une seule requête, purgé chaque nuit ; un compte inexistant se comporte comme un vrai). `onRecordUpdateRequest` sur `admins` : rôle inchangé sauf superutilisateur (seconde barrière derrière la règle).
+- `regles.roleNettoye` : rôle vide = propriétaire (comptes d'avant les rôles), rôle inconnu = livreur ; `regles.estRole` (sans `constructor`, `__proto__`…).
+- `lib/comptes.js` : essai de code compté par `UPDATE … WHERE essais < 5` avant la comparaison.
+- `lib/import.js` : `decouper` (refuse identifiant `@`, crochets, caractères inattendus), `hotePublic` / `ipPublique` (nom avec un point et une extension en lettres, sans point final ; IPv4 ordinaire publique seulement : ni 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.168/16, 192.0.0/24, 198.18/15, 224/3) ; ports habituels seulement.
+- `serveur/scripts/securite.sh` (nouveau) ; `mise-a-jour.sh` et `installer.sh` appellent `securite.sh droits` (et `installer.sh` lance toute la protection) ; `sauvegarde.sh verifier` contrôle la copie avec `setpriv` (utilisateur `sokoyetu`) ; `sauvegardes/` à root (711), `verification.json` lisible (644) ; `android.sh` : `.well-known` à root.
+- Essais : `tests/serveur.test.mjs` (rôle changé par le membre lui-même en JSON et en formulaire, mot de passe court, verrou du compte et alerte au journal, 8 codes faux simultanés, adresses de photo déguisées, en-têtes), `tests/import.test.js` (adresses déguisées), `tests/regles.test.js` (rôles inconnus).
+
+---
+
 # Sokoyetu 3.2.0 — l'adresse de livraison enregistrée une seule fois (octobre 2026)
 
 ## Ce qui change pour vous
