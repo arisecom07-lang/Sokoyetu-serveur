@@ -1,3 +1,31 @@
+# Sokoyetu 3.2.0 — l'adresse de livraison enregistrée une seule fois (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Le client enregistre son adresse une seule fois** : nom, téléphone, ville, commune, quartier, avenue, numéro et point de repère. La boutique lui dit clairement : « Enregistrée une seule fois : cette adresse servira pour toutes vos livraisons. Vous pourrez la modifier à tout moment. »
+- **Aux commandes suivantes, plus rien à ressaisir** : l'étape Livraison montre l'adresse enregistrée en quelques lignes (« av. Lumumba n° 12, Q. Nyamugo, C. Kadutu, Bukavu »), avec un bouton **Modifier**. Tant que le client ne la modifie pas, c'est toujours la même adresse qui sert.
+- **Ville, commune et quartier se choisissent dans des listes** : d'abord la ville (Bukavu, Goma), puis la commune (Bukavu : Ibanda, Kadutu, Bagira ; Goma : Goma, Karisimbi), puis le quartier. Un quartier absent de la liste ? « Autre quartier… » permet de l'écrire.
+- **Mon compte → Mon adresse de livraison** : le client la voit et la modifie quand il veut. Avec un compte, elle le suit sur tous ses téléphones.
+- **Retrait en boutique** : seuls le nom et le téléphone sont demandés ; l'adresse enregistrée reste pour les livraisons suivantes.
+- **Pour vous** : chaque commande garde l'adresse détaillée (commune, quartier, avenue, numéro), écrite comme le font les livreurs.
+
+## À vérifier une fois dans l'administration
+
+**Réglages → Livraison**, dans chaque ville : « Communes et quartiers ». Les listes de Bukavu et de Goma sont pré-remplies d'après des sources publiques (mairies, travaux universitaires) **qui ne s'accordent pas sur tous les quartiers**, surtout à Bagira. Relisez-les et complétez-les : une commune par ligne, « Ibanda : Ndendere, Nyalukemba, Panzi ». Une nouvelle ville (Uvira…) reçoit ses propres listes de la même façon.
+
+## Après la fusion
+
+Dans la console du Droplet : `sudo /opt/sokoyetu/mise-a-jour.sh`.
+
+## Détails techniques
+
+- `regles.js` : `COMMUNES_DEFAUT` (Bukavu, Goma), `communesDe(zone)` (listes de la zone, sinon par défaut), `zone.communes` gardées par `config`, `champsAdresse`, `adresseTexte` (« av. … n° …, Q. …, C. … »), `adresseComplete`. `profilCompte` garde commune, quartier, avenue, numéro ; `fusionCompte` prend l'adresse d'un bloc (celle du compte si elle existe, sinon celle de l'appareil, jamais un mélange). `preparerCommande` garde `shipping.commune`, `quartier`, `avenue`, `numero` et compose `address` si elle manque (160 caractères).
+- Boutique : `composants/adresse.jsx` (`FormulaireAdresse`, `ResumeAdresse`, `ouvrirAdresse`) ; étape 1 de la commande : mode de livraison (« Livraison à mon adresse » ou retrait), puis résumé ou formulaire ; l'adresse est enregistrée dès l'étape 1 (`profil.retrait` retient le retrait en boutique). « Mes coordonnées » devient « Mon adresse de livraison ».
+- Administration : Réglages → Livraison, champ « Communes et quartiers » par ville (texte « Commune : quartier, quartier »).
+- Essais : `tests/regles.test.js` (communes, adresse écrite et complète, commande, fusion), `tests/adresse.mjs` (nouveau, vrais navigateurs : listes, réutilisation, modification, commande, Mon compte, listes de l'administration) ; `parcours.mjs`, `comptes.mjs` et `demo.mjs` remplissent le nouveau formulaire.
+
+---
+
 # Sokoyetu 3.1.0 — une recherche qui comprend les fautes et propose des suggestions (octobre 2026)
 
 ## Ce qui change pour vous

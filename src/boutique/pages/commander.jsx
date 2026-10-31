@@ -17,24 +17,30 @@ import { mesurerEvenement } from '../mesure.js';
 import { jetonAppareil } from '../notifications.js';
 import { devisLocal, prixPieces } from './panier.jsx';
 import { cagnotte, chargerCagnotte, cagnotteOuverte, parrainageOuvert, parrain, oublierParrain, garderParrain, parrainageEstime } from '../fidelite.js';
+import { FormulaireAdresse, ResumeAdresse, brouillonAdresse, verifierAdresse, profilDepuis, villesDe } from '../composants/adresse.jsx';
 import { useSeo } from './commun.jsx';
 
 export const NOMS_ETAPES = ['Livraison', 'Paiement', 'Reçu'];
-const CHAMP_ETAPE = { name: 1, phone: 1, zone: 1, address: 1, method: 2, payphone: 2, terms: 2, remise: 2 };
+const CHAMP_ETAPE = { name: 1, phone: 1, zone: 1, address: 1, ville: 1, commune: 1, quartier: 1, avenue: 1, method: 2, payphone: 2, terms: 2, remise: 2 };
 
 function brouillonInitial() {
   const pf = profil.value; const c = cfg.value; const ms = moyensPaiement.value;
   const b = Local.lire('commandeEnCours', null);
   const frais = b && Date.now() - (b.le || 0) < 6 * 3600e3 ? b : null;
-  const zone = R.zoneDe(c, (frais && frais.zoneId) || pf.zoneId) || c.zones[0];
+  // Adresse enregistrée complète : elle sert telle quelle (résumé, bouton « Modifier ») ; sinon, le formulaire.
+  const complete = R.adresseComplete(pf, c);
+  const adr = brouillonAdresse(pf, c);
+  const retraitPrefere = R.estRetrait(R.zoneDe(c, pf.retrait)) ? pf.retrait : '';
+  const zone = R.zoneDe(c, (frais && frais.zoneId) || retraitPrefere || adr.ville) || c.zones[0];
   const f = {
-    etape: 1, nom: pf.name || '', tel: pf.phone || '', zoneId: zone ? zone.id : '', adresse: pf.address || '', repere: pf.landmark || '', note: '',
+    etape: 1, ...adr, zoneId: zone ? zone.id : '', note: '',
     methode: pf.payMethod || (ms[0] || {}).k || '', telPaiement: pf.payPhone || '', code: '', remise: null, conditions: false, cagnotte: false,
-    ...(frais || {}), erreurs: {}, devis: null, envoi: false,
+    ...(frais || {}), ...(complete ? adr : {}), edition: !complete, erreurs: {}, devis: null, envoi: false,
     jeton: frais && R.valider.jeton(frais.jeton) ? frais.jeton : secret(32)
   };
   // Brouillon commencé avant de se connecter : les champs restés vides prennent les coordonnées du compte.
-  [['nom', 'name'], ['tel', 'phone'], ['adresse', 'address'], ['repere', 'landmark'], ['telPaiement', 'payPhone']].forEach(([k, kp]) => { if (!String(f[k] || '').trim() && pf[kp]) f[k] = pf[kp]; });
+  [['nom', 'name'], ['tel', 'phone'], ['commune', 'commune'], ['quartier', 'quartier'], ['avenue', 'avenue'], ['numero', 'numero'], ['repere', 'landmark'], ['telPaiement', 'payPhone']]
+    .forEach(([k, kp]) => { if (!String(f[k] || '').trim() && pf[kp]) f[k] = pf[kp]; });
   return f;
 }
 
@@ -128,7 +134,7 @@ export function Commander() {
   useEffect(() => {
     const { erreurs, devis, envoi, etape, conditions, ...garde } = f;
     Local.ecrire('commandeEnCours', { ...garde, le: Date.now() });
-  }, [f.nom, f.tel, f.zoneId, f.adresse, f.repere, f.note, f.methode, f.telPaiement, f.code, f.remise, f.jeton]);
+  }, [f.nom, f.tel, f.zoneId, f.ville, f.commune, f.quartier, f.avenue, f.numero, f.repere, f.note, f.methode, f.telPaiement, f.code, f.remise, f.jeton]);
   useEffect(() => { if (!ms.some((m) => m.k === f.methode) && ms[0]) maj({ methode: ms[0].k }); }, [ms.length]);
   // Connecté : solde de la cagnotte, et première commande ou non (cadeau de bienvenue du parrainage).
   useEffect(() => { if (client.value && cagnotteOuverte.value) chargerCagnotte().catch(() => { }); }, [client.value && client.value.id, cagnotteOuverte.value]);
@@ -152,6 +158,9 @@ export function Commander() {
   }
 
   const zone = R.zoneDe(c, f.zoneId); const retrait = R.estRetrait(zone);
+  const villes = villesDe(c);
+  // Formulaire d'adresse : une autre ville change aussi la zone de livraison (et ses frais).
+  const majAdresse = (p) => maj({ ...p, ...(p.ville && !retrait ? { zoneId: p.ville, devis: null } : {}), erreurs: {} });
   // Cagnotte (connecté) et cadeau de bienvenue : estimés ici, confirmés par le serveur avant le paiement.
   const g = client.value && cagnotteOuverte.value ? cagnotte.value : null;
   const utiliser = !!(f.cagnotte && g && g.solde > 0);
@@ -166,12 +175,21 @@ export function Commander() {
   const montrerErreur = () => setTimeout(() => document.querySelector('.en-erreur, .champ-erreur')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
 
   function verifierEtape1() {
-    const e = {};
-    if (!R.valider.nom(f.nom)) e.name = 'Indiquez votre nom complet (2 à 60 lettres).';
-    if (!R.valider.telephone(f.tel)) e.phone = 'Numéro invalide. Exemple : 099 123 4567 ou +243 99 123 4567.';
-    if (!zone) e.zone = 'Choisissez une zone de livraison.';
-    if (zone && !retrait && R.nettoyer(f.adresse, 120).length < 4) e.address = 'Indiquez votre adresse : quartier, avenue, numéro.';
+    const e = verifierAdresse(f, c, !!zone && !retrait);
+    if (!zone) e.zone = 'Choisissez un mode de livraison.';
+    // Une erreur sur l'adresse enregistrée (résumé) : le formulaire s'ouvre pour la corriger.
+    if (Object.keys(e).length && !f.edition) maj({ edition: true });
     return e;
+  }
+  // L'adresse est enregistrée dès l'étape 1 (pas seulement après le paiement) : elle sert pour toutes les livraisons.
+  function enregistrerAdresse() {
+    const premiere = !R.adresseComplete(profil.value, c);
+    if (retrait) enregistrerProfil({ name: R.valider.nom(f.nom), phone: R.valider.telephone(f.tel), retrait: f.zoneId });
+    else {
+      enregistrerProfil({ ...profilDepuis(f), retrait: '' });
+      if (f.edition) toast(premiere ? 'Adresse enregistrée : elle servira pour toutes vos livraisons' : 'Nouvelle adresse enregistrée pour vos livraisons', { icone: 'repere', duree: 3500 });
+    }
+    maj({ edition: false });
   }
 
   async function appliquerCode() {
@@ -243,7 +261,8 @@ export function Commander() {
     if (!devis) { maj({ envoi: false }); return; }
     const corps = {
       token: f.jeton, termsAccepted: true, website: document.getElementById('site-web')?.value || '',
-      customer: { name: f.nom, phone: f.tel }, shipping: { zoneId: f.zoneId, address: f.adresse, landmark: f.repere }, note: f.note,
+      customer: { name: f.nom, phone: f.tel }, note: f.note,
+      shipping: retrait ? { zoneId: f.zoneId } : { zoneId: f.zoneId, address: R.adresseTexte(f), commune: f.commune, quartier: f.quartier, avenue: f.avenue, numero: f.numero, landmark: f.repere },
       items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })),
       discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: moyen.carte ? '' : telDebite }, total: devis.total,
       appareil: jetonAppareil(), ...fidelite
@@ -252,7 +271,7 @@ export function Commander() {
     try {
       const r = await requete('sokoyetu/commander', { method: 'POST', corps, delai: 45000 });
       suivreCommande(r.id, f.jeton); recevoirCommande(r.id, r.order);
-      enregistrerProfil({ name: R.valider.nom(f.nom), phone: R.valider.telephone(f.tel), zoneId: f.zoneId, address: f.adresse, landmark: f.repere, payMethod: f.methode, ...(moyen.carte ? {} : { payPhone: R.valider.mobileMoney(telDebite) }) });
+      enregistrerProfil({ payMethod: f.methode, ...(moyen.carte ? {} : { payPhone: R.valider.mobileMoney(telDebite) }) });
       retirerCommandes(corps.items); Local.retirer('commandeEnCours');
       // Cadeau de bienvenue reçu : il ne servira plus ; la cagnotte a pu changer.
       if (r.order && r.order.referral) oublierParrain();
@@ -265,7 +284,7 @@ export function Commander() {
         if (err.champ === 'panier') { panierChange([err.message]); return; }
         if (err.champ === 'total') { maj({ devis: null }); toast(err.message, { icone: 'alerte', ton: 'danger', duree: 5000 }); return; }
         const etape = CHAMP_ETAPE[err.champ];
-        if (etape) { if (etape !== f.etape) allerA(etape); maj({ etape, erreurs: { [err.champ]: err.message } }); montrerErreur(); return; }
+        if (etape) { if (etape !== f.etape) allerA(etape); maj({ etape, ...(etape === 1 ? { edition: true } : {}), erreurs: { [err.champ === 'address' ? 'avenue' : err.champ]: err.message } }); montrerErreur(); return; }
         toast(err.message, { icone: 'alerte', ton: 'danger', duree: 5000 }); return;
       }
       connexionCoupee(err);
@@ -282,7 +301,7 @@ export function Commander() {
   }
 
   const suivant = () => {
-    if (f.etape === 1) { const e = verifierEtape1(); if (Object.keys(e).length) { maj({ erreurs: e }); setTimeout(() => document.querySelector('.en-erreur input, .en-erreur')?.focus?.(), 30); return; } maj({ devis: null }); allerA(2); }
+    if (f.etape === 1) { const e = verifierEtape1(); if (Object.keys(e).length) { maj({ erreurs: e }); setTimeout(() => document.querySelector('.en-erreur input, .en-erreur select, .en-erreur')?.focus?.(), 30); return; } enregistrerAdresse(); maj({ devis: null }); allerA(2); }
     else payer();
   };
 
@@ -310,27 +329,37 @@ export function Commander() {
             {f.etape === 1 ? (
               <>
                 <section class="carte entree-avant">
-                  <h2 class="carte-titre"><Icone n="personne" />Vos coordonnées</h2>
-                  {client.value ? <p class="discret petit rangee espace-bas"><Icone n="coche" taille={15} />Connecté : la commande s’ajoute à votre compte ({telephone(client.value.phone) || client.value.phone}).</p> : null}
-                  <div class="formulaire">
-                    <Champ libelle="Nom complet" erreur={f.erreurs.name}>{(a) => <input class="saisie" {...a} value={f.nom} onInput={champ('nom')} autocomplete="name" maxlength="60" placeholder="Ex. : Grâce Mapendo" />}</Champ>
-                    <Champ libelle="Téléphone" erreur={f.erreurs.phone} aide="Le livreur vous appelle à ce numéro.">{(a) => <input class="saisie" {...a} value={f.tel} onInput={champ('tel')} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}</Champ>
-                    <div class="pot-de-miel" aria-hidden="true"><label>Ne pas remplir<input id="site-web" tabIndex={-1} autocomplete="off" /></label></div>
-                  </div>
-                </section>
-                <section class="carte entree-avant">
                   <h2 class="carte-titre"><Icone n="camion" />Livraison</h2>
-                  <div class="choix-liste" role="radiogroup" aria-label="Zone de livraison">
-                    {c.zones.map((z) => <Choix key={z.id} actif={f.zoneId === z.id} onClick={() => maj({ zoneId: z.id, devis: null, erreurs: { ...f.erreurs, zone: '' } })} icone={z.pickup ? 'boutique' : 'camion'} titre={z.name}
-                      sous={`${(() => { const v = R.arrondi(R.num(z.fee) + (z.pickup ? 0 : R.num(z.perKg) * R.num(dv.poids))); return v ? dollars(v) : 'Gratuit'; })()}${z.pickup ? ' · à retirer en boutique' : z.days > 1 ? ` · sous ${z.days} jours` : ' · sous 24 h'}`} />)}
+                  <div class="choix-liste" role="radiogroup" aria-label="Mode de livraison">
+                    {villes.length ? <Choix actif={!!zone && !retrait} onClick={() => maj({ zoneId: f.ville || villes[0].id, devis: null, erreurs: { ...f.erreurs, zone: '' } })} icone="camion" titre="Livraison à mon adresse"
+                      sous={(() => { const z = R.zoneDe(c, f.ville) || villes[0]; const v = R.arrondi(R.num(z.fee) + R.num(z.perKg) * R.num(dv.poids)); return `${z.name} · ${v ? dollars(v) : 'Gratuit'}${z.days > 1 ? ` · sous ${z.days} jours` : ' · sous 24 h'}`; })()} /> : null}
+                    {c.zones.filter((z) => R.estRetrait(z)).map((z) => <Choix key={z.id} actif={f.zoneId === z.id} onClick={() => maj({ zoneId: z.id, devis: null, erreurs: { ...f.erreurs, zone: '' } })} icone="boutique" titre={z.name}
+                      sous={`${R.num(z.fee) ? dollars(z.fee) : 'Gratuit'} · à retirer en boutique`} />)}
                   </div>
                   {f.erreurs.zone ? <p class="champ-erreur"><Icone n="alerte" />{f.erreurs.zone}</p> : null}
-                  {retrait ? <Note ton="info" icone="boutique" classe="espace-haut">Vous récupérez votre commande à la boutique de {c.city}. Nous vous appelons dès qu’elle est prête.</Note> : (
-                    <div class="formulaire espace-haut">
-                      <Champ libelle="Adresse" erreur={f.erreurs.address} aide="Quartier, avenue, numéro.">{(a) => <input class="saisie" {...a} value={f.adresse} onInput={champ('adresse')} autocomplete="street-address" maxlength="120" placeholder="Ex. : Nyawera, av. Lumumba n° 12" />}</Champ>
-                      <Champ libelle="Point de repère" facultatif>{(a) => <input class="saisie" {...a} value={f.repere} onInput={champ('repere')} maxlength="80" placeholder="Ex. : en face de la pharmacie" />}</Champ>
-                    </div>
+                  {retrait ? <Note ton="info" icone="boutique" classe="espace-haut">Vous récupérez votre commande à la boutique de {c.city}. Nous vous appelons dès qu’elle est prête.</Note> : null}
+                </section>
+                <section class="carte entree-avant">
+                  <div class="entre titre-avec-bouton">
+                    <h2 class="carte-titre"><Icone n={retrait ? 'personne' : 'repere'} />{retrait ? 'Vos coordonnées' : 'Votre adresse de livraison'}</h2>
+                    {!f.edition ? <button type="button" class="btn btn-secondaire btn-s" onClick={() => maj({ edition: true })} aria-label={retrait ? 'Modifier mes coordonnées' : 'Modifier mon adresse de livraison'}><Icone n="crayon" />Modifier</button> : null}
+                  </div>
+                  {client.value ? <p class="discret petit rangee espace-bas"><Icone n="coche" taille={15} />Connecté : la commande s’ajoute à votre compte ({telephone(client.value.phone) || client.value.phone}).</p> : null}
+                  {f.edition ? (
+                    <>
+                      {!retrait ? <Note ton="info" icone="repere" classe="espace-bas">{R.adresseComplete(profil.value, c) ? 'Votre nouvelle adresse remplacera l’ancienne pour toutes vos prochaines livraisons.' : 'Enregistrée une seule fois : cette adresse servira pour toutes vos livraisons. Vous pourrez la modifier à tout moment, ici ou dans Mon compte.'}</Note> : null}
+                      <FormulaireAdresse a={f} maj={majAdresse} erreurs={f.erreurs} avecAdresse={!retrait} />
+                      {R.adresseComplete(profil.value, c) ? <button type="button" class="btn btn-fantome btn-s espace-haut" onClick={() => maj({ ...brouillonAdresse(profil.value, c), edition: false, erreurs: {} })}>Garder mon adresse enregistrée</button> : null}
+                    </>
+                  ) : retrait ? (
+                    <ResumeAdresse pf={{ ...profil.value, name: f.nom, phone: f.tel }} sansAdresse />
+                  ) : (
+                    <>
+                      <ResumeAdresse pf={profil.value} />
+                      <p class="discret petit rangee espace-haut"><Icone n="coche" taille={15} />Votre adresse enregistrée : elle sert pour toutes vos livraisons tant que vous ne la modifiez pas.</p>
+                    </>
                   )}
+                  <div class="pot-de-miel" aria-hidden="true"><label>Ne pas remplir<input id="site-web" tabIndex={-1} autocomplete="off" /></label></div>
                   <div class="espace-haut"><Champ libelle="Note pour la boutique" facultatif>{(a) => <textarea class="saisie" {...a} rows="2" value={f.note} onInput={champ('note')} maxlength="300" placeholder="Horaires, précisions…" />}</Champ></div>
                 </section>
                 <p class="discret petit rangee"><Icone n="cadenas" taille={15} />Ces informations servent uniquement à livrer votre commande. <a class="lien" href={lien('/infos/confidentialite')}>Confidentialité</a></p>
@@ -363,7 +392,7 @@ export function Commander() {
                 {cagnotteOuverte.value ? <CarteFidelite dv={dv} utiliser={utiliser} onUtiliser={() => maj({ cagnotte: !utiliser, devis: null })} /> : null}
                 <section class="carte entree-avant">
                   <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="repere" />{retrait ? 'Retrait' : 'Livraison'}</h2><button class="btn btn-fantome btn-s" onClick={() => allerA(1)}><Icone n="crayon" />Modifier</button></div>
-                  <dl class="infos espace-haut"><dt>Nom</dt><dd>{f.nom}</dd><dt>Téléphone</dt><dd>{telephone(R.valider.telephone(f.tel)) || f.tel}</dd><dt>Zone</dt><dd>{zone && zone.name}</dd>{!retrait && f.adresse ? <><dt>Adresse</dt><dd>{f.adresse}</dd></> : null}</dl>
+                  <dl class="infos espace-haut"><dt>Nom</dt><dd>{f.nom}</dd><dt>Téléphone</dt><dd>{telephone(R.valider.telephone(f.tel)) || f.tel}</dd><dt>{retrait ? 'Retrait' : 'Ville'}</dt><dd>{zone && zone.name}</dd>{!retrait ? <><dt>Adresse</dt><dd>{R.adresseTexte(f)}</dd></> : null}{!retrait && f.repere ? <><dt>Repère</dt><dd>{f.repere}</dd></> : null}</dl>
                 </section>
                 <div class="seulement-mobile">{recap}</div>
                 {dv.frais ? <p class="discret petit rangee"><Icone n="info" taille={15} />Les frais de service ({R.num(dv.fraisPct)} % du panier) sont ajoutés au paiement : ils couvrent le paiement sécurisé et le suivi de votre commande.</p> : null}

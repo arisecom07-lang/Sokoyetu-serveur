@@ -57,7 +57,8 @@ function Formulaire({ section }) {
       if ([d.referral.welcome, d.referral.reward].some((v) => !(v >= 0 && v <= 100)) && stop('Parrainage : cadeau et gain de 0 à 100 $')) return;
       if (d.referral.welcome > 0 && !(d.referral.min > d.referral.welcome && d.referral.min <= 1000) && stop('L’achat minimum doit dépasser le cadeau du filleul (jusqu’à 1 000 $)')) return;
     }
-    d.zones = (d.zones || []).filter((z) => String(z.name || '').trim()).map((z) => ({ id: z.id || uid(), name: R.nettoyer(z.name, 40), fee: Math.max(0, R.num(z.fee)), days: R.int(z.days), pickup: !!z.pickup, perKg: Math.max(0, R.arrondi(z.perKg)) }));
+    d.zones = (d.zones || []).filter((z) => String(z.name || '').trim()).map((z) => ({ id: z.id || uid(), name: R.nettoyer(z.name, 40), fee: Math.max(0, R.num(z.fee)), days: R.int(z.days), pickup: !!z.pickup, perKg: Math.max(0, R.arrondi(z.perKg)),
+      communes: z.pickup ? [] : z.communesTexte !== undefined ? R.communesNettoyees(communesDepuisTexte(z.communesTexte)) : R.communesNettoyees(z.communes) }));
     if (!d.zones.length && stop('Gardez au moins une zone de livraison')) return;
     for (const k of ['company', 'address', 'rccm', 'idnat', 'nif']) d.legal[k] = R.nettoyer(d.legal[k], k === 'address' ? 140 : 80);
     const em = R.valider.email(d.legal.email); if (em === null && stop('E-mail de contact invalide')) return; d.legal.email = em;
@@ -150,6 +151,9 @@ function Formulaire({ section }) {
                         <Champ libelle="Délai (jours)">{(a) => <input class="saisie" {...a} inputmode="numeric" value={z.days} onInput={(e) => zone(i, { days: e.currentTarget.value.replace(/\D/g, '') })} />}</Champ>
                       </div>
                       {!z.pickup ? <Champ libelle="Supplément par kilo ($)" facultatif aide="Ajouté selon le poids des articles (champ « Poids » de chaque produit). 0 : frais fixes.">{(a) => <input class="saisie" {...a} inputmode="decimal" value={z.perKg || ''} placeholder="0" onInput={(e) => zone(i, { perKg: e.currentTarget.value })} />}</Champ> : null}
+                      {!z.pickup ? <Champ libelle="Communes et quartiers" facultatif aide="Une commune par ligne, puis ses quartiers : « Ibanda : Ndendere, Nyalukemba, Panzi ». Proposés en listes dans l’adresse du client, qui peut aussi écrire un autre quartier. Vide : les listes de Bukavu et de Goma.">{(a) => (
+                        <textarea class="saisie" {...a} rows="5" value={z.communesTexte !== undefined ? z.communesTexte : communesEnTexte(z)} onInput={(e) => zone(i, { communesTexte: e.currentTarget.value })} placeholder="Commune : quartier, quartier, …" />
+                      )}</Champ> : null}
                       <Bascule actif={!!z.pickup} onClick={() => zone(i, { pickup: !z.pickup })} libelle="Retrait en boutique" sous="Le client vient chercher sa commande : pas d’adresse demandée" />
                       <button class="btn btn-fantome btn-s" style={{ justifySelf: 'start' }} onClick={() => maj({ zones: f.zones.filter((_, j) => j !== i) })}><Icone n="poubelle" />Retirer la zone</button>
                     </div>
@@ -274,6 +278,15 @@ function Formulaire({ section }) {
       <BarreEnregistrer modifie={modifie} occupe={occupe} onEnregistrer={enregistrer} onAnnuler={() => aller('/plus')} />
     </>
   );
+}
+
+/* Communes et quartiers d'une zone, en texte modifiable : « Commune : quartier, quartier » (une commune par ligne). */
+const communesEnTexte = (z) => R.communesDe({ ...z, pickup: false }).map((k) => `${k.name} : ${k.quartiers.join(', ')}`).join('\n');
+function communesDepuisTexte(t) {
+  return String(t || '').split('\n').map((l) => {
+    const i = l.indexOf(':'); const name = (i < 0 ? l : l.slice(0, i)).trim();
+    return { name, quartiers: i < 0 ? [] : l.slice(i + 1).split(/[,;]/).map((x) => x.trim()).filter(Boolean) };
+  }).filter((k) => k.name);
 }
 
 export function Reglages() {

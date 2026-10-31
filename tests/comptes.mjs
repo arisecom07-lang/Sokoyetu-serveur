@@ -87,7 +87,8 @@ await admin.screenshot({ path: SORTIE + 'compte-7-admin-client.png', fullPage: t
 etape('administration : « Paniers à relancer », clients qui ont l’article en favori, fiche client avec panier et favoris');
 
 // 3. Le client paie sa commande connecté.
-await a.click('[aria-label="Zone de livraison"] .choix >> nth=0'); await a.fill('input[autocomplete="street-address"]', 'Nyawera, av. Lumumba 12');
+await a.getByLabel('Commune').selectOption('Kadutu'); await a.getByLabel('Quartier', { exact: true }).selectOption('Nyamugo');
+await a.getByLabel('Avenue ou rue').fill('av. Lumumba'); await a.getByLabel('Numéro').fill('12');
 await a.click('.barre-action .btn-primaire'); await a.waitForSelector('[aria-label="Opérateur Mobile Money"]');
 await a.click('[aria-label="Opérateur Mobile Money"] .choix >> nth=0');
 await a.fill('.saisie-numero', TEL);

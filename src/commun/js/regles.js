@@ -168,12 +168,67 @@ const valider = {
 
 /* ---------- Configuration ---------- */
 
+/* ---------- Adresse de livraison : enregistrée une fois, utilisée pour toutes les livraisons ---------- */
+
+/*
+ * Communes et quartiers proposés en listes (ville, puis commune, puis quartier). Les sources publiques (mairies, travaux
+ * universitaires) ne s'accordent pas sur tous les quartiers : la boutique complète ces listes dans Réglages → Livraison,
+ * et le client peut toujours écrire un autre quartier.
+ */
+const COMMUNES_DEFAUT = {
+  bukavu: [
+    { name: 'Ibanda', quartiers: ['Ndendere', 'Nyalukemba', 'Panzi'] },
+    { name: 'Kadutu', quartiers: ['Cimpunda', 'Kajangu', 'Kasali', 'Mosala', 'Nkafu', 'Nyakaliba', 'Nyamugo'] },
+    { name: 'Bagira', quartiers: ['Kasha', 'Lumumba', 'Nyakavogo'] }
+  ],
+  goma: [
+    { name: 'Goma', quartiers: ['Himbi', 'Katindo', 'Kyeshero', 'Lac Vert', 'Les Volcans', 'Mapendo', 'Mikeno'] },
+    { name: 'Karisimbi', quartiers: ['Bujovu', 'Kahembe', 'Kasika', 'Katoyi', 'Mabanga-Nord', 'Mabanga-Sud', 'Majengo', 'Mugunga', 'Murara', 'Ndosho', 'Virunga'] }
+  ]
+};
+const MAX_COMMUNES = 30, MAX_QUARTIERS = 80;
+function communesNettoyees(l) {
+  const vues = {};
+  return (Array.isArray(l) ? l : []).map((c) => {
+    const name = nettoyer(c && c.name, 40); const k = name.toLowerCase();
+    if (!name || vues[k]) return null;
+    vues[k] = true; const q = {};
+    const quartiers = (Array.isArray(c.quartiers) ? c.quartiers : []).map((x) => nettoyer(x, 40))
+      .filter((x) => x && !q[x.toLowerCase()] && (q[x.toLowerCase()] = true)).slice(0, MAX_QUARTIERS);
+    return { name, quartiers };
+  }).filter(Boolean).slice(0, MAX_COMMUNES);
+}
+/* Communes d'une zone de livraison : celles réglées par la boutique, sinon celles de Bukavu ou de Goma ; aucune pour un retrait. */
+function communesDe(zone) {
+  if (!zone || estRetrait(zone)) return [];
+  const propres = communesNettoyees(zone.communes);
+  if (propres.length) return propres;
+  return copie(COMMUNES_DEFAUT[slug(zone.id)] || COMMUNES_DEFAUT[slug(zone.name)] || []);
+}
+/* Les champs de l'adresse : la ville (zone de livraison), la commune, le quartier, l'avenue, le numéro et un point de repère. */
+const CHAMPS_ADRESSE = ['zoneId', 'commune', 'quartier', 'avenue', 'numero', 'address', 'landmark'];
+const champsAdresse = (x) => ({
+  zoneId: nettoyer(x && x.zoneId, 40), commune: nettoyer(x && x.commune, 40), quartier: nettoyer(x && x.quartier, 40),
+  avenue: nettoyer(x && x.avenue, 80), numero: nettoyer(x && x.numero, 12).replace(/^n°\s*/i, ''), landmark: nettoyer(x && x.landmark, 80)
+});
+/* « av. Patrice Lumumba n° 12, Q. Nyalukemba, C. Ibanda » : l'adresse telle que l'écrivent les livreurs. */
+function adresseTexte(a) {
+  const x = champsAdresse(a);
+  return [x.avenue ? x.avenue + (x.numero ? ' n° ' + x.numero : '') : '', x.quartier ? 'Q. ' + x.quartier : '', x.commune ? 'C. ' + x.commune : ''].filter(Boolean).join(', ');
+}
+/* L'adresse enregistrée suffit pour livrer : nom, téléphone, ville (zone de livraison), commune, quartier et avenue. */
+function adresseComplete(p, cfg) {
+  const x = estObjet(p) ? p : {}; const a = champsAdresse(x);
+  const zone = zoneDe(cfg, a.zoneId);
+  return !!(valider.nom(x.name) && valider.telephone(x.phone) && zone && !estRetrait(zone) && a.commune && a.quartier && a.avenue.length >= 2);
+}
+
 function zoneNettoyee(z, i) {
   const fee = Math.max(0, arrondi(z && z.fee)); const days = int(z && z.days);
   const pickup = z && typeof z.pickup === 'boolean' ? z.pickup : (!fee && !days);
   /* perKg : supplément par kilo du colis (poids renseigné sur les fiches), 0 = frais fixes. */
   const perKg = Math.max(0, arrondi(z && z.perKg));
-  return { id: String((z && z.id) || 'zone-' + (i + 1)).slice(0, 40), name: nettoyer(z && z.name, 40) || 'Zone ' + (i + 1), fee, days, pickup, perKg };
+  return { id: String((z && z.id) || 'zone-' + (i + 1)).slice(0, 40), name: nettoyer(z && z.name, 40) || 'Zone ' + (i + 1), fee, days, pickup, perKg, communes: communesNettoyees(z && z.communes) };
 }
 function config(brut) {
   const c = fusion(CONFIG_DEFAUT, estObjet(brut) ? brut : {});
@@ -455,7 +510,9 @@ function preparerCommande(opts) {
   const phone = valider.telephone(client.phone); if (!phone) stop('Numéro de téléphone invalide. Exemple : 099 123 4567.', 'phone');
   const zone = zoneDe(cfg, liv.zoneId); if (!zone) stop('Choisissez une zone de livraison.', 'zone');
   const retrait = estRetrait(zone);
-  const address = nettoyer(liv.address, 120); if (!retrait && address.length < 4) stop('Indiquez votre adresse de livraison.', 'address');
+  // Adresse détaillée (ville, commune, quartier, avenue, numéro) ; l'adresse écrite est composée si elle manque.
+  const lieu = champsAdresse(liv);
+  const address = nettoyer(liv.address, 160) || adresseTexte(lieu); if (!retrait && address.length < 4) stop('Indiquez votre adresse de livraison.', 'address');
   if (!Array.isArray(d.items) || !d.items.length) stop('Votre panier est vide.', 'panier');
   if (d.items.length > MAX_LIGNES) stop('Trop d’articles dans une seule commande.', 'panier');
   for (const it of d.items) { const q = Number(it && it.qty); if (!(q >= 1 && q <= MAX_QTE && Math.floor(q) === q)) stop('Quantité invalide dans le panier.', 'panier'); }
@@ -480,7 +537,8 @@ function preparerCommande(opts) {
   const doc = {
     number: opts.numero, createdAt: now, termsAcceptedAt: now, phone: chiffres(phone),
     customer: { name, phone },
-    shipping: { zoneId: zone.id, zoneName: zone.name, pickup: retrait, address: retrait ? '' : address, landmark: retrait ? '' : nettoyer(liv.landmark, 80) },
+    shipping: retrait ? { zoneId: zone.id, zoneName: zone.name, pickup: true, address: '', landmark: '' }
+      : { zoneId: zone.id, zoneName: zone.name, pickup: false, address, landmark: lieu.landmark, commune: lieu.commune, quartier: lieu.quartier, avenue: lieu.avenue, numero: lieu.numero },
     note: nettoyer(d.note, 300),
     items: dv.lignes.map((l) => { const o = Object.assign({}, l); delete o.available; return o; }),
     subtotal: dv.sousTotal, discount: dv.remise ? { code: dv.remise.code, amount: dv.remise.amount } : null,
@@ -757,7 +815,7 @@ const favorisCompte = (l) => (Array.isArray(l) ? l : []).map(String).filter((x, 
 /* Coordonnées de livraison et de paiement retenues pour les prochaines commandes. */
 function profilCompte(p) {
   const x = estObjet(p) ? p : {};
-  return { zoneId: nettoyer(x.zoneId, 40), address: nettoyer(x.address, 120), landmark: nettoyer(x.landmark, 80), payMethod: nettoyer(x.payMethod, 20), payPhone: valider.mobileMoney(x.payPhone) };
+  return Object.assign(champsAdresse(x), { address: nettoyer(x.address, 160), payMethod: nettoyer(x.payMethod, 20), payPhone: valider.mobileMoney(x.payPhone) });
 }
 /* Le compte : panier, favoris, coordonnées, et depuis quand chaque article est au panier ou en favori (« panier:<id> »). */
 function docCompte(d) {
@@ -788,7 +846,12 @@ function fusionCompte(compte, appareil) {
     return acc;
   }, []));
   const profil = profilCompte(a.profil);
-  Object.keys(c.profil).forEach((k) => { if (c.profil[k]) profil[k] = c.profil[k]; });
+  // L'adresse va d'un bloc : celle du compte si elle existe, sinon celle de l'appareil (jamais un mélange des deux).
+  const compteAAdresse = !!(c.profil.address || c.profil.avenue);
+  Object.keys(c.profil).forEach((k) => {
+    if (CHAMPS_ADRESSE.indexOf(k) >= 0) { if (compteAAdresse) profil[k] = c.profil[k]; }
+    else if (c.profil[k]) profil[k] = c.profil[k];
+  });
   return docCompte({ panier, favoris: c.favoris.concat(favorisCompte(a.favoris)), profil, dates });
 }
 
@@ -1113,6 +1176,7 @@ module.exports = {
   etapeCommande, reservationsAnciennes, incoherences, margeCommande,
   MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte,
   MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage,
+  COMMUNES_DEFAUT, communesNettoyees, communesDe, CHAMPS_ADRESSE, champsAdresse, adresseTexte, adresseComplete,
   evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification,
   MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee,
   RELANCE_PANIER_JOURS, relancePanier,
