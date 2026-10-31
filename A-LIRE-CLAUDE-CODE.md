@@ -30,7 +30,7 @@ serveur/scripts/            installer.sh, mise-a-jour.sh, service.sh, mot-de-pas
 demo/                       api-demo.js (serveur simulé dans le navigateur), index.html (page d'accueil de la démo)
 medias/photos/              photos d'exemple (ban-*, cat-*, pNN-* ; -s = petite taille), medias/marque/ (SVG des icônes), medias/marque/operateurs/ (logos d’origine des opérateurs ; versions web 144 px en WebP dans src/commun/marque/operateurs/, composant LogoOperateur)
 outils/                     construire.mjs, serveur-local.sh, charger-exemple.mjs, captures-manifeste.mjs, images-marque.mjs
-tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, comptes.mjs, partage.mjs, recherche.mjs, accessibilite.mjs, captures.mjs, demo.mjs, charge.mjs, sauvegarde.mjs,
+tests/                      *.test.js (npm test), serveur.test.mjs, parcours.mjs, comptes.mjs, partage.mjs, recherche.mjs, adresse.mjs, accessibilite.mjs, captures.mjs, demo.mjs, charge.mjs, sauvegarde.mjs,
                             faux services : flexpay-simule.mjs, codes-simule.mjs (WhatsApp, Twilio, Plivo), claude-simule.mjs
 ```
 
@@ -52,6 +52,7 @@ BASE=http://127.0.0.1:8091 node --test tests/serveur.test.mjs   # sur une base N
 node tests/flexpay-simule.mjs    # faux FlexPay sur :8099 (Mobile Money et carte), puis SOKOYETU_PAIEMENT=flexpay FLEXPAY_URL=http://127.0.0.1:8099/api/rest/v1 FLEXPAY_CARTE_URL=http://127.0.0.1:8099/v1.1/pay FLEXPAY_MARCHAND=SOKOYETU FLEXPAY_JETON=jeton-de-test-flexpay-0123456789 bash outils/serveur-local.sh
 node tests/parcours.mjs          # client (téléphone) + gérante (ordinateur), temps réel, stock
 node tests/partage.mjs           # partage du panier et d'un article : message, aperçu lu sans JavaScript, page, ajout au panier
+node tests/adresse.mjs           # adresse enregistrée : listes ville → commune → quartier, résumé, modification, commande, Mon compte
 node tests/recherche.mjs         # fautes, suggestions, populaires, liste de l'en-tête au clavier et accessible, recherche comptée
 node tests/push.mjs              # notifications du téléphone avec un faux service (SOKOYETU_PUSH_ESSAI=http://127.0.0.1:8099 au lancement du serveur ; commande en tête du fichier)
 node tests/accessibilite.mjs [clair|sombre]
@@ -80,6 +81,8 @@ Pour arrêter un serveur local : `ps -eo pid,args | awk '$2 ~ /pocketbase$/ {pri
 **Temps réel.** Une seule connexion SSE par onglet (`TempsReel` dans `api.js`). Admin : `col/*`. Boutique : catalogue + `orders/<id>?options={"query":{"t":…}}` pour le suivi.
 
 **Admin.** Enregistrement d'une fiche produit par fusion à trois voies (stock et ventes modifiés par une commande pendant l'édition ne sont pas écrasés). Garde des modifications non enregistrées dans le routeur. Commande **payée** (passage à `payment.status = paid` reçu en direct, hors confirmation manuelle) : toast, carillon (WebAudio), notification système (permission demandée dans Mon compte), compteur dans le titre et badge. Le fournisseur affiché vient de `GET /api/sokoyetu/etat` (`paiement`).
+
+**Adresse.** Enregistrée une fois dans le profil (appareil et compte) : `zoneId` (la ville, zone de livraison), `commune`, `quartier`, `avenue`, `numero`, `landmark`, `address` (composée par `regles.adresseTexte`). `regles.communesDe(zone)` donne les listes (réglées par zone dans `config.zones[].communes`, sinon `COMMUNES_DEFAUT` pour Bukavu et Goma). Commande : `composants/adresse.jsx`, résumé si `regles.adresseComplete`, sinon formulaire ; `profil.retrait` retient le retrait en boutique. `fusionCompte` prend l'adresse d'un bloc.
 
 **Recherche.** `src/commun/js/recherche.js` tourne dans le navigateur sur le catalogue chargé (`indexRecherche`, etat.js) : racines, son approximatif, distance de Damerau, synonymes (français, swahili, anglais, couleurs). `chercher` exige tous les mots (sinon « articles proches ») et, quand un mot est corrigé, renvoie les résultats de la recherche corrigée. Suggestions : `suggestions` (rayons, mots-clés, débuts de titres) et `populairesSures` (recherches des clients filtrées : mots du catalogue qui trouvent des articles). Comptage : `signalerRecherche` → `POST /api/sokoyetu/visite { a: 'recherche', q, n }` → table `sokoyetu_recherches` (jour, terme normalisé, appareil, texte, résultats) ; `GET /api/sokoyetu/recherches` (≥ 2 appareils en 30 jours, avec résultats) ; rapport dans `/api/sokoyetu/audience` (`recherches.trouvees`, `recherches.sansResultat`).
 

@@ -13,6 +13,7 @@ import { EnteteBoutique, EntetePage, Pied, Marque, ouvrirLivraisonPaiement } fro
 import { installable, installer, estIOS } from '../installation.jsx';
 import { Montants as MontantsDevis } from './commander.jsx';
 import { useSeo } from './commun.jsx';
+import { ouvrirAdresse } from '../composants/adresse.jsx';
 import { ActiverNotifications } from './notifications.jsx';
 import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, oublierNotifications } from '../notifications.js';
 import { messagesNonLus, oublierDiscussion } from '../discussion.js';
@@ -156,26 +157,6 @@ export function Merci() {
   );
 }
 
-function ouvrirProfil() {
-  let nom = profil.value.name || '', tel = profil.value.phone || '';
-  const id = ouvrirFeuille({
-    titre: 'Mes coordonnées',
-    contenu: () => (
-      <div class="formulaire">
-        <p class="attenue petit">{client.value ? 'Elles pré-remplissent vos prochaines commandes, sur tous vos appareils connectés à votre compte.' : 'Elles pré-remplissent vos prochaines commandes. Elles restent sur ce téléphone.'}</p>
-        <Champ libelle="Nom complet">{(a) => <input class="saisie" {...a} defaultValue={nom} onInput={(e) => { nom = e.currentTarget.value; }} autocomplete="name" />}</Champ>
-        <Champ libelle="Téléphone">{(a) => <input class="saisie" {...a} defaultValue={tel} onInput={(e) => { tel = e.currentTarget.value; }} type="tel" inputmode="tel" autocomplete="tel" placeholder="099 123 4567" />}</Champ>
-      </div>
-    ),
-    pied: () => <button class="btn btn-primaire btn-bloc" onClick={() => {
-      const n = nom.trim() ? R.valider.nom(nom) : ''; const t = tel.trim() ? R.valider.telephone(tel) : '';
-      if (nom.trim() && !n) { toast('Nom invalide (2 à 60 lettres)', { icone: 'alerte', ton: 'danger' }); return; }
-      if (tel.trim() && !t) { toast('Numéro invalide, ex. 099 123 4567', { icone: 'alerte', ton: 'danger' }); return; }
-      enregistrerProfil({ name: n, phone: t }); fermerFeuille(id); toast('Coordonnées enregistrées');
-    }}>Enregistrer</button>
-  });
-}
-
 function ouvrirInstallationIOS() {
   ouvrirFeuille({
     titre: 'Installer sur iPhone',
@@ -244,7 +225,7 @@ export function Compte() {
             <b>{(cl && cl.name) || pf.name || 'Bienvenue'}</b>
             <small>{cl ? <><span class="sans-coupure">{telephone(cl.phone) || cl.phone}</span> · <span class="ok-texte">connecté</span></> : pf.phone ? telephone(pf.phone) : 'Vos commandes sont suivies sur ce téléphone.'}</small>
           </div>
-          <button class="btn btn-secondaire btn-s profil-modifier" onClick={ouvrirProfil} aria-label={pf.phone || cl ? 'Modifier mes coordonnées' : 'Ajouter mes coordonnées'}><Icone n="crayon" /><span class="libelle">{pf.phone || cl ? 'Modifier' : 'Ajouter'}</span></button>
+          <button class="btn btn-secondaire btn-s profil-modifier" onClick={ouvrirAdresse} aria-label={R.adresseComplete(pf, c) ? 'Modifier mon adresse de livraison' : 'Ajouter mon adresse de livraison'}><Icone n="crayon" /><span class="libelle">{pf.phone || cl ? 'Modifier' : 'Ajouter'}</span></button>
         </section>
         {comptesOuverts.value && !cl ? <InvitationCompte titre="Créez votre compte" texte="Facultatif, gratuit, sans mot de passe. Vous pouvez aussi continuer à commander sans compte." retour="/compte" tel={pf.phone} /> : null}
         {enCours.length ? (
@@ -256,6 +237,7 @@ export function Compte() {
         ) : null}
         <div class="compte-grille">
           <div class="menu">
+            {item({ onClick: ouvrirAdresse, icone: 'repere', titre: 'Mon adresse de livraison', sous: R.adresseComplete(pf, c) ? `${R.adresseTexte(pf)}, ${(R.zoneDe(c, pf.zoneId) || {}).name || ''}` : 'Enregistrez-la une fois : elle servira pour toutes vos commandes' })}
             {item({ href: lien('/compte/commandes'), icone: 'recu', titre: 'Mes commandes', sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : 'Reçus, suivi et historique' })}
             {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
             {item({ href: lien('/discussion'), icone: 'bulle', titre: 'Écrire à la boutique', sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : 'Une question ? Réponse ici, dans l’application' })}

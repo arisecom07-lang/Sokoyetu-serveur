@@ -264,8 +264,10 @@ test('comptes clients : code, numéro international, fusion du panier et des fav
   const f = R.fusionCompte(compte, appareil);
   assert.deepEqual(f.panier.map((l) => [l.productId, l.qty]), [['robe', 3], ['montre', 1]]);
   assert.deepEqual(f.favoris, ['sac', 'montre']);
-  assert.equal(f.profil.zoneId, 'bukavu');
-  assert.equal(f.profil.address, 'Av. Lumumba 12');
+  // L'adresse va d'un bloc : le compte n'en avait pas, celle de l'appareil est gardée entière (ville comprise).
+  assert.deepEqual([f.profil.zoneId, f.profil.address], ['goma', 'Av. Lumumba 12']);
+  const avecAdresse = R.fusionCompte({ profil: { zoneId: 'bukavu', commune: 'Ibanda', quartier: 'Panzi', avenue: 'av. Kabila' } }, { profil: { zoneId: 'goma', commune: 'Karisimbi', avenue: 'av. des Volcans', payPhone: '0991234567' } });
+  assert.deepEqual([avecAdresse.profil.zoneId, avecAdresse.profil.commune, avecAdresse.profil.avenue, avecAdresse.profil.payPhone], ['bukavu', 'Ibanda', 'av. Kabila', '0991234567'], 'adresse du compte entière, numéro de paiement de l’appareil');
   assert.deepEqual(f.dates, { 'panier:robe': 5, 'favori:sac': 7 });
   const d = R.daterCompte(f, 100);
   assert.equal(d.dates['panier:robe'], 5);
@@ -528,4 +530,28 @@ test('fidélité : cadeau de bienvenue sans code promo, cagnotte jusqu’à la m
   assert.equal(R.texteNotification({ type: 'livree', details: { numero: 'K7P2QA' } }, 'fr').texte, 'Commande #K7P2QA remise. Merci pour votre confiance !');
   assert.equal(R.texteNotification({ type: 'parrainage', details: { filleul: 'Patrick B.', montant: 3 } }, 'fr').texte, 'Patrick B. a reçu sa première commande : $3.00 ajoutés à votre cagnotte.');
   assert.ok(R.peut('proprietaire', 'cagnotte') && !R.peut('vendeur', 'cagnotte'));
+});
+
+test('adresse enregistrée : communes de Bukavu et Goma, adresse écrite, adresse complète, commande', () => {
+  const c = R.config({});
+  const noms = (id) => R.communesDe(R.zoneDe(c, id)).map((x) => x.name);
+  assert.deepEqual(noms('bukavu'), ['Ibanda', 'Kadutu', 'Bagira']);
+  assert.deepEqual(noms('goma'), ['Goma', 'Karisimbi']);
+  assert.deepEqual(noms('retrait'), [], 'pas d’adresse pour un retrait en boutique');
+  assert.ok(R.communesDe(R.zoneDe(c, 'goma')).find((x) => x.name === 'Karisimbi').quartiers.includes('Katoyi'));
+  // Listes réglées par la boutique : elles remplacent celles par défaut ; doublons et vides écartés.
+  const propre = R.config({ zones: [{ id: 'uvira', name: 'Uvira', fee: 4, days: 2, communes: [{ name: 'Kalundu', quartiers: ['Kabindula', 'kabindula', ''] }, { name: 'kalundu' }, { name: '' }] }] });
+  assert.deepEqual(R.communesDe(propre.zones[0]), [{ name: 'Kalundu', quartiers: ['Kabindula'] }]);
+  // L'adresse telle que l'écrivent les livreurs.
+  assert.equal(R.adresseTexte({ avenue: 'av. Patrice Lumumba', numero: 'n° 12', quartier: 'Nyalukemba', commune: 'Ibanda' }), 'av. Patrice Lumumba n° 12, Q. Nyalukemba, C. Ibanda');
+  assert.equal(R.adresseTexte({ avenue: 'av. de la Mission', quartier: 'Panzi' }), 'av. de la Mission, Q. Panzi');
+  // Complète : nom, téléphone, ville livrée, commune, quartier, avenue.
+  const a = { name: 'Amani Bahati', phone: '0997654321', zoneId: 'bukavu', commune: 'Ibanda', quartier: 'Nyalukemba', avenue: 'av. Lumumba' };
+  assert.equal(R.adresseComplete(a, c), true);
+  for (const k of ['name', 'phone', 'commune', 'quartier', 'avenue']) assert.equal(R.adresseComplete({ ...a, [k]: '' }, c), false, k);
+  assert.equal(R.adresseComplete({ ...a, zoneId: 'retrait' }, c), false);
+  // La commande garde l'adresse détaillée et la compose si elle manque.
+  const cfg = R.config({ payments: { mpesa: { enabled: true } }, payment: { provider: 'simulation' } });
+  const o = R.preparerCommande({ cfg, produit, numero: 'SK-1', saisie: { termsAccepted: true, customer: { name: 'Amani Bahati', phone: '0997654321' }, shipping: { zoneId: 'bukavu', commune: 'Ibanda', quartier: 'Nyalukemba', avenue: 'av. Lumumba', numero: '12', landmark: 'pharmacie' }, items: [{ productId: 'sac', qty: 1 }], payment: { method: 'mpesa', phone: '0997654321' }, total: R.devis({ cfg, produit, lignes: [{ productId: 'sac', qty: 1 }], zoneId: 'bukavu' }).total } }).commande;
+  assert.deepEqual([o.shipping.address, o.shipping.commune, o.shipping.quartier, o.shipping.numero, o.shipping.landmark], ['av. Lumumba n° 12, Q. Nyalukemba, C. Ibanda', 'Ibanda', 'Nyalukemba', '12', 'pharmacie']);
 });

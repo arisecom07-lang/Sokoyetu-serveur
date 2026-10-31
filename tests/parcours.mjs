@@ -54,8 +54,8 @@ etape('article ajouté au panier, création de compte proposée, commande ouvert
 await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.champ-erreur');
 etape('étape 1 vide : erreurs affichées près des champs');
 await client.fill('input[autocomplete="name"]', 'Amani Bahati'); await client.fill('input[type=tel]', '0997654321');
-await client.click('[aria-label="Zone de livraison"] .choix >> nth=0');
-await client.fill('input[autocomplete="street-address"]', 'Nguba, av. de la Mission 7');
+await client.getByLabel('Commune').selectOption('Ibanda'); await client.getByLabel('Quartier', { exact: true }).selectOption('Nyalukemba');
+await client.getByLabel('Avenue ou rue').fill('av. de la Mission'); await client.getByLabel('Numéro').fill('7');
 await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Opérateur Mobile Money"]');
 etape('étape 1 : coordonnées et livraison');
 

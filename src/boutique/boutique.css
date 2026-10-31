@@ -857,3 +857,14 @@ a.gain-cagnotte:hover { background: var(--surface-3); }
 @media (min-width: 900px) {
   .cagnotte-grille { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: var(--e5); }
 }
+
+/* ---------- Adresse de livraison enregistrée : résumé et formulaire (ville, commune, quartier en listes) ---------- */
+.titre-avec-bouton { gap: var(--e3); margin-bottom: var(--e3); }
+.titre-avec-bouton .carte-titre { margin: 0; min-width: 0; }
+.titre-avec-bouton .btn { flex: none; }
+.adresse-texte { line-height: 1.5; }
+.adresse-texte p { margin-top: 3px; color: var(--encre-2); overflow-wrap: anywhere; }
+.ligne-avenue { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: var(--e3); align-items: end; }
+.ligne-avenue > .champ { align-content: start; }
+@media (max-width: 380px) { .formulaire-adresse .deux-colonnes { grid-template-columns: 1fr; } }
+
