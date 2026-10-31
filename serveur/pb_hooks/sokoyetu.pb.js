@@ -379,6 +379,15 @@ routerAdd('POST', '/api/sokoyetu/visite', (e) => {
   return e.noContent(204);
 }, LIMITE.commande);
 
+// Recherches populaires (mots seulement, sans accents) : lues à l'ouverture de la recherche, gardées une heure par le navigateur.
+routerAdd('GET', '/api/sokoyetu/recherches', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  let termes = [];
+  try { termes = require(`${__hooks}/lib/audience.js`).populaires(e.app); } catch (err) { S.trace('warn', 'Recherches populaires indisponibles', { module: 'audience', erreur: String(err) }); }
+  e.response.header().set('Cache-Control', 'public, max-age=3600');
+  return e.json(200, { termes });
+});
+
 // Chaque nuit : compteurs de plus de 90 jours effacés.
 cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/audience.js`).purger($app);

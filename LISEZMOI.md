@@ -221,6 +221,7 @@ La clé reste sur le serveur, dans un fichier lisible par l'administrateur du se
 
 - **Boutique** : dans Chrome sur Android, la boutique propose **Installer l'application**. Elle s'ouvre ensuite comme une application, reste rapide avec une connexion faible et affiche une page hors connexion.
 - **Administration** : ouvrez https://admin.sokoyakwetu.com dans Chrome → menu ⋮ → **Ajouter à l'écran d'accueil**. Dans **Plus → Mon compte → Alertes de commande payée**, activez le son et les notifications : une commande payée s'annonce même quand l'onglet est en arrière-plan, avec le nombre de commandes à préparer dans le titre (et sur l'icône quand le téléphone le permet).
+- **Recherche** : elle comprend les fautes (« monter » → montre, « chosure » → chaussures) et des mots swahili ou anglais (« saa », « viatu », « bag »), et propose des suggestions pendant la frappe et les recherches populaires de vos clients. Dans **Audience → Ce que vos clients cherchent**, vous voyez les recherches sans résultat : des articles à proposer, ou un mot à ajouter aux **mots-clés** d'un article.
 - **Partager** : sur la fiche d'un article, le bouton **Partager** envoie son lien ; dans le panier, **Partager** envoie tout le panier (articles, quantités, couleurs et tailles, aucune donnée personnelle). Dans WhatsApp ou Facebook, le lien s'affiche avec une image d'aperçu : le logo de la boutique et la photo de l'article, faite toute seule quand vous enregistrez l'article. La personne qui ouvre un panier partagé voit les prix et le stock du jour, puis touche **Ajouter au panier**.
 - **Google Play** (plus tard) : créez l'application avec PWABuilder à partir de https://sokoyakwetu.com, puis reliez-la au site avec `sudo /opt/sokoyetu/android.sh 'EMPREINTE:SHA256'` (empreinte fournie par PWABuilder et la Play Console).
 
@@ -271,6 +272,6 @@ npm test             # règles métier, icônes, import, cadrage des photos, sig
 bash outils/serveur-local.sh   # vrai serveur local (paiement en mode test) : http://localhost:8090 et http://admin.localhost:8090
 ```
 
-Autres essais (serveur local lancé) : `tests/serveur.test.mjs` (routes du serveur), `tests/parcours.mjs`, `tests/comptes.mjs` et `tests/partage.mjs` (vrais navigateurs), `tests/push.mjs` (notifications du téléphone, avec un faux service de notification), `tests/accessibilite.mjs clair|sombre`, `tests/charge.mjs` (visiteurs simultanés), `tests/sauvegarde.mjs` (sauvegarde et restauration), `tests/demo.mjs` (démo construite). La commande de chacun est en tête du fichier.
+Autres essais (serveur local lancé) : `tests/serveur.test.mjs` (routes du serveur), `tests/parcours.mjs`, `tests/comptes.mjs`, `tests/partage.mjs` et `tests/recherche.mjs` (vrais navigateurs), `tests/push.mjs` (notifications du téléphone, avec un faux service de notification), `tests/accessibilite.mjs clair|sombre`, `tests/charge.mjs` (visiteurs simultanés), `tests/sauvegarde.mjs` (sauvegarde et restauration), `tests/demo.mjs` (démo construite). La commande de chacun est en tête du fichier.
 
 Le détail technique (architecture, tests, conventions) est dans `A-LIRE-CLAUDE-CODE.md`.

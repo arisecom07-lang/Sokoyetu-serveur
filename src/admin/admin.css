@@ -154,6 +154,8 @@ a.kpi:active { transform: scale(.985); }
 /* Listes dans une carte : les lignes vont d'un bord à l'autre */
 .liste.sans-bord { border: 0; border-radius: 0; box-shadow: none; background: transparent; margin: 0 calc(-1 * var(--e5)) calc(-1 * var(--e2)); }
 .liste.sans-bord .ligne { padding-left: var(--e5); padding-right: var(--e5); }
+/* Sous-titre dans une carte (Audience → Ce que vos clients cherchent). */
+.sous-titre-carte { font-size: var(--t-m); font-weight: 720; color: var(--encre); margin-bottom: 2px; }
 .carte-titre a.fin { color: var(--marque-texte); font-weight: 700; }
 .ligne-vignette .media, .ligne-vignette .media-vide { border-radius: inherit; }
 .ligne-vignette.grande { width: 58px; height: 58px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px var(--ligne); }

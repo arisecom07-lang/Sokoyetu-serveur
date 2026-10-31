@@ -1,6 +1,7 @@
 // Sokoyetu (administration) — produits : liste et fiche (photos cadrées par l'assistant, vidéo, assistant IA, import par lien, prix et marge, variantes, stock, rayons).
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
+import RS from '../../commun/js/recherche.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Photo, compresser, taille } from '../../commun/js/medias.jsx';
 import { envoyerPhoto, urlFichierServeur } from '../../commun/js/api.js';
@@ -37,7 +38,10 @@ export function Produits() {
   const [q, setQ] = useState('');
   const ps = produits.value; const fn = (FILTRES.find((x) => x[0] === filtre) || FILTRES[0])[2];
   const mots = normaliser(q).split(/\s+/).filter(Boolean);
-  const liste = ps.filter(fn).filter((p) => !mots.length || mots.every((m) => normaliser([p.title, p.sku, p.tags].join(' ')).includes(m)));
+  // Recherche tolérante aux fautes (comme dans la boutique), plus la référence (SKU) écrite telle quelle.
+  const index = useMemo(() => RS.indexer(ps, (p) => (p.collectionIds || []).map((id) => (rayons.value.find((r) => r.id === id) || {}).name)), [ps, rayons.value]);
+  const proches = useMemo(() => (mots.length ? new Set(RS.chercher(index, q).resultats.map((x) => x.p.id)) : null), [index, q]);
+  const liste = ps.filter(fn).filter((p) => !mots.length || mots.every((m) => normaliser([p.title, p.sku, p.tags].join(' ')).includes(m)) || proches.has(p.id));
   const ia = etatServeur.value.ia;
   const page = useParPage(liste, 50, filtre + '|' + q);
   useEffect(() => { chargerAttentes(); }, []);

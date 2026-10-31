@@ -6,6 +6,7 @@
  *   sokoyetu_visiteurs  une ligne par appareil et par jour (dernière activité, article affiché, nombre d'articles vus)
  *   sokoyetu_articles   une ligne par appareil, article et jour (vues, ajouts au panier, ajouts aux favoris)
  *   sokoyetu_etats      ce qui est en ce moment dans chaque panier et chaque liste de favoris
+ *   sokoyetu_recherches une ligne par jour, mot cherché et appareil, avec le nombre d'articles trouvés
  * Tout est effacé au bout de GARDE_JOURS jours. Les jours suivent l'heure de Bukavu et Goma (UTC+2).
  */
 const FUSEAU = 2 * 3600e3;
@@ -13,21 +14,37 @@ const JOUR = 864e5;
 const EN_LIGNE = 90e3;      // la boutique se signale toutes les 45 s tant qu'elle est à l'écran
 const GARDE_JOURS = 90;
 const MAX_ETAT = 60;
+const RECHERCHE_JOURS = 30;   // recherches populaires : les 30 derniers jours
 
 const ID_VISITEUR = /^[a-z0-9]{16,40}$/;
 const ID_PRODUIT = /^[a-z0-9-]{2,40}$/;
 const ROBOT = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|preview|headless|lighthouse|curl|wget|python|java\//i;
 
 const jour = (t) => new Date(t + FUSEAU).toISOString().slice(0, 10);
+/*
+ * Mot cherché tel qu'il est compté : sans accents, majuscules ni ponctuation, 2 à 40 caractères, 6 mots au plus.
+ * Jamais un numéro de téléphone : une recherche qui contient 7 chiffres ou plus n'est pas gardée.
+ */
+function termeRecherche(q) {
+  const t = String(q == null ? '' : q).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (t.length < 2 || t.length > 40 || t.split(' ').length > 6 || (t.match(/[0-9]/g) || []).length >= 7) return '';
+  return t;
+}
+const texteRecherche = (q) => String(q == null ? '' : q).replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 60);
+
 const listeIds = (l) => (Array.isArray(l) ? l : []).map(String).filter((x) => ID_PRODUIT.test(x)).filter((x, i, a) => a.indexOf(x) === i).slice(0, MAX_ETAT);
 
-/* Ce que la boutique annonce : { v, p (article à l'écran), a (vue | panier | favori), panier: [ids], favoris: [ids] }. */
+/*
+ * Ce que la boutique annonce : { v, p (article à l'écran), a (vue | panier | favori | recherche), panier: [ids], favoris: [ids] }
+ * et, pour une recherche, q (le texte cherché) et n (le nombre d'articles trouvés).
+ */
 function enregistrer(app, b, agent) {
   const v = String((b && b.v) || '');
   if (!ID_VISITEUR.test(v) || ROBOT.test(String(agent || ''))) return false;
   const now = Date.now(); const j = jour(now);
   const p = ID_PRODUIT.test(String(b.p || '')) ? String(b.p) : '';
   const a = ['vue', 'panier', 'favori'].indexOf(b.a) >= 0 && p ? b.a : '';
+  const q = b.a === 'recherche' ? termeRecherche(b.q) : '';
   app.runInTransaction((tx) => {
     const db = tx.db();
     db.newQuery(`INSERT INTO sokoyetu_visiteurs (jour, visiteur, vu, vues, produit) VALUES ({:j}, {:v}, {:t}, {:n}, {:p})
@@ -37,6 +54,11 @@ function enregistrer(app, b, agent) {
       db.newQuery(`INSERT INTO sokoyetu_articles (jour, produit, visiteur, vues, panier, favori) VALUES ({:j}, {:p}, {:v}, {:vu}, {:pa}, {:fa})
         ON CONFLICT (jour, produit, visiteur) DO UPDATE SET vues = vues + excluded.vues, panier = panier + excluded.panier, favori = favori + excluded.favori`)
         .bind({ j, p, v, vu: a === 'vue' ? 1 : 0, pa: a === 'panier' ? 1 : 0, fa: a === 'favori' ? 1 : 0 }).execute();
+    }
+    if (q) {
+      db.newQuery(`INSERT INTO sokoyetu_recherches (jour, terme, visiteur, texte, resultats, vu) VALUES ({:j}, {:q}, {:v}, {:x}, {:n}, {:t})
+        ON CONFLICT (jour, terme, visiteur) DO UPDATE SET texte = excluded.texte, resultats = excluded.resultats, vu = excluded.vu`)
+        .bind({ j, q, v, x: texteRecherche(b.q), n: Math.max(0, Math.min(9999, parseInt(b.n, 10) || 0)), t: now }).execute();
     }
     for (const [type, cle] of [['panier', 'panier'], ['favori', 'favoris']]) {
       if (!Array.isArray(b[cle])) continue;
@@ -87,8 +109,20 @@ function resume(app, jours, graphe) {
   lignes(app, "SELECT produit, COUNT(DISTINCT visiteur) AS n FROM sokoyetu_visiteurs WHERE vu > {:r} AND produit != '' GROUP BY produit", { produit: '', n: 0 }, { r: recent })
     .forEach((x) => { fiche(x.produit).enLigne = x.n; });
 
+  // Recherches de la période : les plus fréquentes (appareils différents), avec ce qu'elles trouvaient la dernière fois.
+  const recherches = lignes(app, `SELECT terme, COUNT(DISTINCT visiteur) AS visiteurs, COUNT(*) AS fois, MAX(vu) AS vu,
+      (SELECT r2.texte FROM sokoyetu_recherches r2 WHERE r2.terme = r.terme ORDER BY r2.vu DESC LIMIT 1) AS texte,
+      (SELECT r2.resultats FROM sokoyetu_recherches r2 WHERE r2.terme = r.terme ORDER BY r2.vu DESC LIMIT 1) AS resultats
+    FROM sokoyetu_recherches r WHERE jour >= {:d} GROUP BY terme ORDER BY visiteurs DESC, vu DESC LIMIT 300`,
+  { terme: '', visiteurs: 0, fois: 0, vu: 0, texte: '', resultats: 0 }, { d: P.debut });
+
   return {
     maintenant: P.now, periode: P.n,
+    recherches: {
+      visiteurs: nombre(app, 'SELECT COUNT(DISTINCT visiteur) AS n FROM sokoyetu_recherches WHERE jour >= {:d}', { d: P.debut }),
+      trouvees: recherches.filter((x) => x.resultats > 0).slice(0, 15),
+      sansResultat: recherches.filter((x) => !x.resultats).slice(0, 15)
+    },
     enLigne: nombre(app, 'SELECT COUNT(DISTINCT visiteur) AS n FROM sokoyetu_visiteurs WHERE vu > {:r}', { r: recent }),
     visiteurs: nombre(app, 'SELECT COUNT(DISTINCT visiteur) AS n FROM sokoyetu_visiteurs WHERE jour >= {:d}', { d: P.debut }),
     nouveaux: P.jours.reduce((a, j) => a + (nouveaux[j] || 0), 0),
@@ -123,13 +157,26 @@ function article(app, id, jours, graphe) {
   return r;
 }
 
+/*
+ * Recherches fréquentes des 30 derniers jours, proposées dans la boutique : faites par au moins deux appareils et qui
+ * trouvaient des articles la dernière fois. La boutique ne montre ensuite que celles dont les mots sont au catalogue.
+ */
+function populaires(app) {
+  const debut = jour(Date.now() - (RECHERCHE_JOURS - 1) * JOUR);
+  return lignes(app, `SELECT terme, COUNT(DISTINCT visiteur) AS visiteurs,
+      (SELECT r2.resultats FROM sokoyetu_recherches r2 WHERE r2.terme = r.terme ORDER BY r2.vu DESC LIMIT 1) AS resultats
+    FROM sokoyetu_recherches r WHERE jour >= {:d} GROUP BY terme HAVING COUNT(DISTINCT visiteur) >= 2 ORDER BY visiteurs DESC, MAX(vu) DESC LIMIT 40`,
+  { terme: '', visiteurs: 0, resultats: 0 }, { d: debut }).filter((x) => x.resultats > 0).slice(0, 12).map((x) => x.terme);
+}
+
 /* Chaque nuit : ce qui a plus de GARDE_JOURS jours disparaît, ainsi que les paniers et favoris des appareils disparus. */
 function purger(app) {
   const limite = jour(Date.now() - GARDE_JOURS * JOUR);
   const db = app.db();
   db.newQuery('DELETE FROM sokoyetu_visiteurs WHERE jour < {:l}').bind({ l: limite }).execute();
   db.newQuery('DELETE FROM sokoyetu_articles WHERE jour < {:l}').bind({ l: limite }).execute();
+  db.newQuery('DELETE FROM sokoyetu_recherches WHERE jour < {:l}').bind({ l: limite }).execute();
   db.newQuery('DELETE FROM sokoyetu_etats WHERE visiteur NOT IN (SELECT DISTINCT visiteur FROM sokoyetu_visiteurs)').execute();
 }
 
-module.exports = { enregistrer, resume, article, purger, jour, GARDE_JOURS };
+module.exports = { enregistrer, resume, article, populaires, purger, jour, termeRecherche, GARDE_JOURS };

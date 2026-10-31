@@ -3,6 +3,7 @@ import { signal, computed, batch, effect } from '@preact/signals';
 import R from '../commun/js/regles.js';
 import { requete, lireCatalogue, TempsReel, versLigne, Auth, prolongerSession } from '../commun/js/api.js';
 import { Local, Session } from '../commun/js/stockage.js';
+import RS from '../commun/js/recherche.js';
 
 /* Reprise des données de l'ancienne version de la boutique (même appareil). */
 (function reprendre() {
@@ -210,6 +211,21 @@ export function memoriserRecherche(q) {
   Local.ecrire('recherches', recherches.value);
 }
 export function effacerRecherches() { recherches.value = []; Local.ecrire('recherches', []); }
+
+/* ---------- Recherche : index du catalogue (refait quand il change) et recherches populaires des clients ---------- */
+
+export const indexRecherche = computed(() => {
+  const m = rayonsParId.value;
+  return RS.indexer(produits.value, (p) => (p.collectionIds || []).map((id) => (m.get(id) || {}).name));
+});
+export const recherchesPopulaires = signal([]);
+let populairesLues = false;
+/* Lues une fois par visite, à l'ouverture de la recherche (le navigateur les garde une heure). */
+export async function chargerPopulaires() {
+  if (populairesLues) return; populairesLues = true;
+  try { const r = await requete('sokoyetu/recherches', { essais: 0 }); recherchesPopulaires.value = Array.isArray(r && r.termes) ? r.termes.map(String) : []; }
+  catch (e) { populairesLues = false; }
+}
 
 /* ---------- Commandes passées depuis cet appareil ---------- */
 

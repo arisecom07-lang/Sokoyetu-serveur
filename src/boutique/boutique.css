@@ -75,6 +75,33 @@ html:not(.vt) .appli { animation: fondu var(--moyen) ease both; }
 .recherche-mobile .btn-icone { width: 38px; height: 38px; }
 .recherche-page { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 18px; border-radius: var(--r-rond); background: var(--surface); border: 1px solid var(--ligne-2); box-shadow: var(--ombre-1); margin-top: var(--e5); }
 .recherche-page .ic { color: var(--encre-3); }
+/* Champ de recherche : le contour de saisie est porté par la pilule entière (un seul contour, arrondi). */
+.recherche-mobile, .recherche-page { transition: border-color var(--rapide), box-shadow var(--rapide); }
+.recherche-mobile:focus-within, .recherche-page:focus-within { border-color: var(--marque); box-shadow: 0 0 0 3px color-mix(in srgb, var(--marque) 18%, transparent); }
+.recherche-mobile input:focus-visible, .recherche-ordi input:focus-visible, .recherche-page input:focus-visible { outline: none; }
+/* Recherche : puces de suggestions (une ligne qui défile sur téléphone), recherche comprise quand un mot a été corrigé. */
+.puces-suggestions { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: var(--e3) calc(-1 * var(--gouttiere)) 0; padding: 2px var(--gouttiere); }
+.puces-suggestions::-webkit-scrollbar { display: none; }
+.puces-suggestions .puce { font-weight: 600; }
+.puces-suggestions .puce b, .sug-texte b { font-weight: 750; color: var(--encre); }
+.recherche-correction { color: var(--encre-2); }
+.recherche-correction b { color: var(--encre); font-weight: 750; }
+/* Liste des suggestions sous le champ de l'en-tête (ordinateur). */
+.recherche-ordi { position: relative; }
+.suggestions-ordi { position: absolute; z-index: 60; top: calc(100% + 8px); left: 0; width: max(100%, 420px); max-height: min(70vh, 560px); overflow-y: auto; padding: 8px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--ligne); box-shadow: var(--ombre-3); }
+.suggestions-ordi[hidden] { display: none; }
+.sug-groupe + .sug-groupe { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--ligne); }
+.sug-titre { padding: 6px 10px 4px; font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); }
+.sug-option { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 6px 10px; border-radius: var(--r-m); color: var(--encre-2); font-size: 14.5px; cursor: pointer; }
+.sug-option .ic { --ic: 17px; flex: none; color: var(--encre-3); }
+.sug-option[aria-selected="true"] { background: var(--surface-2); color: var(--encre); }
+.sug-texte { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sug-vignette { flex: none; width: 40px; height: 50px; border-radius: 8px; overflow: hidden; background: var(--surface-2); position: relative; }
+.sug-vignette .media, .sug-vignette .media-vide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sug-article .sug-texte { color: var(--encre); font-weight: 600; }
+.sug-prix { flex: none; font-weight: 750; color: var(--encre); font-variant-numeric: tabular-nums; }
+.sug-tout { color: var(--marque-texte); font-weight: 650; }
+.sug-tout .ic { color: currentColor; }
 
 /* ---------- Navigation du bas, barre d'action ---------- */
 .barre-action { position: fixed; z-index: 35; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--ligne); box-shadow: var(--ombre-haut); padding: 10px var(--gouttiere-d) calc(10px + env(safe-area-inset-bottom, 0px)) var(--gouttiere); }

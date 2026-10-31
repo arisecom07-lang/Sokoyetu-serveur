@@ -8,6 +8,8 @@ const axe = await readFile(require.resolve('axe-core/axe.min.js'), 'utf8');
 const BASE = process.env.BASE || 'http://localhost:8090';
 const ADMIN = process.env.ADMIN || 'http://admin.localhost:8090';
 const theme = process.argv[2] || 'clair';
+// Un client par thème : le passage en thème sombre retrouve des articles à noter (le thème clair a déjà donné son avis).
+const TEL = theme === 'sombre' ? '0991231244' : '0991231234';
 
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'fr-FR', reducedMotion: 'reduce', bypassCSP: true });
@@ -26,6 +28,7 @@ await controler('Boutique · accueil', BASE + '/', '.carte-produit');
 await controler('Boutique · rayons', BASE + '/categories', '.page');
 await controler('Boutique · produit', BASE + '/p/ex-p08/chemise-en-chambray', '.produit-titre');
 await controler('Boutique · recherche', BASE + '/recherche?q=sac', '.page');
+await controler('Boutique · recherche corrigée et suggestions', BASE + '/recherche?q=monter', '.recherche-correction');
 await controler('Boutique · panier', BASE + '/panier', '.page', async () => { });
 await controler('Boutique · panier partagé', BASE + '/panier/partage?a=ex-p09:2:Bleu:L&a=ex-p03&a=ex-p07&a=ex-p01:3::XL&a=article-retire', '.ligne-recue');
 await controler('Boutique · fenêtre de partage', BASE + '/p/ex-p03/sac-bandouliere-en-cuir-camel', '.produit-titre', async () => { await p.click('button[aria-label="Partager cet article"]'); await p.waitForSelector('.partage-choix'); });
@@ -36,7 +39,7 @@ async function commande(payeur, method = 'mpesa') {
   const items = [{ productId: 'ex-p15', qty: 1 }];
   const dv = await (await fetch(BASE + '/api/sokoyetu/devis', json({ items, zoneId: 'retrait' }))).json();
   const t = 'axe' + Date.now() + Math.random().toString(16).slice(2, 12) + 'abcdefghij';
-  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: '0991231234' }, shipping: { zoneId: 'retrait' }, items, payment: { method, phone: payeur }, total: dv.total }))).json();
+  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: TEL }, shipping: { zoneId: 'retrait' }, items, payment: { method, phone: payeur }, total: dv.total }))).json();
   return { id: r.id, t };
 }
 const jetonAdmin = (await (await fetch(BASE + '/api/collections/admins/auth-with-password', json({ identity: 'admin@sokoyetu.test', password: 'Sokoyetu-2026' }))).json()).token;
@@ -46,7 +49,7 @@ const config = (await (await fetch(BASE + '/api/collections/config/records/store
 await reglages({ ...config, payments: { ...config.payments, carte: { enabled: true } }, loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } });
 const article = await (await fetch(BASE + '/api/collections/products/records/ex-p15', { headers: { Authorization: jetonAdmin } })).json();
 await fetch(BASE + '/api/collections/products/records/ex-p15', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc: { ...article.doc, stock: 10 } }) });
-const payee = await commande('0991231234'); const refusee = await commande('0991230000'); const parCarte = await commande('', 'carte');
+const payee = await commande(TEL); const refusee = await commande('0991230000'); const parCarte = await commande('', 'carte');
 await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee, parCarte]);
 await controler('Boutique · commande : avec ou sans compte', BASE + '/commander', '.page-choix-compte');
 await controler('Boutique · créer un compte', BASE + '/compte/connexion?pour=commande&retour=/commander', '.page-connexion');
@@ -55,7 +58,7 @@ await controler('Boutique · code de connexion', BASE + '/compte/connexion?retou
 });
 await p.evaluate(() => sessionStorage.setItem('sokoyetu:sansCompte', 'true'));
 await controler('Boutique · commande, paiement', BASE + '/commander', '.page-commande', async () => {
-  await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
+  await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', TEL); await p.click('.choix >> text=Retrait');
   await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement');
 });
 await controler('Boutique · commande, paiement par carte', BASE + '/commander', '.page-commande', async () => {
@@ -81,7 +84,7 @@ await p.fill('.formulaire-avis textarea', 'Bon son, facile à brancher.'); await
 await controler('Boutique · avis sur l’article', BASE + '/p/ex-p15/enceinte-de-bureau-bluetooth', '#avis .avis');
 // Cagnotte : le client de la commande livrée se connecte (code affiché à l'écran, mode test) et retrouve son gain.
 await p.goto(BASE + '/compte/connexion?retour=/compte/cagnotte'); await p.waitForSelector('.page-connexion input[type=tel]');
-await p.fill('input[type=tel]', '0991231234'); await p.click('button[type=submit]'); await p.waitForSelector('.saisie-otp');
+await p.fill('input[type=tel]', TEL); await p.click('button[type=submit]'); await p.waitForSelector('.saisie-otp');
 await p.fill('.saisie-otp', (await p.locator('.page-connexion .note .code').innerText()).trim());
 await p.waitForSelector('.page-connexion input[autocomplete="name"], .page-cagnotte');
 if (await p.locator('.page-connexion input[autocomplete="name"]').count()) { await p.fill('.page-connexion input[autocomplete="name"]', 'Essai Accès'); await p.click('.page-connexion button[type=submit]'); }
@@ -89,7 +92,7 @@ await p.waitForSelector('.page-connexion', { state: 'detached' });
 await controler('Boutique · ma cagnotte', BASE + '/compte/cagnotte', '.cagnotte-mouvements');
 const codeParrain = (await p.locator('.parrainage-code .code').innerText()).trim();
 await controler('Boutique · commande avec la cagnotte', BASE + '/commander', '.page-commande', async () => {
-  await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
+  await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', TEL); await p.click('.choix >> text=Retrait');
   await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-fidelite .case'); await p.click('.carte-fidelite .case'); await p.waitForSelector('.montants dt:text("Ma cagnotte")');
 });
 await controler('Boutique · lien de parrainage', BASE + '/?parrain=' + codeParrain, '.feuille .cadeau-bienvenue');
@@ -103,8 +106,8 @@ await controler('Admin · fiche produit', ADMIN + '/#/produits/ex-p08', '.grille
 await controler('Admin · réglages paiements', ADMIN + '/#/reglages/paiements', '.operateur-tete');
 await controler('Admin · compte', ADMIN + '/#/compte', '.menu');
 await controler('Admin · clients', ADMIN + '/#/clients', '.page, .liste');
-await controler('Admin · fiche client et cagnotte', ADMIN + '/#/clients/0991231234', '.liste-simple');
-await controler('Admin · offrir à la cagnotte', ADMIN + '/#/clients/0991231234', '.liste-simple', async () => { await p.click('button:has-text("Offrir")'); await p.waitForSelector('.feuille input[inputmode="decimal"]'); });
+await controler('Admin · fiche client et cagnotte', ADMIN + '/#/clients/' + TEL, '.liste-simple');
+await controler('Admin · offrir à la cagnotte', ADMIN + '/#/clients/' + TEL, '.liste-simple', async () => { await p.click('button:has-text("Offrir")'); await p.waitForSelector('.feuille input[inputmode="decimal"]'); });
 await p.keyboard.press('Escape'); await p.waitForSelector('.feuille', { state: 'detached' });
 await controler('Admin · réglages fidélité et parrainage', ADMIN + '/#/reglages/general', 'h2:has-text("Fidélité et parrainage")');
 await controler('Admin · messages des clients', ADMIN + '/#/messages', '.ligne-discussion', async () => { await p.click('.ligne-discussion >> nth=0'); await p.waitForSelector('.messagerie-fil .bulle'); });
