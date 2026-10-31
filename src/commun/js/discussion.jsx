@@ -1,14 +1,13 @@
 // Sokoyetu — fil d'une discussion entre un client et la boutique (boutique et administration) : bulles, jours, heures, « Vu ».
 import { Fragment } from 'preact';
 import { classes, date, debutJour, JOUR } from './outils.js';
-import { t, locale } from './langue.js';
 
-const heure = (quand) => new Date(quand).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
-function jour(quand) {
-  const j = debutJour(quand), auj = debutJour(Date.now());
-  if (j === auj) return t('Aujourd’hui');
-  if (j === debutJour(auj - JOUR / 2)) return t('Hier');
-  return date(quand, { weekday: 'long', day: 'numeric', month: 'long', ...(new Date(quand).getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+const heure = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+function jour(t) {
+  const j = debutJour(t), auj = debutJour(Date.now());
+  if (j === auj) return 'Aujourd’hui';
+  if (j === debutJour(auj - JOUR / 2)) return 'Hier';
+  return date(t, { weekday: 'long', day: 'numeric', month: 'long', ...(new Date(t).getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
 }
 
 /*
@@ -21,7 +20,7 @@ export function FilMessages({ messages, moi, lu, autre, piece, signature }) {
   let dernierMien = -1;
   messages.forEach((m, i) => { if (m.auteur === moi && !m.envoi) dernierMien = i; });
   return (
-    <ol class="fil-messages" aria-label={t('Messages')}>
+    <ol class="fil-messages" aria-label="Messages">
       {messages.map((m, i) => {
         const j = debutJour(m.cree); const nouveauJour = j !== jourPrecedent; jourPrecedent = j;
         const mien = m.auteur === moi; const s = signature ? signature(m) : '';
@@ -30,10 +29,10 @@ export function FilMessages({ messages, moi, lu, autre, piece, signature }) {
           <Fragment key={m.id}>
             {nouveauJour ? <li class="fil-jour"><span>{jour(m.cree)}</span></li> : null}
             <li class={classes('bulle', mien ? 'bulle-moi' : 'bulle-autre', m.envoi && 'en-envoi')}>
-              <span class="sr">{mien ? t('Vous') : autre} : </span>
+              <span class="sr">{mien ? 'Vous' : autre} : </span>
               {piece ? piece(m) : null}
               <p>{m.texte}</p>
-              <small>{s ? s + ' · ' : ''}{m.envoi ? t('Envoi…') : heure(m.cree)}{vu ? t(' · Vu') : ''}</small>
+              <small>{s ? s + ' · ' : ''}{m.envoi ? 'Envoi…' : heure(m.cree)}{vu ? ' · Vu' : ''}</small>
             </li>
           </Fragment>
         );

@@ -9,7 +9,7 @@ import { dollars, dateHeure, telephone, lienWhatsApp, pluriel, copier, classes }
 import { lien, route, naviguer } from '../routeur.js';
 import { cfg, commandes, suivis, commandesChargees, actualiserMesCommandes, suivreCommande, jetonDe, profil, enregistrerProfil, favoris, effacerAppareil, produitsParId, retrouverCommande, remettreAuPanier, client, comptesOuverts, chargerCompte, seDeconnecterCompte, supprimerCompte } from '../etat.js';
 import { InvitationCompte } from './connexion.jsx';
-import { EnteteBoutique, EntetePage, Pied, Marque, ouvrirLivraisonPaiement, ouvrirChoixLangue, nomLangue } from '../composants/cadre.jsx';
+import { EnteteBoutique, EntetePage, Pied, Marque, ouvrirLivraisonPaiement } from '../composants/cadre.jsx';
 import { installable, installer, estIOS } from '../installation.jsx';
 import { Montants as MontantsDevis } from './commander.jsx';
 import { useSeo } from './commun.jsx';
@@ -18,22 +18,19 @@ import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, 
 import { messagesNonLus, oublierDiscussion } from '../discussion.js';
 import { restantsANoter, chargerANoter, articleANoter } from '../avis.js';
 import { cagnotte, chargerCagnotte, cagnotteOuverte, parrainageOuvert } from '../fidelite.js';
-import { t, tx, aTraduire, locale } from '../../commun/js/langue.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
 /* 0991234567 → « 099 ••• 4567 » */
 const masque = (tel) => { const t = telephone(tel); return t ? t.replace(/^(.*?)(\d{3})( ?)(\d{4})$/, (_, a, b, s, d) => `${a}•••${s}${d}`) : ''; };
-const jourLong = (quand) => new Date(quand).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
+const jourLong = (t) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 const ouvrirPaiement = (o) => R.enAttentePaiement(o);
 
 /* Délai annoncé au client : « jeudi 7 novembre (environ 21 jours, article importé) ». */
 function texteLivraison(o) {
   const d = o.delivery; if (!d || !d.at) return '';
-  if (R.estRetraitCmd(o) && !d.days) return t('Dès que possible : nous vous appelons quand elle est prête');
-  const v = [jourLong(d.at), pluriel(d.days, 'jour')];
-  if (R.estRetraitCmd(o)) return d.import ? t('Prête vers le {0} (environ {1}, article importé)', v) : t('Prête vers le {0} (environ {1})', v);
-  return d.import ? t('Vers le {0} (environ {1}, article importé)', v) : t('Vers le {0} (environ {1})', v);
+  if (R.estRetraitCmd(o) && !d.days) return 'Dès que possible : nous vous appelons quand elle est prête';
+  return `${R.estRetraitCmd(o) ? 'Prête vers le' : 'Vers le'} ${jourLong(d.at)} (environ ${pluriel(d.days, 'jour')}${d.import ? ', article importé' : ''})`;
 }
 const montantsCommande = (o) => ({ sousTotal: o.subtotal, remise: o.discount, bienvenue: o.referral, cagnotte: o.wallet ? o.wallet.used : 0, livraison: o.shippingFee, frais: o.serviceFee, fraisPct: o.serviceFeePct, total: o.total });
 
@@ -44,7 +41,7 @@ function GainCagnotte({ o }) {
   const livree = o.fulfillment === 'delivered';
   return (
     <a class="gain-cagnotte" href={lien('/compte/cagnotte')}>
-      <Icone n="tirelire" /><span>{livree ? <>{tx('{0} ajoutés à votre cagnotte', [<b class="num">{dollars(g)}</b>])}</> : <>{tx('Cette commande vous rapporte {0} de cagnotte, versés à la livraison', [<b class="num">{dollars(g)}</b>])}</>}</span>
+      <Icone n="tirelire" /><span>{livree ? <><b class="num">{dollars(g)}</b> ajoutés à votre cagnotte</> : <>Cette commande vous rapporte <b class="num">{dollars(g)}</b> de cagnotte, versés à la livraison</>}</span>
     </a>
   );
 }
@@ -61,23 +58,23 @@ const Montants = ({ o, libelleTotal }) => <MontantsDevis m={montantsCommande(o)}
 function texteRecu(o) {
   const c = cfg.value; const p = o.payment || {};
   return [
-    t('Reçu {0} · commande #{1}', [c.name, o.number]),
-    t('Payée le {0} · {1}', [dateHeure(p.paidAt || o.createdAt), R.estCarte(p.method) ? t('Carte bancaire') : p.label]) + (p.reference ? t(' · réf. {0}', [p.reference]) : ''),
+    `Reçu ${c.name} · commande #${o.number}`,
+    `Payée le ${dateHeure(p.paidAt || o.createdAt)} · ${p.label}${p.reference ? ` · réf. ${p.reference}` : ''}`,
     ...(o.items || []).map((i) => `• ${i.title}${i.color || i.size ? ` (${[i.color, i.size].filter(Boolean).join(' / ')})` : ''} × ${i.qty} : ${dollars(i.price * i.qty)}`),
-    o.discount ? t('Code {0} : −{1}', [o.discount.code, dollars(o.discount.amount)]) : '',
-    o.referral ? t('Cadeau de bienvenue : −{0}', [dollars(o.referral.amount)]) : '',
-    o.wallet && o.wallet.used ? t('Payé avec ma cagnotte : −{0}', [dollars(o.wallet.used)]) : '',
-    o.shippingFee ? t('Livraison : {0}', [dollars(o.shippingFee)]) : t('Livraison : gratuite'),
-    o.serviceFee ? t('Frais de service ({0} %) : {1}', [R.num(o.serviceFeePct), dollars(o.serviceFee)]) : '',
-    t('Total payé : {0}', [dollars(o.total)]),
-    texteLivraison(o) ? t('Livraison prévue : {0}', [texteLivraison(o)]) : '',
-    t('Retrouvez votre commande sur {0} avec le numéro {1}.', [location.host, o.number])
+    o.discount ? `Code ${o.discount.code} : −${dollars(o.discount.amount)}` : '',
+    o.referral ? `Cadeau de bienvenue : −${dollars(o.referral.amount)}` : '',
+    o.wallet && o.wallet.used ? `Payé avec ma cagnotte : −${dollars(o.wallet.used)}` : '',
+    `Livraison : ${o.shippingFee ? dollars(o.shippingFee) : 'gratuite'}`,
+    o.serviceFee ? `Frais de service (${R.num(o.serviceFeePct)} %) : ${dollars(o.serviceFee)}` : '',
+    `Total payé : ${dollars(o.total)}`,
+    texteLivraison(o) ? `Livraison prévue : ${texteLivraison(o)}` : '',
+    `Retrouvez votre commande sur ${location.host} avec le numéro ${o.number}.`
   ].filter(Boolean).join('\n');
 }
 async function partagerRecu(o) {
   const texte = texteRecu(o);
-  if (navigator.share) { try { await navigator.share({ title: t('Reçu · commande #{0}', [o.number]), text: texte }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
-  if (await copier(texte)) toast(t('Reçu copié : collez-le où vous voulez'), { icone: 'copier' });
+  if (navigator.share) { try { await navigator.share({ title: `Reçu · commande #${o.number}`, text: texte }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  if (await copier(texte)) toast('Reçu copié : collez-le où vous voulez', { icone: 'copier' });
 }
 
 /* Le reçu : numéro de commande, paiement, articles, montants, délai de livraison. */
@@ -87,33 +84,33 @@ function Recu({ o }) {
     <article class="recu" aria-labelledby="recu-titre">
       <header class="recu-tete">
         <Marque slogan />
-        <div><h2 id="recu-titre">{t('Reçu de commande')}</h2><small>{dateHeure(p.paidAt || o.createdAt)}</small></div>
+        <div><h2 id="recu-titre">Reçu de commande</h2><small>{dateHeure(p.paidAt || o.createdAt)}</small></div>
       </header>
       <div class="recu-numero">
-        <div><small>{t('Numéro de commande')}</small><b class="code">{o.number}</b></div>
-        <button class="btn btn-secondaire btn-s" onClick={async () => { if (await copier(o.number)) toast(t('Numéro copié')); }}><Icone n="copier" />{t('Copier')}</button>
+        <div><small>Numéro de commande</small><b class="code">{o.number}</b></div>
+        <button class="btn btn-secondaire btn-s" onClick={async () => { if (await copier(o.number)) toast('Numéro copié'); }}><Icone n="copier" />Copier</button>
       </div>
       <dl class="infos recu-infos">
-        <dt>{t('Statut')}</dt><dd><Pastille ton="ok" point>{p.status === 'refunded' ? t('Remboursée') : t('Payée')}</Pastille></dd>
-        <dt>{t('Payée avec')}</dt><dd><span class="mode-op"><LogoOperateur k={p.method} m={R.OPERATEURS[p.method] || p} />{R.estCarte(p.method) ? t('Carte bancaire') : p.label}{p.phone ? ` · ${masque(p.phone)}` : ''}</span></dd>
-        {p.reference ? <><dt>{t('Transaction')}</dt><dd class="code">{p.reference}</dd></> : null}
-        <dt>{t('Client')}</dt><dd>{o.customer.name}</dd>
-        <dt>{retrait ? t('Retrait') : t('Livraison')}</dt><dd>{t(o.shipping.zoneName)}{o.shipping.address ? ` · ${o.shipping.address}` : ''}</dd>
-        {texteLivraison(o) ? <><dt>{retrait ? t('Prête') : t('Prévue')}</dt><dd><b>{texteLivraison(o)}</b></dd></> : null}
+        <dt>Statut</dt><dd><Pastille ton="ok" point>{p.status === 'refunded' ? 'Remboursée' : 'Payée'}</Pastille></dd>
+        <dt>Payée avec</dt><dd><span class="mode-op"><LogoOperateur k={p.method} m={R.OPERATEURS[p.method] || p} />{p.label}{p.phone ? ` · ${masque(p.phone)}` : ''}</span></dd>
+        {p.reference ? <><dt>Transaction</dt><dd class="code">{p.reference}</dd></> : null}
+        <dt>Client</dt><dd>{o.customer.name}</dd>
+        <dt>{retrait ? 'Retrait' : 'Livraison'}</dt><dd>{o.shipping.zoneName}{o.shipping.address ? ` · ${o.shipping.address}` : ''}</dd>
+        {texteLivraison(o) ? <><dt>{retrait ? 'Prête' : 'Prévue'}</dt><dd><b>{texteLivraison(o)}</b></dd></> : null}
       </dl>
       <div class="recu-trait" aria-hidden="true" />
       <Articles o={o} />
-      <Montants o={o} libelleTotal={t('Total payé')} />
+      <Montants o={o} libelleTotal="Total payé" />
       <GainCagnotte o={o} />
       {p.status !== 'refunded' ? (
         <div class="recu-cachet">
-          <p><b>{t('Payée et confirmée')}</b><small>{dateHeure(p.paidAt || o.createdAt)}</small></p>
-          <span class="recu-timbre" role="img" aria-label={t('Timbre {0} : commande payée', [c.name])} />
+          <p><b>Payée et confirmée</b><small>{dateHeure(p.paidAt || o.createdAt)}</small></p>
+          <span class="recu-timbre" role="img" aria-label={`Timbre ${c.name} : commande payée`} />
         </div>
       ) : null}
       <footer class="recu-pied">
-        {p.test ? <p>{tx('{0} aucun argent n’a été débité.', [<b>{t('Commande de test :')}</b>])}</p> : null}
-        <p>{t('Gardez ce numéro : avec votre téléphone, il permet de retrouver la commande depuis n’importe quel appareil (Mon compte → Retrouver une commande).')}</p>
+        {p.test ? <p><b>Commande de test :</b> aucun argent n’a été débité.</p> : null}
+        <p>Gardez ce numéro : avec votre téléphone, il permet de retrouver la commande depuis n’importe quel appareil (Mon compte → Retrouver une commande).</p>
         <p>{(c.legal && c.legal.company) || c.name} · {c.city}</p>
       </footer>
     </article>
@@ -123,11 +120,11 @@ function Recu({ o }) {
 export function Merci() {
   const id = route.value.params.id; const o = commandes.value.get(id);
   const [verif, setVerif] = useState(false);
-  useSeo(() => ({ titre: t('Reçu de commande'), noindex: true }), []);
+  useSeo(() => ({ titre: 'Reçu de commande', noindex: true }), []);
   useEffect(() => { if (jetonDe(id)) actualiserMesCommandes().then(() => setVerif(true)); else setVerif(true); }, [id]);
   useEffect(() => { if (o && ouvrirPaiement(o)) naviguer('/paiement/' + id, { remplacer: true }); else if (o && !R.estPayee(o) && o.payment.status !== 'refunded') naviguer('/suivi/' + id, { remplacer: true }); }, [o && o.payment.status, o && o.status]);
   if (!o) {
-    return <><EnteteBoutique /><main id="contenu" class="page conteneur">{!verif ? <div class="squelette" style={{ height: 420 }} /> : <Vide icone="recu" titre={t('Reçu introuvable sur ce téléphone')} texte={t('Retrouvez votre commande avec son numéro et votre téléphone.')}><a class="btn btn-primaire" href={lien('/compte/retrouver')}><Icone n="recherche" />{t('Retrouver ma commande')}</a></Vide>}</main></>;
+    return <><EnteteBoutique /><main id="contenu" class="page conteneur">{!verif ? <div class="squelette" style={{ height: 420 }} /> : <Vide icone="recu" titre="Reçu introuvable sur ce téléphone" texte="Retrouvez votre commande avec son numéro et votre téléphone."><a class="btn btn-primaire" href={lien('/compte/retrouver')}><Icone n="recherche" />Retrouver ma commande</a></Vide>}</main></>;
   }
   const prenom = String(o.customer.name || '').split(/\s+/)[0];
   return (
@@ -136,22 +133,22 @@ export function Merci() {
       <main id="contenu" class="page conteneur page-merci">
         <section class="merci-tete entree non-imprime">
           <div class="merci-coche" aria-hidden="true"><Icone n="coche" /></div>
-          <h1 class="titre-serif">{tx('Paiement reçu, merci {0} !', [prenom])}</h1>
-          <p class="attenue">{t('Votre commande est confirmée. Voici votre reçu.')}</p>
+          <h1 class="titre-serif">Paiement reçu, merci {prenom} !</h1>
+          <p class="attenue">Votre commande est confirmée. Voici votre reçu.</p>
         </section>
         <div class="pile-l merci-corps">
-          {o.review ? <Note ton="alerte" icone="alerte" classe="non-imprime">{tx('{0} Votre paiement est arrivé après le délai : la boutique vérifie que vos articles sont toujours disponibles et vous appelle au {1}.', [<b>{t('Un point est à vérifier.')}</b>, telephone(o.customer.phone)])}</Note> : null}
+          {o.review ? <Note ton="alerte" icone="alerte" classe="non-imprime"><b>Un point est à vérifier.</b> Votre paiement est arrivé après le délai : la boutique vérifie que vos articles sont toujours disponibles et vous appelle au {telephone(o.customer.phone)}.</Note> : null}
           <Recu o={o} />
           <div class="pile non-imprime">
-            <a class="btn btn-primaire btn-l btn-bloc" href={lien('/suivi/' + o.id)}><Icone n="camion" />{t('Suivre ma commande')}</a>
+            <a class="btn btn-primaire btn-l btn-bloc" href={lien('/suivi/' + o.id)}><Icone n="camion" />Suivre ma commande</a>
             <div class="rangee-boutons">
-              <button class="btn btn-secondaire btn-bloc" onClick={() => partagerRecu(o)}><Icone n="partager" />{t('Partager le reçu')}</button>
-              <button class="btn btn-secondaire btn-bloc" onClick={() => window.print()}><Icone n="telecharger" />{t('Enregistrer en PDF')}</button>
+              <button class="btn btn-secondaire btn-bloc" onClick={() => partagerRecu(o)}><Icone n="partager" />Partager le reçu</button>
+              <button class="btn btn-secondaire btn-bloc" onClick={() => window.print()}><Icone n="telecharger" />Enregistrer en PDF</button>
             </div>
-            <a class="btn btn-fantome btn-bloc" href={lien('/')}>{t('Continuer mes achats')}</a>
+            <a class="btn btn-fantome btn-bloc" href={lien('/')}>Continuer mes achats</a>
           </div>
-          <div class="non-imprime"><ActiverNotifications discret titre={t('Suivez votre commande sur ce téléphone')} /></div>
-          {comptesOuverts.value && !client.value ? <InvitationCompte classe="non-imprime" titre={t('Retrouvez cette commande sur tous vos appareils')} texte={t('Créez votre compte avec le {0} : cette commande et les prochaines y seront rangées.', [telephone(o.customer.phone) || t('même numéro')])} retour={'/merci/' + o.id} tel={o.customer.phone} /> : null}
+          <div class="non-imprime"><ActiverNotifications discret titre="Suivez votre commande sur ce téléphone" /></div>
+          {comptesOuverts.value && !client.value ? <InvitationCompte classe="non-imprime" titre="Retrouvez cette commande sur tous vos appareils" texte={`Créez votre compte avec le ${telephone(o.customer.phone) || 'même numéro'} : cette commande et les prochaines y seront rangées.`} retour={'/merci/' + o.id} tel={o.customer.phone} /> : null}
         </div>
       </main>
       <Pied />
@@ -162,31 +159,31 @@ export function Merci() {
 function ouvrirProfil() {
   let nom = profil.value.name || '', tel = profil.value.phone || '';
   const id = ouvrirFeuille({
-    titre: t('Mes coordonnées'),
+    titre: 'Mes coordonnées',
     contenu: () => (
       <div class="formulaire">
-        <p class="attenue petit">{client.value ? t('Elles pré-remplissent vos prochaines commandes, sur tous vos appareils connectés à votre compte.') : t('Elles pré-remplissent vos prochaines commandes. Elles restent sur ce téléphone.')}</p>
-        <Champ libelle={t('Nom complet')}>{(a) => <input class="saisie" {...a} defaultValue={nom} onInput={(e) => { nom = e.currentTarget.value; }} autocomplete="name" />}</Champ>
-        <Champ libelle={t('Téléphone')}>{(a) => <input class="saisie" {...a} defaultValue={tel} onInput={(e) => { tel = e.currentTarget.value; }} type="tel" inputmode="tel" autocomplete="tel" placeholder="099 123 4567" />}</Champ>
+        <p class="attenue petit">{client.value ? 'Elles pré-remplissent vos prochaines commandes, sur tous vos appareils connectés à votre compte.' : 'Elles pré-remplissent vos prochaines commandes. Elles restent sur ce téléphone.'}</p>
+        <Champ libelle="Nom complet">{(a) => <input class="saisie" {...a} defaultValue={nom} onInput={(e) => { nom = e.currentTarget.value; }} autocomplete="name" />}</Champ>
+        <Champ libelle="Téléphone">{(a) => <input class="saisie" {...a} defaultValue={tel} onInput={(e) => { tel = e.currentTarget.value; }} type="tel" inputmode="tel" autocomplete="tel" placeholder="099 123 4567" />}</Champ>
       </div>
     ),
     pied: () => <button class="btn btn-primaire btn-bloc" onClick={() => {
-      const n = nom.trim() ? R.valider.nom(nom) : ''; const telValide = tel.trim() ? R.valider.telephone(tel) : '';
-      if (nom.trim() && !n) { toast(t('Nom invalide (2 à 60 lettres)'), { icone: 'alerte', ton: 'danger' }); return; }
-      if (tel.trim() && !telValide) { toast(t('Numéro invalide, ex. 099 123 4567'), { icone: 'alerte', ton: 'danger' }); return; }
-      enregistrerProfil({ name: n, phone: telValide }); fermerFeuille(id); toast(t('Coordonnées enregistrées'));
-    }}>{t('Enregistrer')}</button>
+      const n = nom.trim() ? R.valider.nom(nom) : ''; const t = tel.trim() ? R.valider.telephone(tel) : '';
+      if (nom.trim() && !n) { toast('Nom invalide (2 à 60 lettres)', { icone: 'alerte', ton: 'danger' }); return; }
+      if (tel.trim() && !t) { toast('Numéro invalide, ex. 099 123 4567', { icone: 'alerte', ton: 'danger' }); return; }
+      enregistrerProfil({ name: n, phone: t }); fermerFeuille(id); toast('Coordonnées enregistrées');
+    }}>Enregistrer</button>
   });
 }
 
 function ouvrirInstallationIOS() {
   ouvrirFeuille({
-    titre: t('Installer sur iPhone'),
+    titre: 'Installer sur iPhone',
     contenu: () => (
       <ol class="etapes-paiement">
-        <li><span>1</span><p>{tx('Ouvrez cette page dans {0} (depuis WhatsApp ou Facebook : « Ouvrir dans Safari »).', [<b>Safari</b>])}</p></li>
-        <li><span>2</span><p>{tx('Touchez le bouton {0}', [<b>{t('Partager')}</b>])}{' '}<Icone n="partager" taille={16} style={{ display: 'inline', verticalAlign: '-3px' }} />{' '}{t('en bas de l’écran.')}</p></li>
-        <li><span>3</span><p>{tx('Choisissez {0}, puis {1}.', [<b>{t('« Sur l’écran d’accueil »')}</b>, <b>{t('« Ajouter »')}</b>])}</p></li>
+        <li><span>1</span><p>Ouvrez cette page dans <b>Safari</b> (depuis WhatsApp ou Facebook : « Ouvrir dans Safari »).</p></li>
+        <li><span>2</span><p>Touchez le bouton <b>Partager</b> <Icone n="partager" taille={16} style={{ display: 'inline', verticalAlign: '-3px' }} /> en bas de l’écran.</p></li>
+        <li><span>3</span><p>Choisissez <b>« Sur l’écran d’accueil »</b>, puis <b>« Ajouter »</b>.</p></li>
       </ol>
     )
   });
@@ -198,28 +195,28 @@ function ReglagesNotifications() {
   if (e === 'indisponible') return null;
   const basculer = async () => {
     try {
-      if (e === 'actif') { await desactiverPush(); toast(t('Notifications désactivées sur ce téléphone'), { icone: 'cloche' }); }
-      else if (await activerPush()) toast(t('Notifications activées sur ce téléphone'), { icone: 'cloche' });
-      else if (pushEtat.value === 'bloque') toast(t('Notifications bloquées : autorisez-les dans les réglages du navigateur'), { icone: 'alerte', ton: 'danger', duree: 5000 });
-    } catch (err) { toast(t('Réglage impossible pour le moment. Réessayez plus tard.'), { icone: 'alerte', ton: 'danger' }); }
+      if (e === 'actif') { await desactiverPush(); toast('Notifications désactivées sur ce téléphone', { icone: 'cloche' }); }
+      else if (await activerPush()) toast('Notifications activées sur ce téléphone', { icone: 'cloche' });
+      else if (pushEtat.value === 'bloque') toast('Notifications bloquées : autorisez-les dans les réglages du navigateur', { icone: 'alerte', ton: 'danger', duree: 5000 });
+    } catch (err) { toast('Réglage impossible pour le moment. Réessayez plus tard.', { icone: 'alerte', ton: 'danger' }); }
   };
-  const sous = { actif: t('Chaque étape de vos commandes'), bloque: t('Bloquées dans les réglages du navigateur'), ios: t('Sur iPhone : installez d’abord l’application') }[e] || t('Désactivées');
+  const sous = { actif: 'Chaque étape de vos commandes', bloque: 'Bloquées dans les réglages du navigateur', ios: 'Sur iPhone : installez d’abord l’application' }[e] || 'Désactivées';
   return (
     <>
-      <Bascule actif={e === 'actif'} onClick={basculer} desactive={e === 'bloque' || e === 'ios'} libelle={t('Notifications sur ce téléphone')} sous={sous} />
-      {e === 'actif' ? <Bascule actif={promos.value} onClick={() => changerPromos(!promos.value).catch(() => { })} libelle={t('Promotions et nouveautés')} sous={promos.value ? t('Annonces de la boutique, de temps en temps') : t('Seulement vos commandes')} /> : null}
+      <Bascule actif={e === 'actif'} onClick={basculer} desactive={e === 'bloque' || e === 'ios'} libelle="Notifications sur ce téléphone" sous={sous} />
+      {e === 'actif' ? <Bascule actif={promos.value} onClick={() => changerPromos(!promos.value).catch(() => { })} libelle="Promotions et nouveautés" sous={promos.value ? 'Annonces de la boutique, de temps en temps' : 'Seulement vos commandes'} /> : null}
     </>
   );
 }
 
 async function confirmerDeconnexion() {
-  if (!(await confirmer({ titre: t('Se déconnecter ?'), texte: t('Votre panier, vos favoris et vos commandes restent dans votre compte : vous les retrouvez en vous reconnectant, sur ce téléphone ou un autre.'), ok: t('Se déconnecter') }))) return;
-  seDeconnecterCompte(); toast(t('Vous êtes déconnecté'), { icone: 'sortie' }); naviguer('/');
+  if (!(await confirmer({ titre: 'Se déconnecter ?', texte: 'Votre panier, vos favoris et vos commandes restent dans votre compte : vous les retrouvez en vous reconnectant, sur ce téléphone ou un autre.', ok: 'Se déconnecter' }))) return;
+  seDeconnecterCompte(); toast('Vous êtes déconnecté', { icone: 'sortie' }); naviguer('/');
 }
 async function confirmerSuppression() {
   const g = cagnotte.value && cagnotte.value.solde > 0 ? cagnotte.value.solde : 0;
-  if (!(await confirmer({ titre: t('Supprimer votre compte ?'), texte: t('Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés{0}. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.', [g ? t(', ainsi que votre cagnotte ({0})', [dollars(g)]) : '']), ok: t('Supprimer mon compte'), danger: true }))) return;
-  try { await supprimerCompte(); toast(t('Compte supprimé'), { icone: 'poubelle' }); naviguer('/'); } catch (e) { toast(e.message, { icone: 'alerte', ton: 'danger' }); }
+  if (!(await confirmer({ titre: 'Supprimer votre compte ?', texte: `Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés${g ? `, ainsi que votre cagnotte (${dollars(g)})` : ''}. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.`, ok: 'Supprimer mon compte', danger: true }))) return;
+  try { await supprimerCompte(); toast('Compte supprimé', { icone: 'poubelle' }); naviguer('/'); } catch (e) { toast(e.message, { icone: 'alerte', ton: 'danger' }); }
 }
 
 export function Compte() {
@@ -227,10 +224,10 @@ export function Compte() {
   useEffect(() => { chargerCompte(); actualiserMesCommandes(); chargerANoter().catch(() => { }); }, []);
   // La cagnotte, une fois le catalogue (réglages de la boutique) et le compte connus.
   useEffect(() => { if (cl && cagnotteOuverte.value) chargerCagnotte().catch(() => { }); }, [cl && cl.id, cagnotteOuverte.value]);
-  useSeo(() => ({ titre: t('Mon compte'), noindex: true }), []);
+  useSeo(() => ({ titre: 'Mon compte', noindex: true }), []);
   const liste = [...commandes.value.values()];
   const enCours = liste.filter((o) => o.status !== 'cancelled' && o.fulfillment !== 'delivered');
-  const wa = lienWhatsApp(c.whatsapp, t('Bonjour {0}, j’ai une question.', [c.name]));
+  const wa = lienWhatsApp(c.whatsapp, `Bonjour ${c.name}, j’ai une question.`);
   const item = (props) => {
     const contenu = <><span class="menu-icone"><Icone n={props.icone} /></span><span class="menu-texte"><b>{props.titre}</b>{props.sous ? <small>{props.sous}</small> : null}</span><Icone n="droite" classe="chevron" /></>;
     return props.href ? <a class="menu-item" href={props.href} target={props.externe ? '_blank' : undefined} rel={props.externe ? 'noopener' : undefined}>{contenu}</a> : <button class="menu-item" onClick={props.onClick}>{contenu}</button>;
@@ -240,44 +237,43 @@ export function Compte() {
     <>
       <EnteteBoutique />
       <main id="contenu" class="page conteneur page-compte">
-        <div class="titre-page"><h1 class="titre-serif">{t('Mon compte')}</h1></div>
+        <div class="titre-page"><h1 class="titre-serif">Mon compte</h1></div>
         <section class="carte profil">
           <span class="initiale" aria-hidden="true">{((cl && cl.name) || pf.name || '?').trim()[0].toUpperCase()}</span>
           <div class="profil-texte">
-            <b>{(cl && cl.name) || pf.name || t('Bienvenue')}</b>
-            <small>{cl ? <><span class="sans-coupure">{telephone(cl.phone) || cl.phone}</span> · <span class="ok-texte">{t('connecté')}</span></> : pf.phone ? telephone(pf.phone) : t('Vos commandes sont suivies sur ce téléphone.')}</small>
+            <b>{(cl && cl.name) || pf.name || 'Bienvenue'}</b>
+            <small>{cl ? <><span class="sans-coupure">{telephone(cl.phone) || cl.phone}</span> · <span class="ok-texte">connecté</span></> : pf.phone ? telephone(pf.phone) : 'Vos commandes sont suivies sur ce téléphone.'}</small>
           </div>
-          <button class="btn btn-secondaire btn-s profil-modifier" onClick={ouvrirProfil} aria-label={pf.phone || cl ? t('Modifier mes coordonnées') : t('Ajouter mes coordonnées')}><Icone n="crayon" /><span class="libelle">{pf.phone || cl ? t('Modifier') : t('Ajouter')}</span></button>
+          <button class="btn btn-secondaire btn-s profil-modifier" onClick={ouvrirProfil} aria-label={pf.phone || cl ? 'Modifier mes coordonnées' : 'Ajouter mes coordonnées'}><Icone n="crayon" /><span class="libelle">{pf.phone || cl ? 'Modifier' : 'Ajouter'}</span></button>
         </section>
-        {comptesOuverts.value && !cl ? <InvitationCompte titre={t('Créez votre compte')} texte={t('Facultatif, gratuit, sans mot de passe. Vous pouvez aussi continuer à commander sans compte.')} retour="/compte" tel={pf.phone} /> : null}
+        {comptesOuverts.value && !cl ? <InvitationCompte titre="Créez votre compte" texte="Facultatif, gratuit, sans mot de passe. Vous pouvez aussi continuer à commander sans compte." retour="/compte" tel={pf.phone} /> : null}
         {enCours.length ? (
           <a class="carte encours" href={lien(seule ? (ouvrirPaiement(seule) ? '/paiement/' : '/suivi/') + seule.id : '/compte/commandes')}>
             <span class="menu-icone"><Icone n="camion" /></span>
-            <span class="menu-texte"><b>{pluriel(enCours.length, 'commande en cours', 'commandes en cours')}</b><small>{seule ? `#${seule.number} · ${t(R.statutClient(seule).label)}` : t('Suivez-les étape par étape')}</small></span>
+            <span class="menu-texte"><b>{pluriel(enCours.length, 'commande en cours', 'commandes en cours')}</b><small>{seule ? `#${seule.number} · ${R.statutClient(seule).label}` : 'Suivez-les étape par étape'}</small></span>
             <Icone n="droite" classe="chevron" />
           </a>
         ) : null}
         <div class="compte-grille">
           <div class="menu">
-            {item({ href: lien('/compte/commandes'), icone: 'recu', titre: t('Mes commandes'), sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : t('Reçus, suivi et historique') })}
-            {item({ href: lien('/notifications'), icone: 'cloche', titre: t('Notifications'), sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : t('Les étapes de vos commandes') })}
-            {item({ href: lien('/discussion'), icone: 'bulle', titre: t('Écrire à la boutique'), sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : t('Une question ? Réponse ici, dans l’application') })}
-            {c.reviews.enabled ? item({ href: lien('/avis'), icone: 'etoile', titre: t('Mes avis'), sous: restantsANoter.value ? pluriel(restantsANoter.value, 'article à noter', 'articles à noter') : t('Notez les articles reçus') }) : null}
-            {cagnotteOuverte.value ? item({ href: lien('/compte/cagnotte'), icone: 'tirelire', titre: parrainageOuvert.value ? t('Ma cagnotte et parrainage') : t('Ma cagnotte'), sous: cl && cagnotte.value ? t('{0} disponibles', [dollars(cagnotte.value.solde)]) + (cagnotte.value.aVenir ? t(' · +{0} à venir', [dollars(cagnotte.value.aVenir)]) : '') : t('{0} % de chaque commande, à réutiliser', [R.num(c.loyalty.pct)]) }) : null}
-            {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: t('Retrouver une commande'), sous: t('Avec le numéro de votre reçu') })}
-            {item({ href: lien('/favoris'), icone: 'coeur', titre: t('Mes favoris'), sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : t('Vos coups de cœur') })}
-            {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: t('Livraison et paiement'), sous: t('Zones, délais, Mobile Money') })}
-            {wa ? item({ href: wa, externe: true, icone: 'appel', titre: t('WhatsApp de la boutique'), sous: telephone(c.whatsapp) }) : null}
+            {item({ href: lien('/compte/commandes'), icone: 'recu', titre: 'Mes commandes', sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : 'Reçus, suivi et historique' })}
+            {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
+            {item({ href: lien('/discussion'), icone: 'bulle', titre: 'Écrire à la boutique', sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : 'Une question ? Réponse ici, dans l’application' })}
+            {c.reviews.enabled ? item({ href: lien('/avis'), icone: 'etoile', titre: 'Mes avis', sous: restantsANoter.value ? pluriel(restantsANoter.value, 'article à noter', 'articles à noter') : 'Notez les articles reçus' }) : null}
+            {cagnotteOuverte.value ? item({ href: lien('/compte/cagnotte'), icone: 'tirelire', titre: parrainageOuvert.value ? 'Ma cagnotte et parrainage' : 'Ma cagnotte', sous: cl && cagnotte.value ? `${dollars(cagnotte.value.solde)} disponibles${cagnotte.value.aVenir ? ` · +${dollars(cagnotte.value.aVenir)} à venir` : ''}` : `${R.num(c.loyalty.pct)} % de chaque commande, à réutiliser` }) : null}
+            {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: 'Retrouver une commande', sous: 'Avec le numéro de votre reçu' })}
+            {item({ href: lien('/favoris'), icone: 'coeur', titre: 'Mes favoris', sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : 'Vos coups de cœur' })}
+            {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: 'Livraison et paiement', sous: 'Zones, délais, Mobile Money' })}
+            {wa ? item({ href: wa, externe: true, icone: 'appel', titre: 'WhatsApp de la boutique', sous: telephone(c.whatsapp) }) : null}
           </div>
           <div class="menu">
-            <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle={t('Thème sombre')} sous={themeSombre.value ? t('Activé sur ce téléphone') : t('Désactivé : thème clair')} />
+            <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur ce téléphone' : 'Désactivé : thème clair'} />
             <ReglagesNotifications />
-            {item({ onClick: ouvrirChoixLangue, icone: 'globe', titre: t('Langue'), sous: nomLangue() })}
-            {installable.value ? item({ onClick: () => (estIOS ? ouvrirInstallationIOS() : installer()), icone: 'mobile', titre: t('Installer l’application'), sous: t('Sur l’écran d’accueil, même avec une connexion faible') }) : null}
-            {item({ href: lien('/infos/conditions'), icone: 'recu', titre: t('Conditions et confidentialité'), sous: t('Vente, retours, données personnelles') })}
-            {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: t('Se déconnecter'), sous: t('Panier, favoris et commandes restent dans votre compte') }) : null}
-            {cl ? item({ onClick: confirmerSuppression, icone: 'poubelle', titre: t('Supprimer mon compte'), sous: t('Vos commandes restent chez la boutique') }) : null}
-            {item({ onClick: async () => { if (await confirmer({ titre: t('Effacer les données de ce téléphone ?'), texte: cl ? t('Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.') : t('Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.'), ok: t('Effacer'), danger: true })) { effacerAppareil(); oublierNotifications(); oublierDiscussion(); toast(t('Données de ce téléphone effacées'), { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: t('Effacer mes données de ce téléphone'), sous: t('Panier, favoris, coordonnées') })}
+            {installable.value ? item({ onClick: () => (estIOS ? ouvrirInstallationIOS() : installer()), icone: 'mobile', titre: 'Installer l’application', sous: 'Sur l’écran d’accueil, même avec une connexion faible' }) : null}
+            {item({ href: lien('/infos/conditions'), icone: 'recu', titre: 'Conditions et confidentialité', sous: 'Vente, retours, données personnelles' })}
+            {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: 'Se déconnecter', sous: 'Panier, favoris et commandes restent dans votre compte' }) : null}
+            {cl ? item({ onClick: confirmerSuppression, icone: 'poubelle', titre: 'Supprimer mon compte', sous: 'Vos commandes restent chez la boutique' }) : null}
+            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); oublierNotifications(); oublierDiscussion(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
           </div>
         </div>
       </main>
@@ -294,7 +290,7 @@ function CarteCommande({ o }) {
   return (
     <li>
       <a class="carte carte-commande" href={lien((ouvrirPaiement(o) ? '/paiement/' : '/suivi/') + o.id)}>
-        <div class="entre"><b class="code">#{o.number}</b><Pastille ton={s.ton} point>{t(s.label)}</Pastille></div>
+        <div class="entre"><b class="code">#{o.number}</b><Pastille ton={s.ton} point>{s.label}</Pastille></div>
         <p class="discret petit">{dateHeure(o.createdAt)} · {pluriel((o.items || []).reduce((a, i) => a + i.qty, 0), 'article')}</p>
         <div class="cc-bas">
           <div class="cc-photos">{(o.items || []).slice(0, 4).map((i, k) => <span key={k}><Photo m={imageLigne(i)} alt="" tailles="48px" /></span>)}</div>
@@ -307,7 +303,7 @@ function CarteCommande({ o }) {
 
 export function Commandes() {
   useEffect(() => { Promise.resolve(chargerCompte()).then(actualiserMesCommandes); }, []);
-  useSeo(() => ({ titre: t('Mes commandes'), noindex: true }), []);
+  useSeo(() => ({ titre: 'Mes commandes', noindex: true }), []);
   const liste = [...commandes.value.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const enCours = liste.filter(estEnCours); const passees = liste.filter((o) => !estEnCours(o));
   // Ce que le client a réellement payé pour les commandes reçues (les annulées et remboursées ne comptent pas).
@@ -315,29 +311,29 @@ export function Commandes() {
   const depense = recues.reduce((a, o) => a + R.num(o.total), 0);
   return (
     <>
-      <EntetePage titre={t('Mes commandes')} sous={liste.length ? (client.value ? t('Toutes les commandes de votre compte') : t('Passées ou retrouvées sur ce téléphone')) : ''} repli="/compte" />
+      <EntetePage titre="Mes commandes" sous={liste.length ? (client.value ? 'Toutes les commandes de votre compte' : 'Passées ou retrouvées sur ce téléphone') : ''} repli="/compte" />
       <main id="contenu" class="page conteneur">
         {!liste.length && suivis.value.length && !commandesChargees.value ? <div class="pile">{[1, 2].map((i) => <div key={i} class="squelette" style={{ height: 120 }} />)}</div>
           : !liste.length ? (
-            <Vide icone="recu" titre={t('Aucune commande ici')} texte={t('Les commandes passées depuis ce téléphone apparaissent ici. Commande passée ailleurs ? Retrouvez-la avec le numéro de son reçu.')}>
-              <a class="btn btn-primaire" href={lien('/compte/retrouver')}><Icone n="recherche" />{t('Retrouver une commande')}</a>
-              <a class="btn btn-fantome" href={lien('/')}>{t('Commencer mes achats')}</a>
+            <Vide icone="recu" titre="Aucune commande ici" texte="Les commandes passées depuis ce téléphone apparaissent ici. Commande passée ailleurs ? Retrouvez-la avec le numéro de son reçu.">
+              <a class="btn btn-primaire" href={lien('/compte/retrouver')}><Icone n="recherche" />Retrouver une commande</a>
+              <a class="btn btn-fantome" href={lien('/')}>Commencer mes achats</a>
             </Vide>
           ) : (
             <div class="pile-l">
               {enCours.length ? (
                 <section class="pile" aria-labelledby="cmd-en-cours">
-                  <h2 id="cmd-en-cours" class="historique-tete"><span>{t('En cours')}</span><small>{pluriel(enCours.length, 'commande')}</small></h2>
+                  <h2 id="cmd-en-cours" class="historique-tete"><span>En cours</span><small>{pluriel(enCours.length, 'commande')}</small></h2>
                   <ul class="pile commandes-liste">{enCours.map((o) => <CarteCommande key={o.id} o={o} />)}</ul>
                 </section>
               ) : null}
               {passees.length ? (
                 <section class="pile" aria-labelledby="cmd-historique">
-                  <h2 id="cmd-historique" class="historique-tete"><span>{t('Historique')}</span><small>{recues.length ? <>{pluriel(recues.length, 'commande reçue', 'commandes reçues')} · <b class="num">{dollars(depense)}</b></> : pluriel(passees.length, 'commande')}</small></h2>
+                  <h2 id="cmd-historique" class="historique-tete"><span>Historique</span><small>{recues.length ? <>{pluriel(recues.length, 'commande reçue', 'commandes reçues')} · <b class="num">{dollars(depense)}</b></> : pluriel(passees.length, 'commande')}</small></h2>
                   <ul class="pile commandes-liste">{passees.map((o) => <CarteCommande key={o.id} o={o} />)}</ul>
                 </section>
               ) : null}
-              <p class="centre"><a class="lien" href={lien('/compte/retrouver')}>{t('Une commande manque ? Retrouvez-la avec son numéro')}</a></p>
+              <p class="centre"><a class="lien" href={lien('/compte/retrouver')}>Une commande manque ? Retrouvez-la avec son numéro</a></p>
             </div>
           )}
       </main>
@@ -350,18 +346,18 @@ export function Commandes() {
 export function Retrouver() {
   const [f, setF] = useState({ numero: '', tel: profil.value.phone || '', erreurs: {}, envoi: false });
   const maj = (p) => setF((x) => ({ ...x, ...p }));
-  useSeo(() => ({ titre: t('Retrouver une commande'), noindex: true }), []);
+  useSeo(() => ({ titre: 'Retrouver une commande', noindex: true }), []);
   async function chercher(e) {
     e.preventDefault();
     if (f.envoi) return;
     const erreurs = {};
-    if (!R.numeroValide(f.numero)) erreurs.numero = t('Le numéro figure sur votre reçu : 6 lettres et chiffres, par exemple K7M2QX.');
-    if (!R.valider.telephone(f.tel)) erreurs.tel = t('Numéro invalide. Exemple : 099 123 4567.');
+    if (!R.numeroValide(f.numero)) erreurs.numero = 'Le numéro figure sur votre reçu : 6 lettres et chiffres, par exemple K7M2QX.';
+    if (!R.valider.telephone(f.tel)) erreurs.tel = 'Numéro invalide. Exemple : 099 123 4567.';
     if (Object.keys(erreurs).length) { maj({ erreurs }); return; }
     maj({ envoi: true, erreurs: {} });
     try {
       const id = await retrouverCommande(R.numeroNettoye(f.numero), f.tel);
-      toast(t('Commande retrouvée'));
+      toast('Commande retrouvée');
       naviguer('/suivi/' + id, { remplacer: true });
     } catch (err) {
       maj({ envoi: false });
@@ -371,18 +367,18 @@ export function Retrouver() {
   }
   return (
     <>
-      <EntetePage titre={t('Retrouver une commande')} repli="/compte" />
+      <EntetePage titre="Retrouver une commande" repli="/compte" />
       <main id="contenu" class="page conteneur page-retrouver">
         <form class="carte pile-l" onSubmit={chercher} noValidate>
           <div class="pile">
-            <h1 class="titre-serif">{t('Retrouver une commande')}</h1>
-            <p class="attenue">{t('Saisissez le numéro inscrit sur votre reçu et le téléphone donné à la commande (ou celui qui a payé). La commande s’ajoute à « Mes commandes » sur ce téléphone.')}</p>
+            <h1 class="titre-serif">Retrouver une commande</h1>
+            <p class="attenue">Saisissez le numéro inscrit sur votre reçu et le téléphone donné à la commande (ou celui qui a payé). La commande s’ajoute à « Mes commandes » sur ce téléphone.</p>
           </div>
           <div class="formulaire">
-            <Champ libelle={t('Numéro de commande')} erreur={f.erreurs.numero}>{(a) => <input class="saisie saisie-code" {...a} value={f.numero} onInput={(e) => maj({ numero: e.currentTarget.value.toUpperCase(), erreurs: {} })} autocomplete="off" autocapitalize="characters" spellcheck={false} maxlength="9" placeholder={t('Ex. : K7M2QX')} />}</Champ>
-            <Champ libelle={t('Téléphone')} erreur={f.erreurs.tel}>{(a) => <input class="saisie" {...a} value={f.tel} onInput={(e) => maj({ tel: e.currentTarget.value, erreurs: {} })} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}</Champ>
+            <Champ libelle="Numéro de commande" erreur={f.erreurs.numero}>{(a) => <input class="saisie saisie-code" {...a} value={f.numero} onInput={(e) => maj({ numero: e.currentTarget.value.toUpperCase(), erreurs: {} })} autocomplete="off" autocapitalize="characters" spellcheck={false} maxlength="9" placeholder="Ex. : K7M2QX" />}</Champ>
+            <Champ libelle="Téléphone" erreur={f.erreurs.tel}>{(a) => <input class="saisie" {...a} value={f.tel} onInput={(e) => maj({ tel: e.currentTarget.value, erreurs: {} })} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}</Champ>
           </div>
-          <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit"><Icone n="recherche" />{t('Retrouver ma commande')}</button>
+          <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit"><Icone n="recherche" />Retrouver ma commande</button>
         </form>
       </main>
       <Pied />
@@ -390,7 +386,7 @@ export function Retrouver() {
   );
 }
 
-const STATUT_PAIEMENT = { paid: aTraduire('Payé'), pending: aTraduire('En attente de votre validation'), failed: aTraduire('Non abouti'), expired: aTraduire('Non reçu dans le délai'), refunded: aTraduire('Remboursé') };
+const STATUT_PAIEMENT = { paid: 'Payé', pending: 'En attente de votre validation', failed: 'Non abouti', expired: 'Non reçu dans le délai', refunded: 'Remboursé' };
 
 /* Commande reçue : ses articles à noter (ou déjà notés), vers « Mes avis ». */
 function AvisCommande({ o }) {
@@ -400,7 +396,7 @@ function AvisCommande({ o }) {
   return (
     <a class="carte encours avis-commande" href={lien('/avis')}>
       <span class="menu-icone"><Icone n="etoile" /></span>
-      <span class="menu-texte"><b>{reste ? t('Votre avis compte') : t('Merci pour vos avis !')}</b><small>{reste ? t('{0} à noter : un geste suffit', [pluriel(reste, 'article')]) : t('Voir ou modifier mes avis')}</small></span>
+      <span class="menu-texte"><b>{reste ? 'Votre avis compte' : 'Merci pour vos avis !'}</b><small>{reste ? `${pluriel(reste, 'article')} à noter : un geste suffit` : 'Voir ou modifier mes avis'}</small></span>
       <Icone n="droite" classe="chevron" />
     </a>
   );
@@ -416,14 +412,14 @@ export function Suivi() {
     // Ouverte depuis une notification sur un autre appareil du compte : les commandes du compte d'abord.
     Promise.resolve(chargerCompte()).then(actualiserMesCommandes).then(() => { setVerif(true); chargerANoter({ force: true }).catch(() => { }); });
   }, [id]);
-  useSeo(() => ({ titre: t('Suivi de commande'), noindex: true }), []);
+  useSeo(() => ({ titre: 'Suivi de commande', noindex: true }), []);
   const o = commandes.value.get(id);
   if (!o) {
     return (
       <>
-        <EntetePage titre={t('Suivi de commande')} repli="/compte/commandes" />
+        <EntetePage titre="Suivi de commande" repli="/compte/commandes" />
         <main id="contenu" class="page conteneur">
-          {!verif ? <div class="squelette" style={{ height: 260 }} /> : <Vide icone="recu" titre={t('Commande introuvable sur ce téléphone')} texte={t('Ouvrez le lien de suivi de la commande, ou retrouvez-la avec le numéro de son reçu et votre téléphone.')}><a class="btn btn-primaire" href={lien('/compte/retrouver')}><Icone n="recherche" />{t('Retrouver ma commande')}</a></Vide>}
+          {!verif ? <div class="squelette" style={{ height: 260 }} /> : <Vide icone="recu" titre="Commande introuvable sur ce téléphone" texte="Ouvrez le lien de suivi de la commande, ou retrouvez-la avec le numéro de son reçu et votre téléphone."><a class="btn btn-primaire" href={lien('/compte/retrouver')}><Icone n="recherche" />Retrouver ma commande</a></Vide>}
         </main>
       </>
     );
@@ -435,62 +431,62 @@ export function Suivi() {
   const livraison = payee && o.status !== 'cancelled' && o.fulfillment !== 'delivered' ? texteLivraison(o) : '';
   return (
     <>
-      <EntetePage titre={t('Commande #{0}', [o.number])} sous={dateHeure(o.createdAt)} repli="/compte/commandes" />
+      <EntetePage titre={'Commande #' + o.number} sous={dateHeure(o.createdAt)} repli="/compte/commandes" />
       <main id="contenu" class="page conteneur page-suivi">
         <div class="suivi-grille">
           <div class="pile-l">
             {attente ? (
               <a class="carte encours attente-paiement" href={lien('/paiement/' + o.id)}>
                 <span class="menu-icone"><Icone n={R.estCarte(o.payment.method) ? 'carte' : 'mobile'} /></span>
-                <span class="menu-texte"><b>{o.payment.status === 'failed' ? t('Paiement non abouti') : t('Paiement à valider')}</b><small>{o.payment.status === 'failed' ? t('Réessayez pour confirmer la commande') : R.estCarte(o.payment.method) ? t('Terminez le paiement par carte') : t('Validez la demande {0} sur votre téléphone', [o.payment.label])}</small></span>
+                <span class="menu-texte"><b>{o.payment.status === 'failed' ? 'Paiement non abouti' : 'Paiement à valider'}</b><small>{o.payment.status === 'failed' ? 'Réessayez pour confirmer la commande' : R.estCarte(o.payment.method) ? 'Terminez le paiement par carte' : `Validez la demande ${o.payment.label} sur votre téléphone`}</small></span>
                 <Icone n="droite" classe="chevron" />
               </a>
             ) : null}
             {payee && estEnCours(o) ? <ActiverNotifications discret /> : null}
             <section class="carte">
-              <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="camion" />{t('Suivi')}</h2><Pastille ton={s.ton} point>{t(s.label)}</Pastille></div>
+              <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="camion" />Suivi</h2><Pastille ton={s.ton} point>{s.label}</Pastille></div>
               {s.etape < 0 ? (
                 <div class="pile espace-haut">
-                  <Note ton="danger" icone="alerte">{R.nonAboutie(o) ? t('Le paiement n’est pas arrivé à temps : la commande a été annulée et ses articles remis en vente.') : t('Cette commande a été annulée{0}.', [o.payment && o.payment.status === 'refunded' ? t(' et remboursée') : ''])}</Note>
-                  {R.nonAboutie(o) ? <button class="btn btn-secondaire btn-bloc" onClick={() => { const n = remettreAuPanier(o); toast(n ? t('Articles remis dans votre panier') : t('Ces articles ne sont plus en vente'), { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />{t('Remettre les articles dans mon panier')}</button> : null}
+                  <Note ton="danger" icone="alerte">{R.nonAboutie(o) ? 'Le paiement n’est pas arrivé à temps : la commande a été annulée et ses articles remis en vente.' : `Cette commande a été annulée${o.payment && o.payment.status === 'refunded' ? ' et remboursée' : ''}.`}</Note>
+                  {R.nonAboutie(o) ? <button class="btn btn-secondaire btn-bloc" onClick={() => { const n = remettreAuPanier(o); toast(n ? 'Articles remis dans votre panier' : 'Ces articles ne sont plus en vente', { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />Remettre les articles dans mon panier</button> : null}
                 </div>
               ) : (
                 <ol class="suivi">
                   {etapes.map((e, i) => {
                     const fait = i < s.etape || (i === 4 && s.etape === 4); const actuelle = i === s.etape && s.etape < 4;
-                    return <li key={i} class={'suivi-etape ' + (fait ? 'faite' : actuelle ? 'actuelle' : 'a-venir')}><span class="suivi-puce"><Icone n={fait ? 'coche' : e.icone} /></span><div><b>{t(e.titre)}</b>{quand[i] && (fait || actuelle) ? <small>{dateHeure(quand[i])}</small> : null}{i === 0 && attente ? <small>{t('En attente du paiement')}</small> : null}</div></li>;
+                    return <li key={i} class={'suivi-etape ' + (fait ? 'faite' : actuelle ? 'actuelle' : 'a-venir')}><span class="suivi-puce"><Icone n={fait ? 'coche' : e.icone} /></span><div><b>{e.titre}</b>{quand[i] && (fait || actuelle) ? <small>{dateHeure(quand[i])}</small> : null}{i === 0 && attente ? <small>En attente du paiement</small> : null}</div></li>;
                   })}
                 </ol>
               )}
-              {o.review && s.etape >= 0 ? <Note ton="alerte" icone="info" classe="espace-haut">{t('Un point de votre commande est à vérifier : la boutique vous appelle.')}</Note> : null}
+              {o.review && s.etape >= 0 ? <Note ton="alerte" icone="info" classe="espace-haut">Un point de votre commande est à vérifier : la boutique vous appelle.</Note> : null}
             </section>
-            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />{t('Articles')}</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? t('Total payé') : t('Total')} />{payee ? <GainCagnotte o={o} /> : null}
-              {o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <button class="btn btn-secondaire btn-bloc espace-haut" onClick={() => { const n = remettreAuPanier(o); toast(n ? t('Articles ajoutés à votre panier') : t('Ces articles ne sont plus en vente'), { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />{t('Commander à nouveau')}</button> : null}
+            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} />{payee ? <GainCagnotte o={o} /> : null}
+              {o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <button class="btn btn-secondaire btn-bloc espace-haut" onClick={() => { const n = remettreAuPanier(o); toast(n ? 'Articles ajoutés à votre panier' : 'Ces articles ne sont plus en vente', { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />Commander à nouveau</button> : null}
             </section>
           </div>
           <div class="pile-l">
             <section class="carte">
-              <h2 class="carte-titre"><Icone n="portefeuille" />{t('Paiement')}</h2>
+              <h2 class="carte-titre"><Icone n="portefeuille" />Paiement</h2>
               <dl class="infos">
-                <dt>{t('Mode')}</dt><dd><span class="mode-op"><LogoOperateur k={o.payment.method} m={R.OPERATEURS[o.payment.method] || o.payment} />{R.estCarte(o.payment.method) ? t('Carte bancaire') : o.payment.label}{o.payment.phone ? ` · ${masque(o.payment.phone)}` : ''}</span></dd>
-                {o.payment.reference ? <><dt>{t('Transaction')}</dt><dd class="code">{o.payment.reference}</dd></> : null}
-                <dt>{t('Statut')}</dt><dd>{STATUT_PAIEMENT[o.payment.status] ? t(STATUT_PAIEMENT[o.payment.status]) : t('En attente')}</dd>
+                <dt>Mode</dt><dd><span class="mode-op"><LogoOperateur k={o.payment.method} m={R.OPERATEURS[o.payment.method] || o.payment} />{o.payment.label}{o.payment.phone ? ` · ${masque(o.payment.phone)}` : ''}</span></dd>
+                {o.payment.reference ? <><dt>Transaction</dt><dd class="code">{o.payment.reference}</dd></> : null}
+                <dt>Statut</dt><dd>{STATUT_PAIEMENT[o.payment.status] || 'En attente'}</dd>
               </dl>
-              {payee ? <a class="btn btn-secondaire btn-bloc espace-haut" href={lien('/merci/' + o.id)}><Icone n="recu" />{t('Voir le reçu')}</a> : null}
+              {payee ? <a class="btn btn-secondaire btn-bloc espace-haut" href={lien('/merci/' + o.id)}><Icone n="recu" />Voir le reçu</a> : null}
             </section>
             <section class="carte">
-              <h2 class="carte-titre"><Icone n="repere" />{R.estRetraitCmd(o) ? t('Retrait') : t('Livraison')}</h2>
-              <dl class="infos"><dt>{t('Zone')}</dt><dd>{t(o.shipping.zoneName)}</dd>{o.shipping.address ? <><dt>{t('Adresse')}</dt><dd>{o.shipping.address}</dd></> : null}{o.shipping.landmark ? <><dt>{t('Repère')}</dt><dd>{o.shipping.landmark}</dd></> : null}{livraison ? <><dt>{t('Prévue')}</dt><dd>{livraison}</dd></> : null}<dt>{t('Contact')}</dt><dd>{o.customer.name} · {telephone(o.customer.phone)}</dd></dl>
+              <h2 class="carte-titre"><Icone n="repere" />{R.estRetraitCmd(o) ? 'Retrait' : 'Livraison'}</h2>
+              <dl class="infos"><dt>Zone</dt><dd>{o.shipping.zoneName}</dd>{o.shipping.address ? <><dt>Adresse</dt><dd>{o.shipping.address}</dd></> : null}{o.shipping.landmark ? <><dt>Repère</dt><dd>{o.shipping.landmark}</dd></> : null}{livraison ? <><dt>Prévue</dt><dd>{livraison}</dd></> : null}<dt>Contact</dt><dd>{o.customer.name} · {telephone(o.customer.phone)}</dd></dl>
             </section>
             {cfg.value.reviews.enabled && o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <AvisCommande o={o} /> : null}
             <a class="carte encours question" href={lien('/discussion?c=' + encodeURIComponent(o.id))}>
               <span class="menu-icone"><Icone n="bulle" /></span>
-              <span class="menu-texte"><b>{t('Une question sur cette commande ?')}</b><small>{t('Écrivez à la boutique : elle vous répond ici, dans l’application')}</small></span>
+              <span class="menu-texte"><b>Une question sur cette commande ?</b><small>Écrivez à la boutique : elle vous répond ici, dans l’application</small></span>
               <Icone n="droite" classe="chevron" />
             </a>
             <div class="pile">
-              {ls ? <button class="btn btn-fantome btn-bloc" onClick={async () => { if (await copier(ls)) toast(t('Lien de suivi copié')); }}><Icone n="copier" />{t('Copier le lien de suivi')}</button> : null}
-              {ls ? <p class="discret tres-petit centre">{t('Ce lien permet de suivre la commande depuis un autre téléphone. Partagez-le seulement avec vos proches.')}</p> : null}
+              {ls ? <button class="btn btn-fantome btn-bloc" onClick={async () => { if (await copier(ls)) toast('Lien de suivi copié'); }}><Icone n="copier" />Copier le lien de suivi</button> : null}
+              {ls ? <p class="discret tres-petit centre">Ce lien permet de suivre la commande depuis un autre téléphone. Partagez-le seulement avec vos proches.</p> : null}
             </div>
           </div>
         </div>

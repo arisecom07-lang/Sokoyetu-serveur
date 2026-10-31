@@ -3,7 +3,6 @@ import { signal, computed } from '@preact/signals';
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { Icone } from './icones.jsx';
 import { dollars, classes, pluriel } from './outils.js';
-import { t, tx } from './langue.js';
 
 /* ---------- Longues listes : affichées par pages (« Afficher plus »), pour rester rapides sur un petit téléphone ---------- */
 
@@ -17,8 +16,8 @@ export function AfficherPlus({ page, total, libelle, libelles }) {
   if (!page.reste) return null;
   return (
     <div class="afficher-plus">
-      <p class="discret petit">{tx('{0} sur {1}', [page.n, pluriel(total, libelle, libelles)])}</p>
-      <button class="btn btn-secondaire" onClick={page.plus}>{t('Afficher plus')}<Icone n="bas" /></button>
+      <p class="discret petit">{page.n} sur {pluriel(total, libelle, libelles)}</p>
+      <button class="btn btn-secondaire" onClick={page.plus}>Afficher plus<Icone n="bas" /></button>
     </div>
   );
 }
@@ -117,7 +116,7 @@ function Feuille({ f }) {
         <div class="feuille-poignee" aria-hidden="true" />
         <div class="feuille-entete">
           {f.titre ? <h2 id={titreId}>{f.titre}</h2> : <span style={{ flex: 1 }} />}
-          <button class="btn-icone" onClick={() => fermerFeuille(f.id)} aria-label={t('Fermer')}><Icone n="fermer" /></button>
+          <button class="btn-icone" onClick={() => fermerFeuille(f.id)} aria-label="Fermer"><Icone n="fermer" /></button>
         </div>
         <div class="feuille-corps">{f.contenu()}</div>
         {f.pied ? <div class="feuille-pied">{f.pied()}</div> : null}
@@ -136,7 +135,7 @@ export function Feuilles() {
 }
 
 /* Confirmation : await confirmer({ titre, texte, ok, danger }) → true / false */
-export function confirmer({ titre, texte, ok = t('Confirmer'), annuler = t('Annuler'), danger = false }) {
+export function confirmer({ titre, texte, ok = 'Confirmer', annuler = 'Annuler', danger = false }) {
   return new Promise((resoudre) => {
     let rep = false;
     const id = ouvrirFeuille({
@@ -162,7 +161,7 @@ export function Champ({ libelle, aide, erreur, facultatif, children, classe, id:
   const attrs = { id, 'aria-describedby': decrit, 'aria-invalid': erreur ? 'true' : undefined };
   return (
     <div class={classes('champ', erreur && 'en-erreur', classe)}>
-      {libelle ? <label class="champ-libelle" for={id}>{libelle}{facultatif ? <span class="facultatif">{' '}{t('(facultatif)')}</span> : null}</label> : null}
+      {libelle ? <label class="champ-libelle" for={id}>{libelle}{facultatif ? <span class="facultatif"> (facultatif)</span> : null}</label> : null}
       {typeof children === 'function' ? children(attrs) : children}
       {erreur ? <p class="champ-erreur" id={id + '-err'}><Icone n="alerte" />{erreur}</p> : null}
       {aide ? <p class="champ-aide" id={id + '-aide'}>{aide}</p> : null}
@@ -217,14 +216,14 @@ export function Segment({ options, valeur, onChange, plein, libelle }) {
   );
 }
 
-export function Quantite({ valeur, min = 1, max = 20, onChange, petit, libelle = t('Quantité'), supprimer }) {
+export function Quantite({ valeur, min = 1, max = 20, onChange, petit, libelle = 'Quantité', supprimer }) {
   return (
     <div class={classes('quantite', petit && 'petit')} role="group" aria-label={libelle}>
-      <button type="button" onClick={() => onChange(valeur - 1)} disabled={!supprimer && valeur <= min} aria-label={supprimer && valeur <= min ? t('Retirer du panier') : t('Diminuer')}>
+      <button type="button" onClick={() => onChange(valeur - 1)} disabled={!supprimer && valeur <= min} aria-label={supprimer && valeur <= min ? 'Retirer du panier' : 'Diminuer'}>
         <Icone n={supprimer && valeur <= min ? 'poubelle' : 'moins'} />
       </button>
       <output aria-live="polite">{valeur}</output>
-      <button type="button" onClick={() => onChange(valeur + 1)} disabled={valeur >= max} aria-label={t('Augmenter')}><Icone n="plus" /></button>
+      <button type="button" onClick={() => onChange(valeur + 1)} disabled={valeur >= max} aria-label="Augmenter"><Icone n="plus" /></button>
     </div>
   );
 }
@@ -244,12 +243,12 @@ export function Vide({ icone = 'info', titre, texte, children }) {
 
 export function Etapes({ noms, actuelle }) {
   return (
-    <ol class="etapes" aria-label={t('Étape {0} sur {1}', [actuelle, noms.length])}>
+    <ol class="etapes" aria-label={`Étape ${actuelle} sur ${noms.length}`}>
       {noms.map((nom, i) => (
         <>
           {i ? <li class={classes('trait', actuelle > i && 'fait')} aria-hidden="true" /> : null}
           <li class={classes('etape', actuelle === i + 1 && 'actuelle', actuelle > i + 1 && 'faite')} aria-current={actuelle === i + 1 ? 'step' : undefined}>
-            <i>{actuelle > i + 1 ? <Icone n="coche" /> : i + 1}</i><span>{t(nom)}</span>
+            <i>{actuelle > i + 1 ? <Icone n="coche" /> : i + 1}</i><span>{nom}</span>
           </li>
         </>
       ))}

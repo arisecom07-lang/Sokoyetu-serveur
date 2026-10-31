@@ -1,6 +1,5 @@
 // Sokoyetu — client de l'API du serveur (PocketBase, même adresse que la page) et temps réel.
 import { Local } from './stockage.js';
-import { t, traduireMessage } from './langue.js';
 
 export class ErreurApi extends Error {
   constructor(status, message, extra) { super(message); this.status = status; Object.assign(this, extra || {}); }
@@ -36,14 +35,14 @@ const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const ANGLAIS = /^(Something went wrong|Failed to|The requested resource|Only superusers|The authorized record|Missing or invalid|Request entity too large|Too Many Requests|Unauthorized|Forbidden|Not Found|Bad Request|Internal Server Error)/i;
 function messageErreur(status, j) {
   const m = String((j && j.message) || '');
-  if (m && !ANGLAIS.test(m)) return traduireMessage(m); // message du serveur Sokoyetu (en français), traduit s'il est connu
-  if (status === 429) return t('Trop de demandes en peu de temps. Patientez une minute, puis réessayez.');
-  if (status === 413) return t('Envoi trop volumineux : réduisez la taille, puis réessayez.');
-  if (status >= 500) return t('Le serveur a rencontré un problème. Réessayez dans un instant.');
-  if (status === 401) return t('Session expirée : reconnectez-vous.');
-  if (status === 403) return t('Action non autorisée.');
-  if (status === 404) return t('Introuvable : cet élément a peut-être été supprimé.');
-  return t('La demande n’a pas pu être traitée. Vérifiez les informations, puis réessayez.');
+  if (m && !ANGLAIS.test(m)) return m; // message du serveur Sokoyetu, déjà en français
+  if (status === 429) return 'Trop de demandes en peu de temps. Patientez une minute, puis réessayez.';
+  if (status === 413) return 'Envoi trop volumineux : réduisez la taille, puis réessayez.';
+  if (status >= 500) return 'Le serveur a rencontré un problème. Réessayez dans un instant.';
+  if (status === 401) return 'Session expirée : reconnectez-vous.';
+  if (status === 403) return 'Action non autorisée.';
+  if (status === 404) return 'Introuvable : cet élément a peut-être été supprimé.';
+  return 'La demande n’a pas pu être traitée. Vérifiez les informations, puis réessayez.';
 }
 
 /*
@@ -64,7 +63,7 @@ export async function requete(chemin, { method = 'GET', corps, entetes = {}, del
     catch (e) {
       clearTimeout(minuteur);
       if (n < reprises && navigator.onLine !== false) { await pause(n ? 4000 : 1500); continue; }
-      throw new ErreurApi(0, navigator.onLine === false ? t('Pas de connexion internet. Réessayez une fois reconnecté.') : t('Le serveur ne répond pas. Vérifiez votre connexion et réessayez.'), { code: 'reseau' });
+      throw new ErreurApi(0, navigator.onLine === false ? 'Pas de connexion internet. Réessayez une fois reconnecté.' : 'Le serveur ne répond pas. Vérifiez votre connexion et réessayez.', { code: 'reseau' });
     }
     clearTimeout(minuteur);
     if ([502, 503, 504].includes(res.status) && n < reprises) { await pause(n ? 4000 : 1500); continue; }
@@ -111,7 +110,7 @@ export async function prolongerSession(col = 'admins') {
   Auth.enregistrer({ token: r.token, record: r.record });
 }
 export async function changerMotDePasse(ancien, nouveau) {
-  const c = Auth.compte; if (!c) throw new ErreurApi(401, t('Session expirée.'));
+  const c = Auth.compte; if (!c) throw new ErreurApi(401, 'Session expirée.');
   await requete(cheminRecords('admins', c.id), { method: 'PATCH', corps: { oldPassword: ancien, password: nouveau, passwordConfirm: nouveau } });
   await connexion(c.email, nouveau);
 }
@@ -125,12 +124,12 @@ export async function lireCatalogue(etag) {
     catch (e) {
       clearTimeout(minuteur);
       if (n < 1 && navigator.onLine !== false) { await pause(2000); continue; }
-      throw new ErreurApi(0, navigator.onLine === false ? t('Pas de connexion internet.') : t('Le serveur ne répond pas.'), { code: 'reseau' });
+      throw new ErreurApi(0, navigator.onLine === false ? 'Pas de connexion internet.' : 'Le serveur ne répond pas.', { code: 'reseau' });
     }
     clearTimeout(minuteur);
     if ([502, 503, 504].includes(res.status) && n < 1) { await pause(2000); continue; }
     if (res.status === 304) return null;
-    if (!res.ok) throw new ErreurApi(res.status, t('Catalogue indisponible pour le moment.'), { code: 'http' });
+    if (!res.ok) throw new ErreurApi(res.status, 'Catalogue indisponible pour le moment.', { code: 'http' });
     return { donnees: await res.json(), etag: res.headers.get('ETag') || '' };
   }
 }

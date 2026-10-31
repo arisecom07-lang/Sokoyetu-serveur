@@ -923,81 +923,8 @@ const TEXTES_NOTIFICATIONS = {
     panier: ['Votre panier vous attend', (d) => (int(d.autres)
       ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.`
       : `« ${d.titre} » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.`)]
-  },
-  // Traductions à faire relire par une personne dont c'est la langue (comme src/boutique/langues/).
-  en: {
-    payee: ['Payment received', 'Order #{numero} confirmed. We are preparing your items.'],
-    preparation: ['Order being prepared', 'Order #{numero}: your items are being prepared.'],
-    expediee: ['Order on its way', 'Order #{numero}: the delivery person is on the way ({zone}).'],
-    prete: ['Order ready', 'Order #{numero}: your items are waiting for you at the shop.'],
-    livree: ['Order delivered', (d) => `Order #${d.numero} handed over. Thank you for your trust!${num(d.gain) > 0 ? ` ${dollars(d.gain)} added to your wallet.` : ''}`],
-    retiree: ['Order collected', (d) => `Order #${d.numero} collected at the shop. Thank you for your trust!${num(d.gain) > 0 ? ` ${dollars(d.gain)} added to your wallet.` : ''}`],
-    annulee: ['Order cancelled', 'Order #{numero} cancelled by the shop.'],
-    expiree: ['Payment not received', 'Order #{numero} cancelled: the payment did not arrive in time.'],
-    remboursee: ['Refund made', (d) => `Order #${d.numero} refunded (${moyenTraduit(d.moyen, 'en')}).`.replace(/ \(\)/, '')],
-    stock: ['Back in stock', '“{titre}” ({option}) is available again. Quantities are limited: don’t wait!'],
-    promo: ['{titre}', '{texte}'],
-    message: ['Reply from the shop', '{texte}'],
-    avis: ['Your opinion counts', (d) => (int(d.autres)
-      ? `Do you like “${d.titre}” and ${int(d.autres) === 1 ? 'one other item' : int(d.autres) + ' other items'}? Leave a review in one tap: it helps other customers.`
-      : `Do you like “${d.titre}”? Leave a review in one tap: it helps other customers.`)],
-    avis_reponse: ['The shop replied to you', 'Your review of “{titre}”: {texte}'],
-    parrainage: ['Thank you for inviting a friend!', (d) => `${d.filleul || 'Your friend'} received their first order: ${dollars(d.montant)} added to your wallet.`],
-    cagnotte: ['Gift from the shop', (d) => `${dollars(d.montant)} added to your wallet${d.motif ? ` (${d.motif})` : ''}. Thank you for your loyalty!`],
-    panier: ['Your basket is waiting', (d) => (int(d.autres)
-      ? `“${d.titre}” and ${int(d.autres) === 1 ? 'one other item' : int(d.autres) + ' other items'} are waiting in your basket, still available. Order whenever you like.`
-      : `“${d.titre}” is waiting in your basket, still available. Order whenever you like.`)]
-  },
-  sw: {
-    payee: ['Malipo yamepokelewa', 'Oda #{numero} imethibitishwa. Tunaandaa bidhaa zako.'],
-    preparation: ['Oda inaandaliwa', 'Oda #{numero}: bidhaa zako zinaandaliwa.'],
-    expediee: ['Oda iko njiani', 'Oda #{numero}: mleta mzigo yuko njiani ({zone}).'],
-    prete: ['Oda iko tayari', 'Oda #{numero}: bidhaa zako zinakusubiri dukani.'],
-    livree: ['Oda imeletwa', (d) => `Oda #${d.numero} imekabidhiwa. Asante kwa kutuamini!${num(d.gain) > 0 ? ` ${dollars(d.gain)} zimeongezwa kwenye kibubu chako.` : ''}`],
-    retiree: ['Oda imechukuliwa', (d) => `Oda #${d.numero} imechukuliwa dukani. Asante kwa kutuamini!${num(d.gain) > 0 ? ` ${dollars(d.gain)} zimeongezwa kwenye kibubu chako.` : ''}`],
-    annulee: ['Oda imeghairiwa', 'Oda #{numero} imeghairiwa na duka.'],
-    expiree: ['Malipo hayakupokelewa', 'Oda #{numero} imeghairiwa: malipo hayakufika kwa wakati.'],
-    remboursee: ['Pesa imerejeshwa', (d) => `Oda #${d.numero}: pesa imerejeshwa (${moyenTraduit(d.moyen, 'sw')}).`.replace(/ \(\)/, '')],
-    stock: ['Imerudi', '“{titre}” ({option}) inapatikana tena. Idadi ni ndogo: usichelewe!'],
-    promo: ['{titre}', '{texte}'],
-    message: ['Jibu kutoka dukani', '{texte}'],
-    avis: ['Maoni yako ni muhimu', (d) => (int(d.autres)
-      ? `Unapenda “${d.titre}” na ${int(d.autres) === 1 ? 'bidhaa nyingine moja' : 'bidhaa nyingine ' + int(d.autres)}? Toa maoni kwa mguso mmoja: yanasaidia wateja wengine.`
-      : `Unapenda “${d.titre}”? Toa maoni kwa mguso mmoja: yanasaidia wateja wengine.`)],
-    avis_reponse: ['Duka limekujibu', 'Maoni yako kuhusu “{titre}”: {texte}'],
-    parrainage: ['Asante kwa kumwalika!', (d) => `${d.filleul || 'Uliyemwalika'} amepokea oda yake ya kwanza: ${dollars(d.montant)} zimeongezwa kwenye kibubu chako.`],
-    cagnotte: ['Zawadi kutoka dukani', (d) => `${dollars(d.montant)} zimeongezwa kwenye kibubu chako${d.motif ? ` (${d.motif})` : ''}. Asante kwa uaminifu wako!`],
-    panier: ['Kikapu chako kinakusubiri', (d) => (int(d.autres)
-      ? `“${d.titre}” na ${int(d.autres) === 1 ? 'bidhaa nyingine moja' : 'bidhaa nyingine ' + int(d.autres)} zinakusubiri kwenye kikapu chako, bado zinapatikana. Agiza wakati wowote.`
-      : `“${d.titre}” inakusubiri kwenye kikapu chako, bado inapatikana. Agiza wakati wowote.`)]
-  },
-  ln: {
-    payee: ['Mbongo ekomi', 'Komande #{numero} endimami. Tozali kobongisa biloko na yo.'],
-    preparation: ['Komande ezali kobongisama', 'Komande #{numero}: biloko na yo ezali kobongisama.'],
-    expediee: ['Komande ezali na nzela', 'Komande #{numero}: moto ya livraison azali na nzela ({zone}).'],
-    prete: ['Komande ebongi', 'Komande #{numero}: biloko na yo ezali kozela yo na butiki.'],
-    livree: ['Komande ekomi', (d) => `Komande #${d.numero} epesami. Matondi mpo na elikya na yo!${num(d.gain) > 0 ? ` ${dollars(d.gain)} ebakisami na kesi na yo.` : ''}`],
-    retiree: ['Komande ezwami', (d) => `Komande #${d.numero} ezwami na butiki. Matondi mpo na elikya na yo!${num(d.gain) > 0 ? ` ${dollars(d.gain)} ebakisami na kesi na yo.` : ''}`],
-    annulee: ['Komande elongolami', 'Butiki elongoli komande #{numero}.'],
-    expiree: ['Mbongo ekomaki te', 'Komande #{numero} elongolami: mbongo ekomaki na ntango te.'],
-    remboursee: ['Mbongo ezongisami', (d) => `Komande #${d.numero}: mbongo ezongisami (${moyenTraduit(d.moyen, 'ln')}).`.replace(/ \(\)/, '')],
-    stock: ['Ezongi na stock', '“{titre}” ({option}) ezongi. Ezali mingi te: kozela te!'],
-    promo: ['{titre}', '{texte}'],
-    message: ['Eyano ya butiki', '{texte}'],
-    avis: ['Likanisi na yo ezali na ntina', (d) => (int(d.autres)
-      ? `Olingi “${d.titre}” mpe ${int(d.autres) === 1 ? 'eloko mosusu moko' : 'biloko mosusu ' + int(d.autres)}? Pesa likanisi na yo na mbala moko: esalisaka bakiliya mosusu.`
-      : `Olingi “${d.titre}”? Pesa likanisi na yo na mbala moko: esalisaka bakiliya mosusu.`)],
-    avis_reponse: ['Butiki ezongiseli yo', 'Likanisi na yo mpo na “{titre}”: {texte}'],
-    parrainage: ['Matondi mpo obengaki moninga!', (d) => `${d.filleul || 'Moninga obengaki'} azwi komande na ye ya liboso: ${dollars(d.montant)} ebakisami na kesi na yo.`],
-    cagnotte: ['Likabo ya butiki', (d) => `${dollars(d.montant)} ebakisami na kesi na yo${d.motif ? ` (${d.motif})` : ''}. Matondi mpo na bosembo na yo!`],
-    panier: ['Kitunga na yo ezali kozela yo', (d) => (int(d.autres)
-      ? `“${d.titre}” mpe ${int(d.autres) === 1 ? 'eloko mosusu moko' : 'biloko mosusu ' + int(d.autres)} ezali kozela yo na kitunga na yo, ezali naino. Sala komande ntango olingi.`
-      : `“${d.titre}” ezali kozela yo na kitunga na yo, ezali naino. Sala komande ntango olingi.`)]
   }
 };
-/* Le moyen de paiement d'un remboursement : nom de l'opérateur, ou « carte bancaire » dans la langue du client. */
-const CARTE_BANCAIRE = { en: 'bank card', sw: 'kadi ya benki', ln: 'carte ya banki' };
-const moyenTraduit = (moyen, langue) => (moyen === OPERATEURS.carte.label ? CARTE_BANCAIRE[langue] || moyen : moyen || '');
 /* Une notification ({ type, details }) en { titre, texte } dans la langue demandée (le français à défaut) ; null si type inconnu. */
 function texteNotification(n, langue) {
   const t = ((TEXTES_NOTIFICATIONS[langue] || {})[n && n.type]) || (TEXTES_NOTIFICATIONS.fr[n && n.type]);

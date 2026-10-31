@@ -9,15 +9,14 @@ import { lien, route, naviguer } from '../routeur.js';
 import { cfg, profil, client, connecte, canauxCodes, demanderCode, validerCode, nommerCompte, continuerSansCompte } from '../etat.js';
 import { EntetePage, Pied } from '../composants/cadre.jsx';
 import { useSeo } from './commun.jsx';
-import { t, tx } from '../../commun/js/langue.js';
 
 /* Ce que le compte apporte, en trois lignes. */
 export function Avantages() {
   return (
     <ul class="avantages-compte">
-      <li><span class="menu-icone"><Icone n="recu" /></span><span>{tx('{0} sur tous vos appareils', [<b>{t('Vos commandes et reçus')}</b>])}</span></li>
-      <li><span class="menu-icone"><Icone n="coeur" /></span><span>{tx('{0}, même en changeant de téléphone', [<b>{t('Panier et favoris gardés')}</b>])}</span></li>
-      <li><span class="menu-icone"><Icone n="camion" /></span><span>{tx('{0} : vous commandez en quelques secondes', [<b>{t('Vos coordonnées retenues')}</b>])}</span></li>
+      <li><span class="menu-icone"><Icone n="recu" /></span><span><b>Vos commandes et reçus</b> sur tous vos appareils</span></li>
+      <li><span class="menu-icone"><Icone n="coeur" /></span><span><b>Panier et favoris gardés</b>, même en changeant de téléphone</span></li>
+      <li><span class="menu-icone"><Icone n="camion" /></span><span><b>Vos coordonnées retenues</b> : vous commandez en quelques secondes</span></li>
     </ul>
   );
 }
@@ -35,11 +34,11 @@ export function InvitationCompte({ titre, texte, retour, pour, tel, sansCompte, 
       </div>
       <Avantages />
       <div class="pile">
-        <a class="btn btn-primaire btn-l btn-bloc" href={lienConnexion(retour, { ...(pour ? { pour } : {}), ...(tel ? { tel } : {}) })}><Icone n="personne" />{t('Créer mon compte')}</a>
-        <a class="btn btn-secondaire btn-bloc" href={lienConnexion(retour, { ...(pour ? { pour } : {}), ...(tel ? { tel } : {}), deja: '1' })}>{t('J’ai déjà un compte : me connecter')}</a>
-        {sansCompte ? <button class="btn btn-fantome btn-bloc" onClick={sansCompte}>{t('Continuer sans compte')}</button> : null}
+        <a class="btn btn-primaire btn-l btn-bloc" href={lienConnexion(retour, { ...(pour ? { pour } : {}), ...(tel ? { tel } : {}) })}><Icone n="personne" />Créer mon compte</a>
+        <a class="btn btn-secondaire btn-bloc" href={lienConnexion(retour, { ...(pour ? { pour } : {}), ...(tel ? { tel } : {}), deja: '1' })}>J’ai déjà un compte : me connecter</a>
+        {sansCompte ? <button class="btn btn-fantome btn-bloc" onClick={sansCompte}>Continuer sans compte</button> : null}
       </div>
-      <p class="discret tres-petit centre"><Icone n="cadenas" taille={14} />{' '}{tx('Pas de mot de passe : un code {0} suffit.', [canauxCodes.value[0] === 'whatsapp' ? t('reçu sur WhatsApp') : t('reçu par SMS')])}</p>
+      <p class="discret tres-petit centre"><Icone n="cadenas" taille={14} /> Pas de mot de passe : un code {canauxCodes.value[0] === 'whatsapp' ? 'reçu sur WhatsApp' : 'reçu par SMS'} suffit.</p>
     </section>
   );
 }
@@ -57,7 +56,7 @@ export function Connexion() {
   const [maintenant, setMaintenant] = useState(Date.now());
   const maj = (p) => setF((x) => ({ ...x, ...p }));
   const champCode = useRef(null);
-  useSeo(() => ({ titre: deja ? t('Se connecter') : t('Créer un compte'), noindex: true }), []);
+  useSeo(() => ({ titre: deja ? 'Se connecter' : 'Créer un compte', noindex: true }), []);
 
   // Déjà connecté (lien ouvert deux fois) : on repart tout de suite.
   useEffect(() => { if (connecte.value && f.etape === 'tel') naviguer(retour, { remplacer: true }); }, []);
@@ -73,21 +72,21 @@ export function Connexion() {
 
   function fin() {
     const c = client.value;
-    toast(c && c.name ? t('Bienvenue {0}, vous êtes connecté', [String(c.name).split(' ')[0]]) : t('Vous êtes connecté'), { icone: 'personne' });
+    toast(c && c.name ? `Bienvenue ${String(c.name).split(' ')[0]}, vous êtes connecté` : 'Vous êtes connecté', { icone: 'personne' });
     naviguer(retour, { remplacer: true });
   }
 
   async function envoyerCode(e, canal) {
     if (e) e.preventDefault();
     if (f.envoi) return;
-    const numero = R.valider.telephone(f.tel);
-    if (!numero) { maj({ erreurs: { tel: t('Numéro invalide. Exemple : 099 123 4567 ou +243 99 123 4567.') } }); return; }
+    const t = R.valider.telephone(f.tel);
+    if (!t) { maj({ erreurs: { tel: 'Numéro invalide. Exemple : 099 123 4567 ou +243 99 123 4567.' } }); return; }
     maj({ envoi: true, erreurs: {} });
     try {
-      const r = await demanderCode(numero, canal || f.canal);
+      const r = await demanderCode(t, canal || f.canal);
       maj({ etape: 'code', tel: r.telephone, canal: r.canal || 'sms', envoi: false, code: '', renvoiA: Date.now() + r.renvoi * 1000, codeTest: r.code || (r.deja ? f.codeTest : ''), test: !!r.test });
-      if (r.deja) toast(t('Un code vient déjà de vous être envoyé : regardez {0}', [f.canal === 'whatsapp' ? 'WhatsApp' : t('vos SMS')]), { icone: 'mobile' });
-      else if (canal) toast(canal === 'sms' ? t('Nouveau code envoyé par SMS') : t('Nouveau code envoyé sur WhatsApp'), { icone: 'mobile' });
+      if (r.deja) toast(`Un code vient déjà de vous être envoyé : regardez ${f.canal === 'whatsapp' ? 'WhatsApp' : 'vos SMS'}`, { icone: 'mobile' });
+      else if (canal) toast(canal === 'sms' ? 'Nouveau code envoyé par SMS' : 'Nouveau code envoyé sur WhatsApp', { icone: 'mobile' });
       setTimeout(() => champCode.current && champCode.current.focus(), 60);
     } catch (err) {
       maj({ envoi: false, erreurs: err.champ === 'telephone' ? { tel: err.message } : {} });
@@ -97,7 +96,7 @@ export function Connexion() {
 
   async function valider(saisi) {
     const code = R.codeConnexion(saisi !== undefined ? saisi : f.code);
-    if (!code) { maj({ erreurs: { code: t('Saisissez les {0} chiffres du code reçu.', [R.CODE_CHIFFRES]) } }); return; }
+    if (!code) { maj({ erreurs: { code: `Saisissez les ${R.CODE_CHIFFRES} chiffres du code reçu.` } }); return; }
     if (f.envoi) return;
     maj({ envoi: true, erreurs: {} });
     try {
@@ -113,57 +112,57 @@ export function Connexion() {
     e.preventDefault();
     if (f.envoi) return;
     const n = R.valider.nom(f.nom);
-    if (!n) { maj({ erreurs: { nom: t('Indiquez votre nom (2 à 60 lettres).') } }); return; }
+    if (!n) { maj({ erreurs: { nom: 'Indiquez votre nom (2 à 60 lettres).' } }); return; }
     maj({ envoi: true, erreurs: {} });
     try { await nommerCompte(n); fin(); } catch (err) { maj({ envoi: false }); toast(err.message, { icone: 'alerte', ton: 'danger' }); }
   }
 
   const attente = Math.max(0, Math.ceil((f.renvoiA - Math.max(maintenant, Date.now())) / 1000));
-  const whatsapp = f.canal === 'whatsapp'; const parQuoi = whatsapp ? t('sur WhatsApp') : t('par SMS');
+  const whatsapp = f.canal === 'whatsapp'; const parQuoi = whatsapp ? 'sur WhatsApp' : 'par SMS';
   const smsPossible = whatsapp && canauxCodes.value.includes('sms');
-  const titre = f.etape === 'nom' ? t('Bienvenue !') : deja ? t('Se connecter') : pourCommande ? t('Créez votre compte et commandez dès maintenant') : t('Créer mon compte');
+  const titre = f.etape === 'nom' ? 'Bienvenue !' : deja ? 'Se connecter' : pourCommande ? 'Créez votre compte et commandez dès maintenant' : 'Créer mon compte';
   return (
     <>
-      <EntetePage titre={deja ? t('Se connecter') : t('Créer un compte')} repli={retour} cacherTitreOrdi />
+      <EntetePage titre={deja ? 'Se connecter' : 'Créer un compte'} repli={retour} cacherTitreOrdi />
       <main id="contenu" class="page conteneur page-connexion">
         <div class="carte pile-l">
           {f.etape === 'tel' ? (
             <form class="pile-l" onSubmit={envoyerCode} noValidate>
               <div class="pile">
                 <h1 class="titre-serif">{titre}</h1>
-                <p class="attenue">{deja ? t('Saisissez le numéro de votre compte : nous vous envoyons un code {0}.', [parQuoi]) : t('Avec votre numéro de téléphone, en 30 secondes. Pas de mot de passe : nous vous envoyons un code {0}.', [parQuoi])}</p>
+                <p class="attenue">{deja ? `Saisissez le numéro de votre compte : nous vous envoyons un code ${parQuoi}.` : `Avec votre numéro de téléphone, en 30 secondes. Pas de mot de passe : nous vous envoyons un code ${parQuoi}.`}</p>
               </div>
               {deja ? null : <Avantages />}
               <div class="formulaire">
-                <Champ libelle={t('Votre téléphone')} erreur={f.erreurs.tel} aide={t('Le même numéro que pour vos commandes : elles rejoindront votre compte.')}>
+                <Champ libelle="Votre téléphone" erreur={f.erreurs.tel} aide="Le même numéro que pour vos commandes : elles rejoindront votre compte.">
                   {(a) => <input class="saisie" {...a} value={f.tel} onInput={(e) => maj({ tel: e.currentTarget.value, erreurs: {} })} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}
                 </Champ>
               </div>
-              <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit"><Icone n={whatsapp ? 'bulle' : 'mobile'} />{tx('Recevoir mon code {0}', [parQuoi])}</button>
-              {pourCommande ? <button type="button" class="btn btn-fantome btn-bloc" onClick={() => { continuerSansCompte(); naviguer(retour, { remplacer: true }); }}>{t('Continuer sans compte')}</button>
-                : <a class="btn btn-fantome btn-bloc" href={lien('/')}>{t('Continuer sans compte')}</a>}
+              <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit"><Icone n={whatsapp ? 'bulle' : 'mobile'} />Recevoir mon code {parQuoi}</button>
+              {pourCommande ? <button type="button" class="btn btn-fantome btn-bloc" onClick={() => { continuerSansCompte(); naviguer(retour, { remplacer: true }); }}>Continuer sans compte</button>
+                : <a class="btn btn-fantome btn-bloc" href={lien('/')}>Continuer sans compte</a>}
             </form>
           ) : null}
 
           {f.etape === 'code' ? (
             <form class="pile-l" onSubmit={(e) => { e.preventDefault(); valider(); }} noValidate>
               <div class="pile">
-                <h1 class="titre-serif">{tx('Code reçu {0}', [parQuoi])}</h1>
-                <p class="attenue">{whatsapp ? <>{tx('Ouvrez WhatsApp : le code de {0} est arrivé sur le {1}. Touchez « Copier le code », puis collez-le ici.', [cfg.value.name, <b class="num">{telephone(f.tel) || f.tel}</b>])}</> : <>{tx('Saisissez le code envoyé au {0}.', [<b class="num">{telephone(f.tel) || f.tel}</b>])}</>}{' '}{t('Il est valable 10 minutes.')}</p>
+                <h1 class="titre-serif">Code reçu {parQuoi}</h1>
+                <p class="attenue">{whatsapp ? <>Ouvrez WhatsApp : le code de {cfg.value.name} est arrivé sur le <b class="num">{telephone(f.tel) || f.tel}</b>. Touchez « Copier le code », puis collez-le ici.</> : <>Saisissez le code envoyé au <b class="num">{telephone(f.tel) || f.tel}</b>.</>} Il est valable 10 minutes.</p>
               </div>
-              {f.test ? <Note ton="info" icone="info">{tx('{0} rien n’est envoyé {1}.', [<b>{t('Mode test :')}</b>, parQuoi])}{' '}{f.codeTest ? <>{tx('Votre code est {0}.', [<b class="code">{f.codeTest}</b>])}</> : t('Utilisez le dernier code affiché.')}</Note> : null}
+              {f.test ? <Note ton="info" icone="info"><b>Mode test :</b> rien n’est envoyé {parQuoi}. {f.codeTest ? <>Votre code est <b class="code">{f.codeTest}</b>.</> : 'Utilisez le dernier code affiché.'}</Note> : null}
               <div class="formulaire">
-                <Champ libelle={t('Code à 6 chiffres')} erreur={f.erreurs.code}>
+                <Champ libelle="Code à 6 chiffres" erreur={f.erreurs.code}>
                   {(a) => <input ref={champCode} class="saisie saisie-code saisie-otp" {...a} value={f.code} type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="••••••"
                     onInput={(e) => { const v = R.chiffres(e.currentTarget.value).slice(0, R.CODE_CHIFFRES); maj({ code: v, erreurs: {} }); if (v.length === R.CODE_CHIFFRES) valider(v); }} />}
                 </Champ>
               </div>
-              <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit"><Icone n="coche" />{t('Valider')}</button>
+              <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit"><Icone n="coche" />Valider</button>
               <div class="pile">
-                <button type="button" class="btn btn-secondaire btn-bloc" disabled={attente > 0 || f.envoi} onClick={() => envoyerCode()}><Icone n="actualiser" />{attente > 0 ? t('Nouveau code dans {0} s', [attente]) : t('Renvoyer un code')}</button>
-                <button type="button" class="btn btn-fantome btn-bloc" onClick={() => maj({ etape: 'tel', code: '', canal: canauxCodes.value[0], erreurs: {} })}><Icone n="crayon" />{t('Changer de numéro')}</button>
+                <button type="button" class="btn btn-secondaire btn-bloc" disabled={attente > 0 || f.envoi} onClick={() => envoyerCode()}><Icone n="actualiser" />{attente > 0 ? `Nouveau code dans ${attente} s` : 'Renvoyer un code'}</button>
+                <button type="button" class="btn btn-fantome btn-bloc" onClick={() => maj({ etape: 'tel', code: '', canal: canauxCodes.value[0], erreurs: {} })}><Icone n="crayon" />Changer de numéro</button>
               </div>
-              {smsPossible ? <p class="centre petit">{t('Pas de WhatsApp sur ce numéro ?')}{' '}<button type="button" class="lien" disabled={attente > 0 || f.envoi} onClick={() => envoyerCode(null, 'sms')}>{attente > 0 ? t('Recevoir le code par SMS (dans {0} s)', [attente]) : t('Recevoir le code par SMS')}</button></p> : null}
+              {smsPossible ? <p class="centre petit">Pas de WhatsApp sur ce numéro ? <button type="button" class="lien" disabled={attente > 0 || f.envoi} onClick={() => envoyerCode(null, 'sms')}>{attente > 0 ? `Recevoir le code par SMS (dans ${attente} s)` : 'Recevoir le code par SMS'}</button></p> : null}
             </form>
           ) : null}
 
@@ -171,17 +170,17 @@ export function Connexion() {
             <form class="pile-l" onSubmit={enregistrerNom} noValidate>
               <div class="pile">
                 <h1 class="titre-serif">{titre}</h1>
-                <p class="attenue">{tx('Votre compte {0} est prêt. Comment vous appelez-vous ? Votre nom figurera sur vos commandes.', [cfg.value.name])}</p>
+                <p class="attenue">Votre compte {cfg.value.name} est prêt. Comment vous appelez-vous ? Votre nom figurera sur vos commandes.</p>
               </div>
               <div class="formulaire">
-                <Champ libelle={t('Nom complet')} erreur={f.erreurs.nom}>{(a) => <input class="saisie" {...a} value={f.nom} onInput={(e) => maj({ nom: e.currentTarget.value, erreurs: {} })} autocomplete="name" maxlength="60" placeholder={t('Ex. : Grâce Mapendo')} />}</Champ>
+                <Champ libelle="Nom complet" erreur={f.erreurs.nom}>{(a) => <input class="saisie" {...a} value={f.nom} onInput={(e) => maj({ nom: e.currentTarget.value, erreurs: {} })} autocomplete="name" maxlength="60" placeholder="Ex. : Grâce Mapendo" />}</Champ>
               </div>
-              <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit">{pourCommande ? t('Continuer ma commande') : t('Continuer')}</button>
-              <button type="button" class="btn btn-fantome btn-bloc" onClick={fin}>{t('Plus tard')}</button>
+              <button class={classes('btn btn-primaire btn-l btn-bloc', f.envoi && 'charge')} type="submit">{pourCommande ? 'Continuer ma commande' : 'Continuer'}</button>
+              <button type="button" class="btn btn-fantome btn-bloc" onClick={fin}>Plus tard</button>
             </form>
           ) : null}
         </div>
-        <p class="discret petit centre espace-haut">{tx('En créant un compte, vous acceptez que la boutique garde votre panier, vos favoris et vos coordonnées. Vous pouvez le supprimer à tout moment dans Mon compte. {0}', [<a class="lien" href={lien('/infos/confidentialite')}>{t('Confidentialité')}</a>])}</p>
+        <p class="discret petit centre espace-haut">En créant un compte, vous acceptez que la boutique garde votre panier, vos favoris et vos coordonnées. Vous pouvez le supprimer à tout moment dans Mon compte. <a class="lien" href={lien('/infos/confidentialite')}>Confidentialité</a></p>
       </main>
       <Pied />
     </>

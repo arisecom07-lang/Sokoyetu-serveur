@@ -18,9 +18,8 @@ import { jetonAppareil } from '../notifications.js';
 import { devisLocal, prixPieces } from './panier.jsx';
 import { cagnotte, chargerCagnotte, cagnotteOuverte, parrainageOuvert, parrain, oublierParrain, garderParrain, parrainageEstime } from '../fidelite.js';
 import { useSeo } from './commun.jsx';
-import { t, tx, aTraduire, traduireMessage } from '../../commun/js/langue.js';
 
-export const NOMS_ETAPES = [aTraduire('Livraison'), aTraduire('Paiement'), aTraduire('Reçu')];
+export const NOMS_ETAPES = ['Livraison', 'Paiement', 'Reçu'];
 const CHAMP_ETAPE = { name: 1, phone: 1, zone: 1, address: 1, method: 2, payphone: 2, terms: 2, remise: 2 };
 
 function brouillonInitial() {
@@ -40,15 +39,15 @@ function brouillonInitial() {
 }
 
 /* Montants : sous-total, réduction, livraison, frais de service, total (commande, reçu, suivi). */
-export function Montants({ m, zone, libelleTotal = t('Total') }) {
+export function Montants({ m, zone, libelleTotal = 'Total' }) {
   return (
     <dl class="montants espace-haut">
-      <div><dt>{t('Sous-total')}</dt><dd class="num">{dollars(m.sousTotal)}</dd></div>
-      {m.remise ? <div><dt>{tx('Code {0}', [m.remise.code])}</dt><dd class="moins num">−{dollars(m.remise.amount)}</dd></div> : null}
-      {m.bienvenue ? <div><dt>{t('Cadeau de bienvenue')}</dt><dd class="moins num">−{dollars(m.bienvenue.amount)}</dd></div> : null}
-      {m.cagnotte ? <div><dt>{t('Ma cagnotte')}</dt><dd class="moins num">−{dollars(m.cagnotte)}</dd></div> : null}
-      <div><dt>{tx('Livraison{0}', [zone ? ` · ${t(zone)}` : ''])}</dt><dd class="num">{m.livraison ? dollars(m.livraison) : t('Gratuite')}</dd></div>
-      {m.frais ? <div><dt>{tx('Frais de service ({0} %)', [R.num(m.fraisPct)])}</dt><dd class="num">{dollars(m.frais)}</dd></div> : null}
+      <div><dt>Sous-total</dt><dd class="num">{dollars(m.sousTotal)}</dd></div>
+      {m.remise ? <div><dt>Code {m.remise.code}</dt><dd class="moins num">−{dollars(m.remise.amount)}</dd></div> : null}
+      {m.bienvenue ? <div><dt>Cadeau de bienvenue</dt><dd class="moins num">−{dollars(m.bienvenue.amount)}</dd></div> : null}
+      {m.cagnotte ? <div><dt>Ma cagnotte</dt><dd class="moins num">−{dollars(m.cagnotte)}</dd></div> : null}
+      <div><dt>Livraison{zone ? ` · ${zone}` : ''}</dt><dd class="num">{m.livraison ? dollars(m.livraison) : 'Gratuite'}</dd></div>
+      {m.frais ? <div><dt>Frais de service ({R.num(m.fraisPct)} %)</dt><dd class="num">{dollars(m.frais)}</dd></div> : null}
       <div class="total"><dt class="lib">{libelleTotal}</dt><dd class="num">{dollars(m.total)}</dd></div>
     </dl>
   );
@@ -67,14 +66,14 @@ export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, tel
   const moyen = ms.find((m) => m.k === methode);
   return (
     <>
-      <div class="choix-liste" role="radiogroup" aria-label={ms.some((m) => m.carte) ? t('Moyen de paiement') : t('Opérateur Mobile Money')}>
-        {ms.map((m) => <Choix key={m.k} actif={methode === m.k} onClick={() => onMethode(m.k)} icone={<LogoOperateur m={m} />} titre={t(m.label)} sous={t(m.sub)} />)}
+      <div class="choix-liste" role="radiogroup" aria-label={ms.some((m) => m.carte) ? 'Moyen de paiement' : 'Opérateur Mobile Money'}>
+        {ms.map((m) => <Choix key={m.k} actif={methode === m.k} onClick={() => onMethode(m.k)} icone={<LogoOperateur m={m} />} titre={m.label} sous={m.sub} />)}
       </div>
       {erreurs.method ? <p class="champ-erreur"><Icone n="alerte" />{erreurs.method}</p> : null}
-      {moyen && moyen.carte ? <Note ton="info" icone="cadenas" classe="espace-haut">{t('Vous saisirez votre carte sur la page sécurisée de notre partenaire de paiement : la boutique ne voit jamais son numéro.')}</Note> : (
+      {moyen && moyen.carte ? <Note ton="info" icone="cadenas" classe="espace-haut">Vous saisirez votre carte sur la page sécurisée de notre partenaire de paiement : la boutique ne voit jamais son numéro.</Note> : (
       <div class="formulaire espace-haut">
-        <Champ libelle={t('Entrez le numéro de votre compte {0}', [moyen ? moyen.label : 'Mobile Money'])} erreur={erreurs.payphone}
-          aide={t('La demande de paiement arrive sur ce téléphone : vous la validez avec votre code PIN.{0}', [telContact ? t(' Laissé vide, nous utilisons votre numéro {0}.', [telephone(telContact)]) : ''])}>
+        <Champ libelle={`Entrez le numéro de votre compte ${moyen ? moyen.label : 'Mobile Money'}`} erreur={erreurs.payphone}
+          aide={`La demande de paiement arrive sur ce téléphone : vous la validez avec votre code PIN.${telContact ? ` Laissé vide, nous utilisons votre numéro ${telephone(telContact)}.` : ''}`}>
           {(a) => <input class="saisie saisie-numero" {...a} value={tel} onInput={(e) => onTel(e.currentTarget.value)} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder={`Ex. ${(moyen && moyen.exemple) || '099 123 4567'}`} />}
         </Champ>
       </div>
@@ -86,32 +85,33 @@ export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, tel
 /* Étape du paiement : cadeau de bienvenue du parrainage, cagnotte à utiliser, et ce que la commande rapportera. */
 function CarteFidelite({ dv, utiliser, onUtiliser }) {
   const cl = client.value; const g = cl ? cagnotte.value : null; const p = parrainageOuvert.value ? parrain.value : null;
-  const de = p && p.prenom ? t(' de {0}', [p.prenom]) : '';
+  const de = p && p.prenom ? ` de ${p.prenom}` : '';
   let cadeau = null;
-  if (p && !cl) cadeau = <Note ton="info" icone="cadeau">{tx('Votre cadeau{0} ({1}) s’applique avec votre compte, gratuit et sans mot de passe. {2}', [de, <span class="num">{dollars(p.montant)}</span>, <a class="lien" href={lien('/compte/connexion?pour=commande&retour=/commander')}>{t('Créer mon compte')}</a>])}</Note>;
+  if (p && !cl) cadeau = <Note ton="info" icone="cadeau">Votre cadeau{de} (<span class="num">{dollars(p.montant)}</span>) s’applique avec votre compte, gratuit et sans mot de passe. <a class="lien" href={lien('/compte/connexion?pour=commande&retour=/commander')}>Créer mon compte</a></Note>;
   else if (p && g) {
-    const texte = traduireMessage(R.raisonParrainage(!g.premiere ? 'deja-client' : g.parrainage && g.parrainage.code === p.code ? 'soi-meme' : '', dv, p.min));
-    cadeau = texte ? <Note ton="info" icone="cadeau">{texte}</Note> : <Note ton="ok" icone="cadeau">{tx('Cadeau{0} : {1} sur votre première commande.', [de, <b class="num">−{dollars(dv.bienvenue ? dv.bienvenue.amount : p.montant)}</b>])}</Note>;
+    const texte = R.raisonParrainage(!g.premiere ? 'deja-client' : g.parrainage && g.parrainage.code === p.code ? 'soi-meme' : '', dv, p.min);
+    cadeau = texte ? <Note ton="info" icone="cadeau">{texte}</Note> : <Note ton="ok" icone="cadeau">Cadeau{de} : <b class="num">−{dollars(dv.bienvenue ? dv.bienvenue.amount : p.montant)}</b> sur votre première commande.</Note>;
   }
   const solde = g ? g.solde : 0;
   return (
     <section class="carte entree-avant carte-fidelite">
-      <h2 class="carte-titre"><Icone n="tirelire" />{t('Ma cagnotte')}</h2>
+      <h2 class="carte-titre"><Icone n="tirelire" />Ma cagnotte</h2>
       <div class="pile">
         {cadeau}
         {solde > 0 ? (
           <CaseACocher coche={utiliser} onClick={onUtiliser}>
-            {tx('Utiliser ma cagnotte : {0} disponibles{1}', [<b class="num">{dollars(solde)}</b>, <small class="case-sous">{utiliser && dv.cagnotte ? t('−{0} sur cette commande', [dollars(dv.cagnotte)]) : t('Elle règle jusqu’à la moitié des articles.')}</small>])}
+            Utiliser ma cagnotte : <b class="num">{dollars(solde)}</b> disponibles
+            <small class="case-sous">{utiliser && dv.cagnotte ? `−${dollars(dv.cagnotte)} sur cette commande` : 'Elle règle jusqu’à la moitié des articles.'}</small>
           </CaseACocher>
-        ) : g ? <p class="attenue petit">{t('Votre cagnotte est vide pour l’instant : elle se remplit à chaque commande livrée.')}</p> : null}
-        {dv.gain > 0 ? <p class="gain-cagnotte"><Icone n="tirelire" /><span>{tx('Cette commande vous rapportera {0}, versés à la livraison{1}.', [<b class="num">{dollars(dv.gain)}</b>, cl ? '' : ' : votre compte les retrouve avec votre numéro'])}</span></p> : null}
+        ) : g ? <p class="attenue petit">Votre cagnotte est vide pour l’instant : elle se remplit à chaque commande livrée.</p> : null}
+        {dv.gain > 0 ? <p class="gain-cagnotte"><Icone n="tirelire" /><span>Cette commande vous rapportera <b class="num">{dollars(dv.gain)}</b>, versés à la livraison{cl ? '' : ' : votre compte les retrouve avec votre numéro'}.</span></p> : null}
       </div>
     </section>
   );
 }
 
 export function NoteModeTest({ carte }) {
-  return <Note ton="info" icone="info">{tx('{0} Aucun argent n’est débité : {1}', [<b>{t('Mode test.')}</b>, carte ? t('une page de test remplace la page sécurisée de la carte, et vous y choisissez l’issue du paiement.') : t('le paiement est confirmé tout seul après quelques secondes (refusé si le numéro se termine par 0000).')])}</Note>;
+  return <Note ton="info" icone="info"><b>Mode test.</b> Aucun argent n’est débité : {carte ? 'une page de test remplace la page sécurisée de la carte, et vous y choisissez l’issue du paiement.' : 'le paiement est confirmé tout seul après quelques secondes (refusé si le numéro se termine par 0000).'}</Note>;
 }
 
 export function Commander() {
@@ -122,7 +122,7 @@ export function Commander() {
   const haut = useRef(null);
   // Verrou immédiat (avant même le nouvel affichage) : deux appuis rapides sur « Payer » n'envoient qu'une demande.
   const verrou = useRef(false);
-  useSeo(() => ({ titre: t('Commande'), noindex: true }), []);
+  useSeo(() => ({ titre: 'Commande', noindex: true }), []);
 
   // Brouillon gardé sur l'appareil (et le jeton : un nouvel essai ne crée jamais de doublon)
   useEffect(() => {
@@ -134,18 +134,18 @@ export function Commander() {
   useEffect(() => { if (client.value && cagnotteOuverte.value) chargerCagnotte().catch(() => { }); }, [client.value && client.value.id, cagnotteOuverte.value]);
 
   if (!lignes.length) {
-    return <><EntetePage titre={t('Commande')} repli="/panier" /><main id="contenu" class="page conteneur"><Vide icone="sac" titre={t('Aucun article à commander')} texte={t('Cochez dans votre panier les articles que vous voulez commander maintenant.')}><a class="btn btn-primaire" href={lien('/panier')}>{t('Voir mon panier')}</a></Vide></main></>;
+    return <><EntetePage titre="Commande" repli="/panier" /><main id="contenu" class="page conteneur"><Vide icone="sac" titre="Aucun article à commander" texte="Cochez dans votre panier les articles que vous voulez commander maintenant."><a class="btn btn-primaire" href={lien('/panier')}>Voir mon panier</a></Vide></main></>;
   }
 
   // Avant la commande, la création d'un compte est proposée ; « Continuer sans compte » reste toujours possible.
   if (comptesOuverts.value && !connecte.value && !sansCompte.value) {
     return (
       <>
-        <EntetePage titre={t('Commande')} sous={t('Avec ou sans compte')} repli="/panier" />
+        <EntetePage titre="Commande" sous="Avec ou sans compte" repli="/panier" />
         <main id="contenu" class="page conteneur page-choix-compte">
-          <InvitationCompte titre={parrainageOuvert.value && parrain.value ? t('Créez votre compte pour recevoir votre cadeau de {0}', [dollars(parrain.value.montant)]) : t('Créez votre compte et commencez à commander dès maintenant')} texte={t('En 30 secondes, avec votre numéro de téléphone.')} retour="/commander" pour="commande" tel={f.tel}
+          <InvitationCompte titre={parrainageOuvert.value && parrain.value ? `Créez votre compte pour recevoir votre cadeau de ${dollars(parrain.value.montant)}` : 'Créez votre compte et commencez à commander dès maintenant'} texte="En 30 secondes, avec votre numéro de téléphone." retour="/commander" pour="commande" tel={f.tel}
             sansCompte={() => { continuerSansCompte(); window.scrollTo(0, 0); }} />
-          <p class="discret petit centre">{t('Sans compte, vous commandez tout de suite. Vous pourrez créer votre compte plus tard : vos commandes passées avec le même téléphone vous suivront.')}</p>
+          <p class="discret petit centre">Sans compte, vous commandez tout de suite. Vous pourrez créer votre compte plus tard : vos commandes passées avec le même téléphone vous suivront.</p>
         </main>
       </>
     );
@@ -167,37 +167,37 @@ export function Commander() {
 
   function verifierEtape1() {
     const e = {};
-    if (!R.valider.nom(f.nom)) e.name = t('Indiquez votre nom complet (2 à 60 lettres).');
-    if (!R.valider.telephone(f.tel)) e.phone = t('Numéro invalide. Exemple : 099 123 4567 ou +243 99 123 4567.');
-    if (!zone) e.zone = t('Choisissez une zone de livraison.');
-    if (zone && !retrait && R.nettoyer(f.adresse, 120).length < 4) e.address = t('Indiquez votre adresse : quartier, avenue, numéro.');
+    if (!R.valider.nom(f.nom)) e.name = 'Indiquez votre nom complet (2 à 60 lettres).';
+    if (!R.valider.telephone(f.tel)) e.phone = 'Numéro invalide. Exemple : 099 123 4567 ou +243 99 123 4567.';
+    if (!zone) e.zone = 'Choisissez une zone de livraison.';
+    if (zone && !retrait && R.nettoyer(f.adresse, 120).length < 4) e.address = 'Indiquez votre adresse : quartier, avenue, numéro.';
     return e;
   }
 
   async function appliquerCode() {
     const code = R.valider.codePromo(f.code);
     if (!f.code.trim()) { maj({ remise: null, erreurs: { ...f.erreurs, code: '' } }); return; }
-    if (!code) { maj({ remise: null, erreurs: { ...f.erreurs, code: t('Ce code n’est pas valide.') } }); return; }
+    if (!code) { maj({ remise: null, erreurs: { ...f.erreurs, code: 'Ce code n’est pas valide.' } }); return; }
     try {
       const r = await requete(`sokoyetu/discount?code=${encodeURIComponent(code)}&subtotal=${dv.sousTotal}`);
-      if (r && r.ok) { maj({ remise: { code: r.code, type: r.type, value: r.value, minSubtotal: r.minSubtotal }, devis: null, erreurs: { ...f.erreurs, code: '' } }); toast(t('Code {0} appliqué', [r.code]), { icone: 'etiquette' }); return; }
+      if (r && r.ok) { maj({ remise: { code: r.code, type: r.type, value: r.value, minSubtotal: r.minSubtotal }, devis: null, erreurs: { ...f.erreurs, code: '' } }); toast(`Code ${r.code} appliqué`, { icone: 'etiquette' }); return; }
       // Le code d'un parrain, saisi à la place d'un code promo : son cadeau de bienvenue est gardé.
       const p = parrainageOuvert.value && R.codeParrainValide(code) ? await requete('sokoyetu/parrainage?code=' + encodeURIComponent(code)).catch(() => null) : null;
       if (p && p.ok) {
         garderParrain(p);
         maj({ code: '', remise: null, devis: null, erreurs: { ...f.erreurs, code: '' } });
-        toast(t('Code de parrainage{0} : {1} offerts sur votre première commande', [p.prenom ? ' de ' + p.prenom : '', dollars(p.bienvenue)]), { icone: 'cadeau', duree: 4500 });
+        toast(`Code de parrainage${p.prenom ? ' de ' + p.prenom : ''} : ${dollars(p.bienvenue)} offerts sur votre première commande`, { icone: 'cadeau', duree: 4500 });
         return;
       }
-      maj({ remise: null, erreurs: { ...f.erreurs, code: (r && r.reason && traduireMessage(r.reason)) || t('Ce code n’est pas valide.') } });
+      maj({ remise: null, erreurs: { ...f.erreurs, code: (r && r.reason) || 'Ce code n’est pas valide.' } });
     } catch (e) { maj({ erreurs: { ...f.erreurs, code: e.message } }); }
   }
 
   function panierChange(messages) {
     const id = ouvrirFeuille({
-      titre: t('Votre panier a changé'),
-      contenu: () => <div class="pile"><p class="attenue">{t('Avant de payer, vérifiez ces points :')}</p><ul class="liste-points">{messages.map((m, i) => <li key={i}><Icone n="alerte" />{m}</li>)}</ul></div>,
-      pied: () => <button class="btn btn-primaire btn-bloc" onClick={() => { fermerFeuille(id); naviguer('/panier'); }}>{t('Modifier mon panier')}</button>
+      titre: 'Votre panier a changé',
+      contenu: () => <div class="pile"><p class="attenue">Avant de payer, vérifiez ces points :</p><ul class="liste-points">{messages.map((m, i) => <li key={i}><Icone n="alerte" />{m}</li>)}</ul></div>,
+      pied: () => <button class="btn btn-primaire btn-bloc" onClick={() => { fermerFeuille(id); naviguer('/panier'); }}>Modifier mon panier</button>
     });
   }
 
@@ -205,21 +205,21 @@ export function Commander() {
   async function confirmerMontant() {
     const r = await requete('sokoyetu/devis', { method: 'POST', corps: { items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })), zoneId: f.zoneId, discountCode: f.remise ? f.remise.code : '', ...fidelite } });
     const bloquants = (r.problemes || []).filter((p) => p.code !== 'remise');
-    if (bloquants.length) { panierChange(bloquants.map((p) => traduireMessage(p.message))); return null; }
+    if (bloquants.length) { panierChange(bloquants.map((p) => p.message)); return null; }
     const remiseRefusee = (r.problemes || []).find((p) => p.code === 'remise');
     const devis = { lignes: r.lignes, sousTotal: r.sousTotal, remise: r.remise, bienvenue: r.bienvenue, cagnotte: r.cagnotte, livraison: r.livraison, frais: r.frais, fraisPct: r.fraisPct, total: r.total, gain: r.gain, poids: r.poids, problemes: [] };
     // Le serveur a le dernier mot : cadeau de bienvenue refusé (déjà client, son propre lien), solde de la cagnotte.
     const fi = r.fidelite || {};
-    if (fidelite.parrain && fi.raison && fi.raison !== 'compte') { toast(traduireMessage(R.raisonParrainage(fi.raison)), { icone: 'cadeau', duree: 5000 }); oublierParrain(); }
+    if (fidelite.parrain && fi.raison && fi.raison !== 'compte') { toast(R.raisonParrainage(fi.raison), { icone: 'cadeau', duree: 5000 }); oublierParrain(); }
     if (cagnotte.value && typeof fi.solde === 'number' && fi.solde !== cagnotte.value.solde) cagnotte.value = { ...cagnotte.value, solde: fi.solde };
     if (remiseRefusee) {
-      maj({ devis, remise: null, erreurs: { code: traduireMessage(remiseRefusee.message) } });
-      toast(t('Le code promo ne s’applique plus : vérifiez le nouveau montant'), { icone: 'alerte', ton: 'danger', duree: 4500 });
+      maj({ devis, remise: null, erreurs: { code: remiseRefusee.message } });
+      toast('Le code promo ne s’applique plus : vérifiez le nouveau montant', { icone: 'alerte', ton: 'danger', duree: 4500 });
       return null;
     }
     if (Math.abs(r.total - dv.total) > 0.009) {
       maj({ devis });
-      toast(t('Le montant à payer est maintenant de {0}. Vérifiez-le, puis payez.', [dollars(r.total)]), { icone: 'alerte', ton: 'danger', duree: 5000 });
+      toast(`Le montant à payer est maintenant de ${dollars(r.total)}. Vérifiez-le, puis payez.`, { icone: 'alerte', ton: 'danger', duree: 5000 });
       return null;
     }
     maj({ devis });
@@ -233,9 +233,9 @@ export function Commander() {
   }
   async function payerUneFois() {
     const e = {};
-    if (!moyen) e.method = carteAcceptee.value ? t('Choisissez votre moyen de paiement.') : t('Choisissez votre opérateur Mobile Money.');
-    else if (!moyen.carte && !R.valider.mobileMoney(telDebite)) e.payphone = t('Numéro {0} invalide : 10 chiffres, commençant par 08 ou 09.', [moyen.label]);
-    if (!f.conditions) e.terms = t('Cochez cette case pour payer.');
+    if (!moyen) e.method = carteAcceptee.value ? 'Choisissez votre moyen de paiement.' : 'Choisissez votre opérateur Mobile Money.';
+    else if (!moyen.carte && !R.valider.mobileMoney(telDebite)) e.payphone = `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`;
+    if (!f.conditions) e.terms = 'Cochez cette case pour payer.';
     if (Object.keys(e).length) { maj({ erreurs: e }); montrerErreur(); return; }
     maj({ envoi: true, erreurs: {} });
     let devis;
@@ -275,9 +275,9 @@ export function Commander() {
   function connexionCoupee(err) {
     if (err && err.code === 'limite') { toast(err.message, { icone: 'horloge', ton: 'danger', duree: 5000 }); return; }
     const id = ouvrirFeuille({
-      titre: t('Connexion interrompue'),
-      contenu: () => <div class="pile"><p class="attenue">{t('La demande de paiement n’est peut-être pas partie. Réessayez : votre commande ne sera jamais enregistrée ni payée deux fois.')}</p></div>,
-      pied: () => <button class="btn btn-primaire btn-bloc" onClick={() => { fermerFeuille(id); setTimeout(payer, 300); }}><Icone n="actualiser" />{t('Réessayer')}</button>
+      titre: 'Connexion interrompue',
+      contenu: () => <div class="pile"><p class="attenue">La demande de paiement n’est peut-être pas partie. Réessayez : votre commande ne sera jamais enregistrée ni payée deux fois.</p></div>,
+      pied: () => <button class="btn btn-primaire btn-bloc" onClick={() => { fermerFeuille(id); setTimeout(payer, 300); }}><Icone n="actualiser" />Réessayer</button>
     });
   }
 
@@ -289,51 +289,51 @@ export function Commander() {
   const pieces = prixPieces(lignes);
   const recap = (
     <div class="carte">
-      <h2 class="carte-titre"><Icone n="recu" />{tx('Récapitulatif{0}', [<span class="fin">{pluriel(lignes.reduce((a, l) => a + l.qty, 0), 'article')}</span>])}</h2>
+      <h2 class="carte-titre"><Icone n="recu" />Récapitulatif<span class="fin">{pluriel(lignes.reduce((a, l) => a + l.qty, 0), 'article')}</span></h2>
       <ul class="recap-articles">
         {lignes.map((l) => l.p ? (
           <li key={l.cle}><span class="ra-photo"><Photo m={R.imagePrincipale(l.p)} alt="" tailles="56px" />{l.qty > 1 ? <i>{l.qty}</i> : null}</span><span class="ra-texte"><b>{l.p.title}</b><small>{[l.color, l.size].filter(Boolean).join(' · ')}</small></span><span class="num">{dollars(pieces.get(l.cle).prix * l.qty)}</span></li>
         ) : null)}
       </ul>
-      <Montants m={dv} zone={zone && zone.name} libelleTotal={f.etape === 2 ? t('À payer') : t('Total')} />
+      <Montants m={dv} zone={zone && zone.name} libelleTotal={f.etape === 2 ? 'À payer' : 'Total'} />
       {francs(dv.total, c) ? <p class="discret petit droite">{francs(dv.total, c)}</p> : null}
     </div>
   );
 
   return (
     <>
-      <EntetePage titre={t('Commande')} sous={t('Étape {0} sur 3 · {1}', [f.etape, t(NOMS_ETAPES[f.etape - 1])])} repli="/panier" cacherTitreOrdi onRetour={f.etape > 1 ? () => allerA(f.etape - 1) : undefined} />
+      <EntetePage titre="Commande" sous={`Étape ${f.etape} sur 3 · ${NOMS_ETAPES[f.etape - 1]}`} repli="/panier" cacherTitreOrdi onRetour={f.etape > 1 ? () => allerA(f.etape - 1) : undefined} />
       <main id="contenu" class="page conteneur page-commande" data-etape={f.etape} ref={haut}>
-        <div class="commande-tete"><h1 class="titre-serif seulement-ordi">{t('Finaliser ma commande')}</h1><Etapes noms={NOMS_ETAPES} actuelle={f.etape} /></div>
+        <div class="commande-tete"><h1 class="titre-serif seulement-ordi">Finaliser ma commande</h1><Etapes noms={NOMS_ETAPES} actuelle={f.etape} /></div>
         <div class="commande-grille">
           <div class="pile-l" key={f.etape}>
             {f.etape === 1 ? (
               <>
                 <section class="carte entree-avant">
-                  <h2 class="carte-titre"><Icone n="personne" />{t('Vos coordonnées')}</h2>
-                  {client.value ? <p class="discret petit rangee espace-bas"><Icone n="coche" taille={15} />{tx('Connecté : la commande s’ajoute à votre compte ({0}).', [telephone(client.value.phone) || client.value.phone])}</p> : null}
+                  <h2 class="carte-titre"><Icone n="personne" />Vos coordonnées</h2>
+                  {client.value ? <p class="discret petit rangee espace-bas"><Icone n="coche" taille={15} />Connecté : la commande s’ajoute à votre compte ({telephone(client.value.phone) || client.value.phone}).</p> : null}
                   <div class="formulaire">
-                    <Champ libelle={t('Nom complet')} erreur={f.erreurs.name}>{(a) => <input class="saisie" {...a} value={f.nom} onInput={champ('nom')} autocomplete="name" maxlength="60" placeholder={t('Ex. : Grâce Mapendo')} />}</Champ>
-                    <Champ libelle={t('Téléphone')} erreur={f.erreurs.phone} aide={t('Le livreur vous appelle à ce numéro.')}>{(a) => <input class="saisie" {...a} value={f.tel} onInput={champ('tel')} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}</Champ>
-                    <div class="pot-de-miel" aria-hidden="true"><label>{t('Ne pas remplir')}<input id="site-web" tabIndex={-1} autocomplete="off" /></label></div>
+                    <Champ libelle="Nom complet" erreur={f.erreurs.name}>{(a) => <input class="saisie" {...a} value={f.nom} onInput={champ('nom')} autocomplete="name" maxlength="60" placeholder="Ex. : Grâce Mapendo" />}</Champ>
+                    <Champ libelle="Téléphone" erreur={f.erreurs.phone} aide="Le livreur vous appelle à ce numéro.">{(a) => <input class="saisie" {...a} value={f.tel} onInput={champ('tel')} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="099 123 4567" />}</Champ>
+                    <div class="pot-de-miel" aria-hidden="true"><label>Ne pas remplir<input id="site-web" tabIndex={-1} autocomplete="off" /></label></div>
                   </div>
                 </section>
                 <section class="carte entree-avant">
-                  <h2 class="carte-titre"><Icone n="camion" />{t('Livraison')}</h2>
-                  <div class="choix-liste" role="radiogroup" aria-label={t('Zone de livraison')}>
-                    {c.zones.map((z) => <Choix key={z.id} actif={f.zoneId === z.id} onClick={() => maj({ zoneId: z.id, devis: null, erreurs: { ...f.erreurs, zone: '' } })} icone={z.pickup ? 'boutique' : 'camion'} titre={t(z.name)}
-                      sous={`${(() => { const v = R.arrondi(R.num(z.fee) + (z.pickup ? 0 : R.num(z.perKg) * R.num(dv.poids))); return v ? dollars(v) : t('Gratuit'); })()}${z.pickup ? t(' · à retirer en boutique') : z.days > 1 ? t(' · sous {0} jours', [z.days]) : t(' · sous 24 h')}`} />)}
+                  <h2 class="carte-titre"><Icone n="camion" />Livraison</h2>
+                  <div class="choix-liste" role="radiogroup" aria-label="Zone de livraison">
+                    {c.zones.map((z) => <Choix key={z.id} actif={f.zoneId === z.id} onClick={() => maj({ zoneId: z.id, devis: null, erreurs: { ...f.erreurs, zone: '' } })} icone={z.pickup ? 'boutique' : 'camion'} titre={z.name}
+                      sous={`${(() => { const v = R.arrondi(R.num(z.fee) + (z.pickup ? 0 : R.num(z.perKg) * R.num(dv.poids))); return v ? dollars(v) : 'Gratuit'; })()}${z.pickup ? ' · à retirer en boutique' : z.days > 1 ? ` · sous ${z.days} jours` : ' · sous 24 h'}`} />)}
                   </div>
                   {f.erreurs.zone ? <p class="champ-erreur"><Icone n="alerte" />{f.erreurs.zone}</p> : null}
-                  {retrait ? <Note ton="info" icone="boutique" classe="espace-haut">{tx('Vous récupérez votre commande à la boutique de {0}. Nous vous appelons dès qu’elle est prête.', [c.city])}</Note> : (
+                  {retrait ? <Note ton="info" icone="boutique" classe="espace-haut">Vous récupérez votre commande à la boutique de {c.city}. Nous vous appelons dès qu’elle est prête.</Note> : (
                     <div class="formulaire espace-haut">
-                      <Champ libelle={t('Adresse')} erreur={f.erreurs.address} aide={t('Quartier, avenue, numéro.')}>{(a) => <input class="saisie" {...a} value={f.adresse} onInput={champ('adresse')} autocomplete="street-address" maxlength="120" placeholder={t('Ex. : Nyawera, av. Lumumba n° 12')} />}</Champ>
-                      <Champ libelle={t('Point de repère')} facultatif>{(a) => <input class="saisie" {...a} value={f.repere} onInput={champ('repere')} maxlength="80" placeholder={t('Ex. : en face de la pharmacie')} />}</Champ>
+                      <Champ libelle="Adresse" erreur={f.erreurs.address} aide="Quartier, avenue, numéro.">{(a) => <input class="saisie" {...a} value={f.adresse} onInput={champ('adresse')} autocomplete="street-address" maxlength="120" placeholder="Ex. : Nyawera, av. Lumumba n° 12" />}</Champ>
+                      <Champ libelle="Point de repère" facultatif>{(a) => <input class="saisie" {...a} value={f.repere} onInput={champ('repere')} maxlength="80" placeholder="Ex. : en face de la pharmacie" />}</Champ>
                     </div>
                   )}
-                  <div class="espace-haut"><Champ libelle={t('Note pour la boutique')} facultatif>{(a) => <textarea class="saisie" {...a} rows="2" value={f.note} onInput={champ('note')} maxlength="300" placeholder={t('Horaires, précisions…')} />}</Champ></div>
+                  <div class="espace-haut"><Champ libelle="Note pour la boutique" facultatif>{(a) => <textarea class="saisie" {...a} rows="2" value={f.note} onInput={champ('note')} maxlength="300" placeholder="Horaires, précisions…" />}</Champ></div>
                 </section>
-                <p class="discret petit rangee"><Icone n="cadenas" taille={15} />{tx('Ces informations servent uniquement à livrer votre commande. {0}', [<a class="lien" href={lien('/infos/confidentialite')}>{t('Confidentialité')}</a>])}</p>
+                <p class="discret petit rangee"><Icone n="cadenas" taille={15} />Ces informations servent uniquement à livrer votre commande. <a class="lien" href={lien('/infos/confidentialite')}>Confidentialité</a></p>
               </>
             ) : null}
 
@@ -341,52 +341,52 @@ export function Commander() {
               <>
                 {enTest && ouvert ? <NoteModeTest carte={!!(moyen && moyen.carte)} /> : null}
                 <section class="carte carte-paiement entree-avant" style={moyen ? { '--op': moyen.color } : undefined}>
-                  <h2 class="carte-titre"><Icone n="portefeuille" />{carteAcceptee.value ? t('Paiement') : t('Payer par Mobile Money')}</h2>
+                  <h2 class="carte-titre"><Icone n="portefeuille" />{carteAcceptee.value ? 'Paiement' : 'Payer par Mobile Money'}</h2>
                   {ouvert ? (
                     <>
                       <p class="attenue petit intro-paiement">{carteAcceptee.value
-                        ? t('Mobile Money : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. Carte Visa ou Mastercard : vous la saisissez sur une page sécurisée. La commande est confirmée dès que le paiement est validé.')
-                        : t('Choisissez votre opérateur : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. La commande est confirmée dès que l’opérateur valide le paiement.')}</p>
+                        ? 'Mobile Money : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. Carte Visa ou Mastercard : vous la saisissez sur une page sécurisée. La commande est confirmée dès que le paiement est validé.'
+                        : 'Choisissez votre opérateur : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. La commande est confirmée dès que l’opérateur valide le paiement.'}</p>
                       <ChoixPaiement ms={ms} methode={f.methode} tel={f.telPaiement} erreurs={f.erreurs} telContact={R.valider.mobileMoney(f.tel) ? f.tel : ''}
                         onMethode={(k) => maj({ methode: k, erreurs: { ...f.erreurs, method: '' } })} onTel={(v) => maj({ telPaiement: v, erreurs: { ...f.erreurs, payphone: '' } })} />
                     </>
-                  ) : <Note ton="alerte" icone="horloge">{t('Le paiement en ligne ouvre très bientôt. Gardez votre panier : il vous attend sur ce téléphone.')}</Note>}
+                  ) : <Note ton="alerte" icone="horloge">Le paiement en ligne ouvre très bientôt. Gardez votre panier : il vous attend sur ce téléphone.</Note>}
                 </section>
                 <section class="carte entree-avant">
-                  <h2 class="carte-titre"><Icone n="etiquette" />{t('Code promo')}</h2>
+                  <h2 class="carte-titre"><Icone n="etiquette" />Code promo</h2>
                   <form class="ajout-code" onSubmit={(e) => { e.preventDefault(); appliquerCode(); }}>
-                    <Champ erreur={f.erreurs.code} classe="plein">{(a) => <input class="saisie" {...a} aria-label={t('Code promo')} value={f.code} onInput={(e) => maj({ code: e.currentTarget.value.toUpperCase(), erreurs: { ...f.erreurs, code: '' } })} placeholder={t('Ex. : BIENVENUE10')} autocapitalize="characters" maxlength="20" />}</Champ>
-                    <button class="btn btn-secondaire" type="submit">{t('Appliquer')}</button>
+                    <Champ erreur={f.erreurs.code} classe="plein">{(a) => <input class="saisie" {...a} aria-label="Code promo" value={f.code} onInput={(e) => maj({ code: e.currentTarget.value.toUpperCase(), erreurs: { ...f.erreurs, code: '' } })} placeholder="Ex. : BIENVENUE10" autocapitalize="characters" maxlength="20" />}</Champ>
+                    <button class="btn btn-secondaire" type="submit">Appliquer</button>
                   </form>
-                  {f.remise ? <p class="ligne-stock ok espace-haut"><Icone n="coche" />{tx('Code {0} appliqué{1}', [f.remise.code, dv.remise ? ` : −${dollars(dv.remise.amount)}` : ''])}<button class="lien petit" style={{ marginLeft: 'auto' }} onClick={() => maj({ remise: null, code: '', devis: null })}>{t('Retirer')}</button></p> : null}
+                  {f.remise ? <p class="ligne-stock ok espace-haut"><Icone n="coche" />Code {f.remise.code} appliqué{dv.remise ? ` : −${dollars(dv.remise.amount)}` : ''}<button class="lien petit" style={{ marginLeft: 'auto' }} onClick={() => maj({ remise: null, code: '', devis: null })}>Retirer</button></p> : null}
                 </section>
                 {cagnotteOuverte.value ? <CarteFidelite dv={dv} utiliser={utiliser} onUtiliser={() => maj({ cagnotte: !utiliser, devis: null })} /> : null}
                 <section class="carte entree-avant">
-                  <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="repere" />{retrait ? t('Retrait') : t('Livraison')}</h2><button class="btn btn-fantome btn-s" onClick={() => allerA(1)}><Icone n="crayon" />{t('Modifier')}</button></div>
-                  <dl class="infos espace-haut"><dt>{t('Nom')}</dt><dd>{f.nom}</dd><dt>{t('Téléphone')}</dt><dd>{telephone(R.valider.telephone(f.tel)) || f.tel}</dd><dt>{t('Zone')}</dt><dd>{zone && t(zone.name)}</dd>{!retrait && f.adresse ? <><dt>{t('Adresse')}</dt><dd>{f.adresse}</dd></> : null}</dl>
+                  <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="repere" />{retrait ? 'Retrait' : 'Livraison'}</h2><button class="btn btn-fantome btn-s" onClick={() => allerA(1)}><Icone n="crayon" />Modifier</button></div>
+                  <dl class="infos espace-haut"><dt>Nom</dt><dd>{f.nom}</dd><dt>Téléphone</dt><dd>{telephone(R.valider.telephone(f.tel)) || f.tel}</dd><dt>Zone</dt><dd>{zone && zone.name}</dd>{!retrait && f.adresse ? <><dt>Adresse</dt><dd>{f.adresse}</dd></> : null}</dl>
                 </section>
                 <div class="seulement-mobile">{recap}</div>
-                {dv.frais ? <p class="discret petit rangee"><Icone n="info" taille={15} />{tx('Les frais de service ({0} % du panier) sont ajoutés au paiement : ils couvrent le paiement sécurisé et le suivi de votre commande.', [R.num(dv.fraisPct)])}</p> : null}
+                {dv.frais ? <p class="discret petit rangee"><Icone n="info" taille={15} />Les frais de service ({R.num(dv.fraisPct)} % du panier) sont ajoutés au paiement : ils couvrent le paiement sécurisé et le suivi de votre commande.</p> : null}
                 <section class={classes('carte', f.erreurs.terms && 'en-erreur')}>
                   <CaseACocher coche={f.conditions} onClick={() => maj({ conditions: !f.conditions, erreurs: { ...f.erreurs, terms: '' } })}>
-                    {tx('J’accepte les {0} et la {1}.', [<a class="lien" href={lien('/infos/conditions')} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>{t('conditions de vente')}</a>, <a class="lien" href={lien('/infos/retours')} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>{t('politique de retours')}</a>])}
+                    J’accepte les <a class="lien" href={lien('/infos/conditions')} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>conditions de vente</a> et la <a class="lien" href={lien('/infos/retours')} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>politique de retours</a>.
                   </CaseACocher>
                   {f.erreurs.terms ? <p class="champ-erreur espace-haut"><Icone n="alerte" />{f.erreurs.terms}</p> : null}
                 </section>
-                <Note ton="info" icone="bouclier">{moyen && moyen.carte ? t('Paiement sécurisé : votre carte est saisie sur la page de notre partenaire de paiement, jamais dans la boutique.') : t('Paiement sécurisé : vous seul validez le montant sur votre téléphone. Personne ne vous demandera jamais votre code PIN.')}</Note>
+                <Note ton="info" icone="bouclier">{moyen && moyen.carte ? 'Paiement sécurisé : votre carte est saisie sur la page de notre partenaire de paiement, jamais dans la boutique.' : 'Paiement sécurisé : vous seul validez le montant sur votre téléphone. Personne ne vous demandera jamais votre code PIN.'}</Note>
               </>
             ) : null}
           </div>
           <aside class="commande-resume seulement-ordi">
             {recap}
-            <button class={classes('btn btn-primaire btn-l btn-bloc espace-haut', f.envoi && 'charge')} onClick={suivant} disabled={f.etape === 2 && !ouvert}>{f.etape === 2 ? <><Icone n="cadenas" />{tx('Payer {0}', [dollars(dv.total)])}</> : t('Continuer')}</button>
-            {f.etape > 1 ? <button class="btn btn-fantome btn-bloc" onClick={() => allerA(f.etape - 1)}>{t('Étape précédente')}</button> : null}
+            <button class={classes('btn btn-primaire btn-l btn-bloc espace-haut', f.envoi && 'charge')} onClick={suivant} disabled={f.etape === 2 && !ouvert}>{f.etape === 2 ? <><Icone n="cadenas" />Payer {dollars(dv.total)}</> : 'Continuer'}</button>
+            {f.etape > 1 ? <button class="btn btn-fantome btn-bloc" onClick={() => allerA(f.etape - 1)}>Étape précédente</button> : null}
           </aside>
         </div>
       </main>
       <BarreAction>
-        <div class="barre-total"><small>{f.etape === 2 ? t('À payer') : t('Total')}</small><span class="prix">{dollars(dv.total)}</span></div>
-        <button class={classes('btn btn-primaire btn-l', f.envoi && 'charge')} style={{ flex: 1 }} onClick={suivant} disabled={f.etape === 2 && !ouvert}>{f.etape === 2 ? <><Icone n="cadenas" />{t('Payer')}</> : t('Continuer')}</button>
+        <div class="barre-total"><small>{f.etape === 2 ? 'À payer' : 'Total'}</small><span class="prix">{dollars(dv.total)}</span></div>
+        <button class={classes('btn btn-primaire btn-l', f.envoi && 'charge')} style={{ flex: 1 }} onClick={suivant} disabled={f.etape === 2 && !ouvert}>{f.etape === 2 ? <><Icone n="cadenas" />Payer</> : 'Continuer'}</button>
       </BarreAction>
     </>
   );

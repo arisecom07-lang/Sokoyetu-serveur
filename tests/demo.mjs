@@ -164,41 +164,6 @@ await admin.bringToFront();
 await admin.waitForSelector(`.toast:has-text("Commande payée #${numeroCarte}")`, { timeout: 8000 });
 etape(`paiement par carte (page de test) : carte refusée, nouvel essai, commande #${numeroCarte} payée`);
 
-// Langues : un téléphone réglé en anglais se voit proposer l'anglais, une fois ; la boutique suit, messages du serveur compris.
-const anglais = await (await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'en-GB' })).newPage(); surveiller(anglais, 'anglais');
-await anglais.goto(BASE + '/boutique/index.html'); await anglais.waitForSelector('.proposition-langue:has-text("This shop is also available in English.")');
-await anglais.screenshot({ path: SORTIE + 'demo-langue-proposition.png' });
-await anglais.click('.proposition-langue button:has-text("Switch to English")'); await anglais.waitForSelector('html[lang="en"]', { state: 'attached' });
-await anglais.waitForSelector('.carte-produit'); await anglais.waitForTimeout(400);
-await anglais.screenshot({ path: SORTIE + 'demo-langue-en.png' });
-await anglais.goto(BASE + '/boutique/index.html#/p/ex-p17/montre-classique-bracelet-cuir'); await anglais.click('.barre-action .btn-primaire:has-text("Add to basket")'); await anglais.waitForTimeout(400);
-await anglais.goto(BASE + '/boutique/index.html#/commander'); await anglais.click('button:has-text("Continue without an account")'); await anglais.waitForSelector('.page-commande');
-await anglais.fill('input[autocomplete="name"]', 'Jane Doe'); await anglais.fill('input[type=tel]', '0997654322');
-await anglais.click('[aria-label="Delivery area"] .choix >> nth=0'); await anglais.fill('input[autocomplete="street-address"]', 'Nguba, av. de la Mission 9');
-await anglais.click('.barre-action .btn-primaire'); await anglais.waitForSelector('[aria-label="Payment method"]');
-await anglais.fill('[aria-label="Promo code"]', 'FAUX99'); await anglais.click('button:has-text("Apply")'); await anglais.waitForSelector('text=This code is not valid.');
-await anglais.reload(); await anglais.waitForSelector('.page-commande');
-assert.equal(await anglais.locator('.proposition-langue').count(), 0, 'proposée une seule fois');
-assert.equal(await anglais.evaluate(() => document.documentElement.lang), 'en', 'langue retenue sur ce téléphone');
-await anglais.context().close();
-etape('langues : anglais proposé au téléphone réglé en anglais, accepté, retenu ; message du serveur (code promo refusé) traduit');
-// Le client de la démo change de langue : pied de page (swahili), puis Mon compte (lingala) ; ses notifications suivent.
-await client.bringToFront();
-await client.goto(BASE + '/boutique/index.html#/'); await client.click('.pied-langues button[lang="sw"]'); await client.waitForSelector('html[lang="sw"]', { state: 'attached' });
-await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.notif-texte b:text("Oda inaandaliwa")');
-await client.screenshot({ path: SORTIE + 'demo-langue-sw.png' });
-await client.goto(BASE + '/boutique/index.html#/compte'); await client.click('.page-compte :text("Lugha")'); await client.waitForSelector('.feuille [role="radiogroup"]');
-await client.click('.feuille [lang="ln"] .choix'); await client.waitForSelector('html[lang="ln"]', { state: 'attached' });
-await client.waitForSelector('.feuille', { state: 'detached' });
-await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.notif-texte b:text("Komande ezali kobongisama")');
-await client.waitForTimeout(700);
-const titresLn = await client.locator('.liste-notifs .notif-texte b').allInnerTexts();
-assert.ok(titresLn.includes('Mbongo ekomi') && !titresLn.includes('Malipo yamepokelewa'), 'toute la liste en lingala : ' + titresLn.join(' | '));
-await client.screenshot({ path: SORTIE + 'demo-langue-ln.png' });
-await client.goto(BASE + '/boutique/index.html#/'); await client.click('.pied-langues button[lang="fr"]'); await client.waitForSelector('html[lang="fr"]', { state: 'attached' });
-await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.notif-texte b:text("Commande en préparation")');
-etape('langues : swahili (pied de page), lingala (Mon compte), retour au français ; les notifications suivent la langue');
-
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.
 const envelopper = async (route) => { const r = await route.fetch(); route.fulfill({ response: r, headers: { ...r.headers(), 'content-type': 'text/html; charset=utf-8' }, body: '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + (await r.text()) + '</body></html>' }); };
