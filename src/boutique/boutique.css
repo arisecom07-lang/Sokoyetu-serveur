@@ -14,8 +14,11 @@ body[data-bas="nav"] { --bas-toasts: calc(var(--h-nav) + 16px); }
 body[data-bas="barre"] { --bas-toasts: 96px; }
 body[data-bas="nav-barre"] { --bas-toasts: calc(var(--h-nav) + 96px); }
 html:not(.vt) .appli { animation: fondu var(--moyen) ease both; }
-html:not(.vt) .sens-avant .page { animation: glisse-g var(--moyen) var(--sortie) both; }
-html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sortie) both; }
+/* Le glissement décale la page de 18 px : jamais quand le téléphone demande moins d'animations (la barre du bas en restait décalée). */
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.vt) .sens-avant .page { animation: glisse-g var(--moyen) var(--sortie) both; }
+  html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sortie) both; }
+}
 @media (max-width: 899.98px) { .seulement-ordi { display: none !important; } }
 .section { margin-top: var(--e8); }
 .section-tete { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e3); margin-bottom: var(--e4); }
@@ -51,6 +54,15 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .marque-slogan { font-family: var(--police); font-size: max(9.5px, .37em); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--encre-3); }
 .marque.avec-slogan .cabas { height: 1.62em; margin-top: 0; }
 .entete-actions { display: flex; align-items: center; gap: 2px; margin-right: -6px; }
+/* Téléphone : le slogan passe sur deux lignes plutôt que de pousser les boutons hors de l'écran (slogan réglable). */
+@media (max-width: 899.98px) {
+  .entete-marque, .entete .marque, .entete .marque-texte { min-width: 0; }
+  .entete .marque-slogan { white-space: normal; text-wrap: balance; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+}
+@media (max-width: 359.98px) { .entete .marque { font-size: 22px; } }
+/* Champ de recherche de l'en-tête sur grand écran seulement ; en dessous, une loupe (la place manque à côté des rayons). */
+.recherche-large { display: none; }
+@media (min-width: 1200px) { .recherche-large { display: block; } .entete-actions .recherche-icone { display: none; } }
 .entete-page .entete-in { padding: 0 var(--gouttiere-d) 0 max(6px, env(safe-area-inset-left, 0px)); gap: var(--e1); }
 .entete-titre { flex: 1; min-width: 0; }
 .entete-titre h1 { font-size: 16px; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -408,6 +420,8 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .attente-onde .ic { --ic: 34px; }
 .attente-onde::before, .attente-onde::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--op) 45%, transparent); animation: onde 2.4s var(--sortie) infinite; }
 .attente-onde::after { animation-delay: 1.2s; }
+/* Carte : son bleu, éclairci sur fond sombre pour rester lisible. */
+:root[data-theme="dark"] .attente-carte { --op: #7F9BEA; }
 .attente-logo { position: absolute; right: -6px; bottom: -4px; z-index: 1; box-shadow: 0 0 0 3px var(--surface); }
 .attente-logo[data-op="mpesa"] { box-shadow: inset 0 0 0 1px rgba(26, 18, 12, .12), 0 0 0 3px var(--surface); }
 @keyframes onde { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
@@ -419,6 +433,11 @@ html:not(.vt) .sens-arriere .page { animation: glisse-d var(--moyen) var(--sorti
 .paiement-icone { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); }
 .paiement-icone .ic { --ic: 36px; }
 .paiement-icone.danger { background: var(--danger-doux); color: var(--danger); }
+/* Page de test du paiement par carte (mode test) : une carte dessinée, sans marque. */
+.carte-test-visuel { width: 100%; max-width: 340px; aspect-ratio: 1.586; margin: 0 auto var(--e4); padding: 18px 20px; border-radius: 16px; display: grid; align-content: space-between; color: #fff; background: linear-gradient(135deg, #2B4CB0, #14275F); box-shadow: var(--ombre-2); }
+.carte-test-puce { width: 40px; height: 30px; border-radius: 6px; background: linear-gradient(135deg, #E8C877, #B8913A); }
+.carte-test-numero { font-size: 20px; letter-spacing: .1em; font-weight: 600; }
+.carte-test-bas { display: flex; justify-content: space-between; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
 .attente-paiement { border-color: color-mix(in srgb, var(--alerte) 40%, var(--ligne)); background: var(--alerte-doux); margin-top: 0; }
 .attente-paiement .menu-icone { color: var(--alerte); }
 
@@ -527,6 +546,33 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 .carte-installation b { font-weight: 750; }
 .carte-installation p { font-size: 13.5px; color: var(--encre-2); line-height: 1.4; }
 .carte-installation .rangee { grid-column: 1 / -1; justify-content: flex-end; }
+
+/* ---------- Notifications : invitation à les activer, centre de notifications ---------- */
+.carte-notifs { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border-radius: var(--r-l); background: var(--info-doux); border: 1px solid color-mix(in srgb, var(--info) 25%, var(--ligne)); }
+.carte-notifs .menu-icone { background: var(--surface); color: var(--info); }
+.carte-notifs b { display: block; font-weight: 750; }
+.carte-notifs p { font-size: 13.5px; color: var(--encre-2); line-height: 1.4; }
+@media (max-width: 420px) { .carte-notifs { grid-template-columns: auto minmax(0, 1fr); } .carte-notifs .btn { grid-column: 1 / -1; justify-self: end; } }
+.liste-notifs { display: grid; background: var(--surface); border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-1); overflow: hidden; }
+.liste-notifs li + li { border-top: 1px solid var(--ligne); }
+.notif { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 14px var(--e4); transition: background-color var(--rapide); }
+.notif:hover { background: var(--surface-2); }
+.notif.non-lue { background: color-mix(in srgb, var(--marque-doux) 55%, var(--surface)); }
+.notif-icone { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--marque-doux); color: var(--marque-texte); }
+.notif-icone .ic { --ic: 19px; }
+.notif-ok .notif-icone { background: var(--ok-doux); color: var(--ok); }
+.notif-danger .notif-icone { background: var(--danger-doux); color: var(--danger); }
+.notif-texte { display: grid; gap: 2px; min-width: 0; }
+.notif-texte b { font-weight: 650; }
+.notif.non-lue .notif-texte b { font-weight: 800; }
+.notif-texte span { color: var(--encre-2); font-size: 14px; line-height: 1.4; }
+.notif-texte small { color: var(--encre-3); font-size: 12.5px; }
+.notif-point { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--c1, var(--marque)); }
+.liste-attendus { display: grid; background: var(--surface); border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-1); overflow: hidden; }
+.liste-attendus li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding-right: 8px; }
+.liste-attendus li + li { border-top: 1px solid var(--ligne); }
+.attendu { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px var(--e4); }
+.attendu > :first-child { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
 
 /* ---------- Tablette ---------- */
 @media (min-width: 640px) {
@@ -705,3 +751,109 @@ body[data-bas="barre"] .consentement { bottom: calc(96px + env(safe-area-inset-b
 .vignette-video { display: grid; place-items: center; width: 100%; height: 100%; background: var(--encre); color: var(--surface); }
 .pl-prix { display: inline-grid; justify-items: end; line-height: 1.2; }
 .pl-prix .prix-barre { font-size: 12px; }
+
+/* ---------- Discussion avec la boutique : fil, puis zone d'écriture collée en bas (téléphone) ---------- */
+.page-discussion { max-width: 760px; }
+body[data-bas="barre"] .page-discussion { padding-bottom: calc(var(--h-composeur, 132px) + var(--e4) + env(safe-area-inset-bottom, 0px)); }
+.discussion { display: grid; gap: var(--e3); padding-top: var(--e3); }
+.discussion-intro { display: grid; justify-items: center; gap: 8px; padding: var(--e6) var(--e4); text-align: center; }
+.discussion-logo { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--marque-doux); color: var(--marque-texte); margin-bottom: 4px; }
+.discussion-intro h2 { font-family: var(--police-titre); font-size: var(--t-xl); font-weight: 600; }
+.discussion-intro p { max-width: 440px; color: var(--encre-2); font-size: var(--t-m); line-height: 1.5; }
+.composeur { position: fixed; z-index: 35; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--ligne); box-shadow: var(--ombre-haut); padding: 10px var(--gouttiere-d) calc(10px + env(safe-area-inset-bottom, 0px)) var(--gouttiere); }
+.composeur-in { display: grid; gap: 8px; max-width: 760px; margin: 0 auto; }
+.composeur-nom.saisie { height: 42px; border-radius: var(--r-rond); font-size: 15px; }
+@media (min-width: 900px) {
+  body[data-bas] .page-discussion { padding-bottom: var(--e6); }
+  .composeur { position: sticky; bottom: 16px; margin-top: var(--e4); padding: 12px; border: 1px solid var(--ligne); border-radius: var(--r-l); box-shadow: var(--ombre-2); }
+  .composeur-idees { margin: 0; padding: 0; flex-wrap: wrap; }
+}
+.encours.question { margin-top: 0; background: var(--surface); border-color: var(--ligne); transition: border-color var(--rapide); }
+.encours.question:hover { border-color: var(--ligne-saisie); }
+.encours.question .menu-icone { background: var(--marque-doux); color: var(--marque-texte); }
+
+/* ---------- Avis des clients : cartes, fiche article, formulaire, « Mes avis » ---------- */
+.cp-note { display: flex; align-items: center; font-size: var(--t-xs); color: var(--encre-2); --ic: 13px; }
+.cp-note > span { display: inline-flex; align-items: center; gap: 3px; }
+.cp-note .ic { color: var(--or); }
+.cp-note small { color: var(--encre-3); font-size: inherit; }
+.note-produit { display: inline-flex; align-items: center; gap: 6px; justify-self: start; min-height: 32px; font-size: var(--t-s); color: var(--encre-2); }
+.note-produit b { color: var(--encre); }
+.note-produit span { text-decoration: underline; text-decoration-color: var(--ligne-2); text-underline-offset: 3px; }
+.avis-produit { display: grid; gap: var(--e4); scroll-margin-top: calc(var(--h-entete) + 16px); }
+.avis-resume { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e5); align-items: center; padding: var(--e4); border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--ligne); }
+.avis-moyenne { display: grid; justify-items: center; gap: 4px; text-align: center; }
+.avis-note { font-family: var(--police-titre); font-size: 40px; line-height: 1; font-weight: 600; }
+.avis-note small { font-family: var(--police); font-size: var(--t-m); font-weight: 600; color: var(--encre-3); }
+.avis-moyenne > small { font-size: var(--t-xs); color: var(--encre-3); max-width: 116px; line-height: 1.35; }
+.inviter-avis { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); flex-wrap: wrap; }
+.inviter-avis > span { display: grid; }
+.inviter-avis small { color: var(--encre-3); font-size: var(--t-s); }
+.mon-avis { display: grid; gap: var(--e2); }
+.avis-article { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--e3); align-items: center; }
+.avis-article-photo, .a-noter-photo { width: 56px; height: 56px; border-radius: var(--r-s); overflow: hidden; background: var(--surface-2); }
+.avis-article-photo img, .a-noter-photo img { width: 100%; height: 100%; object-fit: cover; }
+.avis-article-texte, .a-noter-texte { display: grid; min-width: 0; }
+.avis-article-texte small, .a-noter-texte small { color: var(--encre-3); font-size: var(--t-s); }
+.formulaire-avis textarea { min-height: 110px; resize: vertical; }
+.page-mes-avis { max-width: 760px; }
+.liste-a-noter { display: grid; gap: var(--e3); }
+.a-noter { display: grid; gap: var(--e3); }
+.a-noter-article { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--e3); align-items: center; color: inherit; text-decoration: none; }
+.a-noter-photo { width: 64px; height: 64px; }
+.a-noter-avis { display: grid; gap: var(--e2); justify-items: start; }
+.etoiles-rapides { display: flex; gap: 2px; margin-left: -6px; }
+.etoile-rapide { display: grid; place-items: center; width: var(--cible); height: var(--cible); border-radius: var(--r-rond); color: var(--ligne-saisie); --ic: 30px; transition: transform var(--rapide) var(--ressort), color var(--rapide); }
+.etoile-rapide:active { transform: scale(.86); }
+@media (hover: hover) {
+  .etoiles-rapides:hover .etoile-rapide { color: var(--or); }
+  .etoiles-rapides .etoile-rapide:hover ~ .etoile-rapide { color: var(--ligne-saisie); }
+}
+@media (min-width: 900px) { .avis-resume { grid-template-columns: 170px minmax(0, 1fr); } }
+
+/* ---------- Fidélité : « Ma cagnotte », parrainage, cadeau de bienvenue ---------- */
+.cagnotte-grille { display: grid; gap: var(--e4); padding-top: var(--e3); }
+.cagnotte-solde { display: grid; justify-items: center; gap: var(--e2); text-align: center; padding: var(--e6) var(--e5); background: linear-gradient(160deg, var(--marque-doux), var(--surface) 70%); }
+.cagnotte-icone, .cadeau-icone { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: var(--surface); color: var(--or-texte); box-shadow: var(--ombre-1); --ic: 30px; }
+.cagnotte-libelle { margin: var(--e2) 0 0; font-family: var(--police); font-size: var(--t-s); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); }
+.cagnotte-montant { margin: 0; font-family: var(--police-titre); font-size: 44px; line-height: 1.05; font-weight: 600; color: var(--encre); }
+.cagnotte-solde > .attenue { max-width: 34ch; }
+.cagnotte-a-venir { display: flex; gap: var(--e2); align-items: flex-start; max-width: 40ch; margin: 0; padding: 10px var(--e3); border-radius: var(--r-s); background: var(--ok-doux); color: var(--encre); font-size: var(--t-s); text-align: left; }
+.cagnotte-a-venir .ic { --ic: 17px; flex: none; margin-top: 1px; color: var(--ok); }
+.cagnotte-solde .btn { max-width: 320px; margin-top: var(--e2); }
+.cagnotte-etapes { display: grid; gap: var(--e3); margin: 0; padding: 0; list-style: none; counter-reset: etape; }
+.cagnotte-etapes li { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: var(--e3); counter-increment: etape; }
+.cagnotte-etapes li::before { content: counter(etape); grid-row: span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--marque-doux); color: var(--marque-texte); font-weight: 700; font-size: var(--t-s); }
+.cagnotte-etapes small { color: var(--encre-2); font-size: var(--t-s); line-height: 1.45; }
+.cagnotte-mouvements { display: grid; margin: 0 calc(-1 * var(--e4)); padding: 0; list-style: none; }
+.cagnotte-mouvements li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--e3); align-items: center; padding: 10px var(--e4); }
+.cagnotte-mouvements li + li { border-top: 1px solid var(--ligne); }
+.mv-texte { display: grid; min-width: 0; }
+.mv-texte small { color: var(--encre-3); font-size: var(--t-xs); }
+.mv-plus { color: var(--ok); font-weight: 700; }
+.mv-moins { color: var(--encre-2); font-weight: 700; }
+.carte-parrainage { display: grid; gap: var(--e3); }
+.carte-parrainage .carte-titre { margin-bottom: 0; }
+.parrainage-offre { margin: 0; font-size: var(--t-base); line-height: 1.5; }
+.parrainage-code { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); padding: 12px 12px 12px 18px; border-radius: var(--r-m); background: var(--fond-2); border: 1.5px dashed var(--ligne-saisie); }
+.parrainage-code small { display: block; font-size: 12.5px; color: var(--encre-3); font-weight: 600; }
+.parrainage-code b { display: block; font-size: 26px; line-height: 1.15; letter-spacing: .14em; }
+.parrainage-chiffres { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e3); margin: 0; }
+.parrainage-chiffres div { padding: 10px var(--e3); border-radius: var(--r-s); background: var(--surface-2); }
+.parrainage-chiffres dt { font-size: var(--t-xs); color: var(--encre-3); font-weight: 600; }
+.parrainage-chiffres dd { margin: 2px 0 0; font-size: var(--t-xl); font-weight: 700; }
+.parrainage-en-cours { display: grid; gap: var(--e2); margin: 0; padding: 0; list-style: none; font-size: var(--t-s); color: var(--encre-2); }
+.parrainage-en-cours li { display: flex; gap: var(--e2); align-items: flex-start; }
+.parrainage-en-cours .ic { --ic: 16px; flex: none; margin-top: 2px; color: var(--ok); }
+.cadeau-bienvenue { display: grid; justify-items: center; gap: var(--e2); text-align: center; padding-bottom: var(--e2); }
+.cadeau-bienvenue p { margin: 0; max-width: 36ch; }
+.cadeau-montant { font-family: var(--police-titre); font-size: 34px; line-height: 1.1; font-weight: 600; color: var(--encre); }
+.gain-cagnotte { display: flex; gap: var(--e2); align-items: flex-start; margin: var(--e3) 0 0; padding: 10px var(--e3); border-radius: var(--r-s); background: var(--surface-2); color: var(--encre-2); font-size: var(--t-s); line-height: 1.45; text-decoration: none; }
+.gain-cagnotte .ic { --ic: 18px; flex: none; color: var(--or-texte); }
+.gain-cagnotte b { color: var(--encre); }
+a.gain-cagnotte:hover { background: var(--surface-3); }
+.carte-fidelite .gain-cagnotte { margin: 0; }
+.case-sous { display: block; margin-top: 2px; color: var(--encre-3); font-size: var(--t-s); font-weight: 500; }
+@media (min-width: 900px) {
+  .cagnotte-grille { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: var(--e5); }
+}

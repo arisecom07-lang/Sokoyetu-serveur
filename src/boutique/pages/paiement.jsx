@@ -1,4 +1,5 @@
-// Sokoyetu (boutique) — paiement en cours : le client valide la demande sur son téléphone, la page suit l'état auprès du serveur.
+// Sokoyetu (boutique) — paiement en cours : le client valide la demande sur son téléphone (ou paie par carte sur la page
+// sécurisée du fournisseur, qui le renvoie ici), la page suit l'état auprès du serveur.
 // Payée → reçu. Refusée → nouvelle tentative (même commande). Délai dépassé → commande annulée, articles remis en vente.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
@@ -10,7 +11,7 @@ import { lien, naviguer, route } from '../routeur.js';
 import { cfg, moyensPaiement, jetonDe, commandes, recevoirCommande, remettreAuPanier, enregistrerProfil } from '../etat.js';
 import { EntetePage } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
-import { NOMS_ETAPES, ChoixPaiement, NoteModeTest } from './commander.jsx';
+import { NOMS_ETAPES, ChoixPaiement, NoteModeTest, allerVersCarte } from './commander.jsx';
 import { useSeo } from './commun.jsx';
 
 const RELANCE_APRES = (R.RELANCE_APRES_S + 5) * 1000; // le serveur accepte une nouvelle demande R.RELANCE_APRES_S secondes après la précédente
@@ -19,6 +20,8 @@ const minutes = (ms) => { const m = Math.max(0, Math.ceil(ms / 60000)); return m
 
 export function Paiement() {
   const id = route.value.params.id; const t = jetonDe(id);
+  // Retour de la page de paiement par carte : ok (payé, à vérifier), annule ou refuse.
+  const retourCarte = route.value.query.get('carte') || '';
   const ms = moyensPaiement.value; const c = cfg.value;
   const [etat, setEtat] = useState(() => { const o = commandes.value.get(id); return o ? { order: o, paiement: null } : null; });
   const [probleme, setProbleme] = useState('');   // '' | 'introuvable' | message de connexion
@@ -77,19 +80,21 @@ export function Paiement() {
   }
   async function relancerUneFois(avecChoix) {
     const moyen = ms.find((m) => m.k === (avecChoix ? relance.methode : o.payment.method));
-    const tel = avecChoix ? (relance.tel.trim() || o.payment.phone) : o.payment.phone;
+    const tel = moyen && moyen.carte ? '' : avecChoix ? (relance.tel.trim() || o.payment.phone) : o.payment.phone;
     if (avecChoix) {
       const e = {};
-      if (!moyen) e.method = 'Choisissez votre opérateur Mobile Money.';
-      else if (!R.valider.mobileMoney(tel)) e.payphone = `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`;
+      if (!moyen) e.method = 'Choisissez votre moyen de paiement.';
+      else if (!moyen.carte && !R.valider.mobileMoney(tel)) e.payphone = `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`;
       if (Object.keys(e).length) { setRelance((x) => ({ ...x, erreurs: e })); return; }
     }
     setRelance((x) => ({ ...x, envoi: true, erreurs: {} }));
     try {
       const r = await requete(`sokoyetu/paiement/${encodeURIComponent(id)}/relancer?t=${encodeURIComponent(t)}`, { method: 'POST', corps: { method: moyen ? moyen.k : '', phone: tel }, delai: 45000 });
       setEtat(r); recevoirCommande(id, r.order); setAutre(false);
-      if (avecChoix && moyen) enregistrerProfil({ payMethod: moyen.k, payPhone: R.valider.mobileMoney(tel) });
+      if (avecChoix && moyen) enregistrerProfil({ payMethod: moyen.k, ...(moyen.carte ? {} : { payPhone: R.valider.mobileMoney(tel) }) });
       setRelance((x) => ({ ...x, envoi: false, tel: '' }));
+      // Carte : direction la page sécurisée.
+      if (r.paiement.url) { allerVersCarte(id, r.paiement.url); return; }
       toast(r.paiement.etat === 'failed' ? 'La demande n’a pas pu partir' : 'Nouvelle demande envoyée : regardez votre téléphone', { icone: r.paiement.etat === 'failed' ? 'alerte' : 'mobile', ton: r.paiement.etat === 'failed' ? 'danger' : '' });
       setTour((n) => n + 1);
     } catch (e) {
@@ -117,16 +122,19 @@ export function Paiement() {
   const annulee = o.status === 'cancelled';
   const reste = Number(o.expiresAt) - maintenant;
   const depuis = maintenant - Number(o.payment.startedAt || 0);
-  const peutRelancer = enCours && (!p || p.relance) && (echec || depuis > RELANCE_APRES);
+  const carte = R.estCarte(o.payment.method);
+  // Carte : le client peut repartir tout de suite (rien n'arrive sur son téléphone).
+  const peutRelancer = enCours && (!p || p.relance) && (echec || carte || depuis > RELANCE_APRES);
   const test = (p && p.test) || o.payment.test;
+  const pageCarte = p && p.url;
 
   return (
     <>
-      <EntetePage titre={'Commande #' + o.number} sous="Paiement Mobile Money" repli="/compte/commandes" />
+      <EntetePage titre={'Commande #' + o.number} sous={carte ? 'Paiement par carte' : 'Paiement Mobile Money'} repli="/compte/commandes" />
       <main id="contenu" class="page conteneur page-paiement">
         <div class="commande-tete"><Etapes noms={NOMS_ETAPES} actuelle={2} /></div>
         <div class="pile-l paiement-corps">
-          {test && enCours ? <NoteModeTest /> : null}
+          {test && enCours ? <NoteModeTest carte={carte} /> : null}
 
           {annulee ? (
             <section class="carte paiement-attente fin-paiement entree">
@@ -146,6 +154,29 @@ export function Paiement() {
                   <h1 class="titre-serif">Paiement non abouti</h1>
                   <p class="attenue">{o.payment.error || 'Le paiement a été refusé ou annulé.'} Rien n’a été débité : vous pouvez réessayer.</p>
                 </>
+              ) : carte ? (
+                retourCarte === 'ok' ? (
+                  <>
+                    <span class="attente-onde attente-carte" aria-hidden="true"><Icone n="carte" /></span>
+                    <h1 class="titre-serif">Vérification du paiement…</h1>
+                    <p class="attenue">Votre paiement de <b>{dollars(o.total)}</b> par carte est en cours de confirmation auprès de notre partenaire de paiement.</p>
+                    <p class="discret petit centre"><span class="point-vivant" aria-hidden="true" />Cette page se met à jour toute seule dès que le paiement est confirmé.</p>
+                  </>
+                ) : retourCarte === 'annule' || retourCarte === 'refuse' ? (
+                  <>
+                    <LogoOperateur k="carte" m={moyen} taille={48} />
+                    <h1 class="titre-serif">{retourCarte === 'refuse' ? 'Carte refusée' : 'Paiement par carte annulé'}</h1>
+                    <p class="attenue">{retourCarte === 'refuse' ? 'Votre banque n’a pas accepté le paiement.' : 'Vous avez quitté la page de paiement.'} Rien n’a été débité : réessayez, ou payez par Mobile Money.</p>
+                  </>
+                ) : (
+                  <>
+                    <span class="attente-onde attente-carte" aria-hidden="true"><Icone n="carte" /></span>
+                    <h1 class="titre-serif">Terminez le paiement par carte</h1>
+                    <p class="attenue">Vous payez <b>{dollars(o.total)}</b>{francs(o.total, c) ? ` (${francs(o.total, c)})` : ''} par carte Visa ou Mastercard, sur la page sécurisée de notre partenaire de paiement.</p>
+                    {pageCarte ? <button class="btn btn-primaire btn-l btn-bloc" onClick={() => allerVersCarte(id, pageCarte)}><Icone n="cadenas" />Continuer vers le paiement sécurisé</button> : null}
+                    <p class="discret petit centre"><span class="point-vivant" aria-hidden="true" />Cette page se met à jour toute seule dès que le paiement est confirmé.</p>
+                  </>
+                )
               ) : (
                 <>
                   <span class="attente-onde" aria-hidden="true"><Icone n="mobile" /><LogoOperateur k={o.payment.method} m={moyen} taille={30} classe="attente-logo" /></span>
@@ -162,11 +193,13 @@ export function Paiement() {
               {reste > 0 ? <p class="discret petit centre">Vos articles restent réservés encore {minutes(reste)}.</p> : null}
               {probleme ? <Note ton="alerte" icone="info" classe="espace-haut">{probleme} Nouvelle vérification dans un instant…</Note> : null}
 
-              {peutRelancer && !autre ? (
+              {peutRelancer && !autre && carte && !echec && retourCarte !== 'annule' && retourCarte !== 'refuse' ? (
+                <div class="pile espace-haut"><button class="btn btn-fantome btn-bloc" onClick={() => setAutre(true)}>Payer autrement</button></div>
+              ) : peutRelancer && !autre ? (
                 <div class="pile espace-haut">
-                  {!echec ? <p class="petit centre"><b>Rien reçu ?</b> Vérifiez que le téléphone est allumé et a du réseau, puis renvoyez la demande.</p> : null}
-                  <button class={classes('btn btn-primaire btn-l btn-bloc', relance.envoi && 'charge')} onClick={() => relancer(false)}><Icone n="actualiser" />{echec ? `Réessayer : ${dollars(o.total)}` : 'Renvoyer la demande'}</button>
-                  <button class="btn btn-fantome btn-bloc" onClick={() => setAutre(true)}>Payer avec un autre numéro ou opérateur</button>
+                  {!echec && !carte ? <p class="petit centre"><b>Rien reçu ?</b> Vérifiez que le téléphone est allumé et a du réseau, puis renvoyez la demande.</p> : null}
+                  <button class={classes('btn btn-primaire btn-l btn-bloc', relance.envoi && 'charge')} onClick={() => relancer(false)}><Icone n={carte ? 'cadenas' : 'actualiser'} />{carte ? `Réessayer par carte : ${dollars(o.total)}` : echec ? `Réessayer : ${dollars(o.total)}` : 'Renvoyer la demande'}</button>
+                  <button class="btn btn-fantome btn-bloc" onClick={() => setAutre(true)}>{carte ? 'Payer autrement' : 'Payer avec un autre numéro ou opérateur'}</button>
                 </div>
               ) : null}
               {peutRelancer && autre ? (
@@ -189,8 +222,51 @@ export function Paiement() {
               <dt>À payer</dt><dd><b>{dollars(o.total)}</b>{o.serviceFee ? <small class="discret"> dont {dollars(o.serviceFee)} de frais de service</small> : null}</dd>
             </dl>
           </section>
-          <Note ton="info" icone="bouclier">Vous validez vous-même le paiement sur votre téléphone. Personne de la boutique ne vous demandera votre code PIN.</Note>
+          <Note ton="info" icone="bouclier">{carte ? 'Votre carte est saisie sur la page sécurisée de notre partenaire de paiement : la boutique ne voit jamais son numéro.' : 'Vous validez vous-même le paiement sur votre téléphone. Personne de la boutique ne vous demandera votre code PIN.'}</Note>
         </div>
+      </main>
+    </>
+  );
+}
+
+/* Mode test : page de paiement par carte simulée. En vrai, le client saisit sa carte sur la page sécurisée du fournisseur. */
+export function CarteTest() {
+  const id = route.value.params.id; const t = jetonDe(id); const o = commandes.value.get(id);
+  const [envoi, setEnvoi] = useState('');
+  useSeo(() => ({ titre: 'Paiement par carte (test)', noindex: true }), []);
+  async function choisir(issue) {
+    if (envoi) return;
+    setEnvoi(issue);
+    try {
+      const r = await requete(`sokoyetu/paiement/${encodeURIComponent(id)}/carte-test?t=${encodeURIComponent(t)}`, { method: 'POST', corps: { issue } });
+      recevoirCommande(id, r.order);
+      naviguer(`/paiement/${id}?carte=${issue === 'ok' ? 'ok' : issue === 'refus' ? 'refuse' : 'annule'}`, { remplacer: true });
+    } catch (e) { setEnvoi(''); toast(e.message, { icone: 'alerte', ton: 'danger', duree: 5000 }); }
+  }
+  return (
+    <>
+      <EntetePage titre="Paiement par carte" sous="Page de test" repli={'/paiement/' + id} />
+      <main id="contenu" class="page conteneur page-carte-test">
+        {!t ? (
+          <Vide icone="recu" titre="Commande introuvable sur ce téléphone" texte="Cette page de test s’ouvre depuis la commande, sur le téléphone qui l’a passée." />
+        ) : (
+          <div class="pile-l paiement-corps">
+            <Note ton="alerte" icone="info"><b>Mode test.</b> En vrai, le client saisit sa carte sur la page sécurisée du partenaire de paiement (FlexPay), hors de la boutique. Ici, choisissez l’issue du paiement : aucun argent ne circule.</Note>
+            <section class="carte carte-test">
+              <div class="carte-test-visuel" aria-hidden="true">
+                <span class="carte-test-puce" />
+                <span class="carte-test-numero num">4242 4242 4242 4242</span>
+                <span class="carte-test-bas"><span>Carte de test</span><span class="num">12/30</span></span>
+              </div>
+              <dl class="infos"><dt>Commande</dt><dd>#{o ? o.number : '…'}</dd><dt>Montant</dt><dd><b class="num">{o ? dollars(o.total) : '…'}</b></dd></dl>
+              <div class="pile espace-haut">
+                <button class={classes('btn btn-primaire btn-l btn-bloc', envoi === 'ok' && 'charge')} onClick={() => choisir('ok')}><Icone n="cadenas" />Payer {o ? dollars(o.total) : ''}</button>
+                <button class={classes('btn btn-secondaire btn-bloc', envoi === 'refus' && 'charge')} onClick={() => choisir('refus')}>Simuler une carte refusée</button>
+                <button class={classes('btn btn-fantome btn-bloc', envoi === 'annule' && 'charge')} onClick={() => choisir('annule')}>Annuler et revenir à la boutique</button>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </>
   );

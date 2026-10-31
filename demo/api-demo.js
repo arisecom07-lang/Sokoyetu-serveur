@@ -9,7 +9,7 @@ import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 6;
+const VERSION_BASE = 11;
 const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
@@ -27,32 +27,49 @@ export class ErreurApi extends Error {
 
 const CONFIG_DEMO = {
   name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir', setup: { livraison: true },
-  payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false } },
+  payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false }, carte: { enabled: true } },
   serviceFeePct: 2, payment: { holdMinutes: 30 },
+  // Cagnotte de fidélité et parrainage ouverts dans la démo (fermés sur une nouvelle boutique).
+  loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 },
   // Identité d'exemple : aucune société ni numéro d'immatriculation inventés (la boutique se présente sous son nom).
   legal: { company: '', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu (adresse d’exemple)', email: 'contact@sokoyakwetu.com' }
 };
-// [nom, téléphone, zone, adresse, articles, opérateur, paiement (payé, refusé, jamais reçu), étapes, âge en jours]
+// [nom, téléphone, zone, adresse, articles, opérateur, paiement (payé, refusé, jamais reçu), étapes, âge en jours, parrain (téléphone)]
 const CLIENTS = [
   ['Grâce Mapendo', '0991234501', 'bukavu', 'Nyawera, av. Lumumba 12', [{ productId: 'ex-p08', size: 'L', qty: 2 }, { productId: 'ex-p17', qty: 1 }], 'mpesa', 'paye', ['preparing', 'shipped', 'delivered'], 9],
   ['Patient Bisimwa', '0971234502', 'goma', 'Himbi, av. du Lac 4', [{ productId: 'ex-p10', qty: 1 }], 'airtel', 'paye', [], 6],
   ['Esther Furaha', '0891234503', 'bukavu', 'Ibanda, Q. Ndendere 33', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 1 }], 'orange', 'refuse', [], 0],
   ['Josué Mugisho', '0991234504', 'retrait', '', [{ productId: 'ex-p15', qty: 1 }], 'mpesa', 'paye', ['preparing', 'shipped'], 2],
-  ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', 'paye', ['preparing'], 1],
+  ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', 'paye', ['preparing'], 1, '0991234501'],
   ['Didier Kambale', '0821234506', 'goma', 'Katindo, av. Mapendo 21', [{ productId: 'ex-p18', qty: 2 }], 'mpesa', 'echu', [], 3]
 ];
-// [nom, téléphone, panier, favoris, dernière visite (heures)]
+// [nom, téléphone, panier, favoris, dernière visite (heures), code de parrainage]
 const COMPTES = [
-  ['Grâce Mapendo', '0991234501', [{ productId: 'ex-p04', qty: 1 }], ['ex-p05', 'ex-p13'], 3],
-  ['Aline Zawadi', '0971234507', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 2 }], ['ex-p10'], 20],
+  ['Grâce Mapendo', '0991234501', [{ productId: 'ex-p04', qty: 1 }], ['ex-p05', 'ex-p13'], 3, 'K7M2QX'],
+  ['Aline Zawadi', '0971234507', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 2 }], ['ex-p10'], 30],
   ['Patient Bisimwa', '0971234502', [], ['ex-p18'], 50]
+];
+// Avis d'anciens clients : [article, nom, téléphone, note, texte, option achetée, âge en jours, réponse de la boutique, masqué (motif)]
+const AVIS = [
+  ['ex-p01', 'Aline Zawadi', '0971234507', 5, 'Très belle robe : le tissu est léger et le bordeaux est exactement comme sur la photo. Je l’ai portée à un mariage, beaucoup de compliments !', 'Taille M', 12, 'Merci Aline ! Ravis qu’elle vous ait plu pour le mariage.'],
+  ['ex-p01', 'Esther Furaha', '0891234503', 4, 'Jolie robe, bien cousue. Elle taille un peu petit : prenez une taille au-dessus.', 'Taille L', 20],
+  ['ex-p01', 'Rebecca Nsimire', '0991234511', 5, '', 'Taille S', 25],
+  ['ex-p08', 'Fabrice Cirhuza', '0971234512', 4, 'Bonne chemise, coupe droite et chambray épais. Les boutons auraient pu être plus solides.', 'Taille M', 16],
+  ['ex-p10', 'Daniel Bahati', '0821234513', 5, 'Sac solide, le cuir sent bon le vrai cuir. Mon ordinateur 15 pouces rentre sans problème.', '', 30, 'Merci Daniel, bonne route avec votre sac !'],
+  ['ex-p13', 'Neema Byamungu', '0891234514', 2, 'Elle charge bien mon téléphone, mais elle chauffe un peu et met longtemps à se recharger elle-même.', '', 10, 'Bonjour Neema, merci pour votre retour. Avec le câble USB-C fourni et un chargeur de 18 W, elle se recharge en 4 h environ. Écrivez-nous dans « Discussion » si le souci continue : nous regarderons ensemble.'],
+  ['ex-p14', 'Christian Amani', '0971234515', 3, 'Le son est correct pour le prix. L’étui de charge se ferme mal.', '', 4],
+  ['ex-p14', 'Sarah Mwamini', '0991234516', 5, 'Parfaits pour le sport : ils tiennent bien dans l’oreille et la batterie dure toute la journée.', '', 18],
+  ['ex-p17', 'Moïse Lwaboshi', '0821234517', 5, 'Montre élégante, le bracelet en cuir est confortable. Je recommande.', '', 22],
+  ['ex-p05', 'Joëlle Kahindo', '0891234518', 4, 'Très jolis colliers, la dorure tient bien après deux semaines.', '', 9],
+  ['ex-p03', 'Furaha Maombi', '0991234520', 5, 'Le cuir camel est magnifique et la bandoulière se règle facilement.', '', 14],
+  ['ex-p03', 'Bienvenu Mastaki', '0971234519', 4, 'Beau sac. Si quelqu’un veut le même, appelez-moi au 097 123 45 19.', '', 6, '', 'personnel']
 ];
 /* Configuration telle que le serveur la voit : paiement en mode test. */
 const configPaiement = (doc) => R.config({ ...(doc || {}), payment: { ...((doc && doc.payment) || {}), provider: 'simulation' } });
 
 function creerBase() {
   const now = Date.now();
-  const b = { v: VERSION_BASE, cols: { config: {}, collections: {}, products: {}, banners: {}, discounts: {}, orders: {}, media: {}, clients: {} }, codes: {} };
+  const b = { v: VERSION_BASE, cols: { config: {}, collections: {}, products: {}, banners: {}, discounts: {}, orders: {}, media: {}, clients: {}, discussions: {}, avis: {} }, codes: {}, messages: [] };
   const poser = (col, id, doc, extra) => { b.cols[col][id] = { id, doc, created: now, updated: now, ...extra }; };
   poser('config', 'store', R.copie(CONFIG_DEMO));
   for (const k of ['collections', 'products', 'banners', 'discounts']) {
@@ -62,28 +79,63 @@ function creerBase() {
       poser(k, id, doc, k === 'products' ? { active: doc.status !== 'draft' } : k === 'discounts' ? { code: R.valider.codePromo(doc.code) } : {});
     }
   }
+  // Quelques clients ont créé leur compte : panier en attente, favoris (page Clients, Audience → Paniers à relancer).
+  COMPTES.forEach(([name, phone, panier, favoris, heures, code]) => {
+    const t = now - heures * 3600e3; const dates = {};
+    panier.forEach((l) => { dates['panier:' + l.productId] = t; }); favoris.forEach((id) => { dates['favori:' + id] = t - 3600e3; });
+    poser('clients', 'cli' + uid().slice(0, 12), R.docCompte({ panier, favoris, dates }), { phone, name, seen: t, created: t - 9 * JOUR, parrain_code: code || '' });
+  });
+  const compte = (tel) => Object.values(b.cols.clients).find((c) => c.phone === tel);
   // Quelques commandes déjà passées, pour que le tableau de bord ait de quoi montrer.
   const cfg = configPaiement(b.cols.config.store.doc);
   const produit = (id) => (b.cols.products[id] ? b.cols.products[id].doc : null);
-  CLIENTS.forEach(([name, phone, zoneId, address, items, method, mode, suites, age], i) => {
+  CLIENTS.forEach(([name, phone, zoneId, address, items, method, mode, suites, age, parrainTel], i) => {
     const t = mode === 'refuse' ? now - 6 * 60000 : now - age * JOUR - (5 - i) * 3600e3;
-    const dv = R.devis({ cfg, produit, lignes: items, zoneId, maintenant: t });
+    const p = parrainTel && compte(parrainTel);
+    const parrainage = p ? { code: p.parrain_code, montant: cfg.referral.welcome, min: cfg.referral.min, recompense: cfg.referral.reward, parrain: p.id, parrainTel: R.chiffres(p.phone) } : null;
+    const dv = R.devis({ cfg, produit, lignes: items, zoneId, parrainage, maintenant: t });
     const payeur = mode === 'paye' ? phone : phone.slice(0, 6) + '0000';
-    const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: { termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address }, items, payment: { method, phone: payeur }, total: dv.total, note: i === 1 ? 'Appelez avant de passer, merci.' : '' }, maintenant: t, numero: R.numeroCommande() });
+    const { commande, reserve } = R.preparerCommande({ cfg, produit, parrainage, saisie: { termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address }, items, payment: { method, phone: payeur }, total: dv.total, note: i === 1 ? 'Appelez avant de passer, merci.' : '' }, maintenant: t, numero: R.numeroCommande() });
     stock(b, reserve, -1);
     let o = R.paiementEnvoye(commande, { maintenant: t + 2000, providerId: `SIM-${commande.number}-1` });
     if (mode === 'paye') o = R.paiementConfirme(o, { maintenant: t + 45000, reference: 'TEST' + String(t).slice(-8) }).commande;
     else o = R.paiementEchoue(o, { maintenant: t + 45000, raison: 'Solde insuffisant (simulation).' });
     if (mode === 'echu') { const x = R.paiementExpire(o, { maintenant: t + 31 * 60000 }); stock(b, x.entrees, 1); o = x.commande; }
     suites.forEach((a, j) => { const r = R.etapeCommande(o, a, { maintenant: t + (j + 1) * 5400e3, produit }); o = r.commande; });
-    poser('orders', 'cmd' + uid().slice(0, 12), o, { token: jeton(), phone: o.phone, status: o.status, created: t });
+    const id = 'cmd' + uid().slice(0, 12);
+    poser('orders', id, o, { token: jeton(), phone: o.phone, status: o.status, created: t });
+    // Livrée : le gain promis a rejoint la cagnotte du client (page « Ma cagnotte », fiche client).
+    if (o.fulfillment === 'delivered' && o.loyalty && o.loyalty.phone) crediterDemo(b, { telephone: o.loyalty.phone, montant: o.loyalty.amount, type: 'achat', commande: id, details: { numero: o.number }, cle: 'achat:' + id, cree: Number(o.deliveredAt) || t });
   });
-  // Quelques clients ont créé leur compte : panier en attente, favoris (page Clients, Audience → Paniers à relancer).
-  COMPTES.forEach(([name, phone, panier, favoris, heures]) => {
-    const t = now - heures * 3600e3; const dates = {};
-    panier.forEach((l) => { dates['panier:' + l.productId] = t; }); favoris.forEach((id) => { dates['favori:' + id] = t - 3600e3; });
-    poser('clients', 'cli' + uid().slice(0, 12), R.docCompte({ panier, favoris, dates }), { phone, name, seen: t, created: t - 9 * JOUR });
+  // Deux discussions avec la boutique : une question qui attend sa réponse, une commande suivie (page Messages).
+  const discussion = (c, l, extra) => {
+    const id = 'dis' + uid().slice(0, 12);
+    l.forEach(([auteur, texte, heures, piece]) => b.messages.push({ id: b.messages.length + 1, discussion: id, auteur, texte, produit: (piece && piece.produit) || '', commande: (piece && piece.commande) || '', par: auteur === 'boutique' ? 'demo' : '', cree: now - heures * 3600e3 }));
+    const der = l[l.length - 1];
+    b.cols.discussions[id] = { id, created: now - l[0][2] * 3600e3, updated: now, client: c.id, appareil: '', nom: c.name, telephone: c.phone, dernier: R.apercuMessage(der[1], 160), auteur: der[0], maj: now - der[2] * 3600e3, non_lus: 0, a_repondre: false, lu_client: 0, lu_boutique: 0, ...extra };
+  };
+  const aline = compte('0971234507'), patient = compte('0971234502');
+  if (aline) discussion(aline, [['client', 'Bonjour ! La robe midi bordeaux existe-t-elle en XL ? D’habitude je prends du L.', 3, { produit: 'ex-p01' }]], { non_lus: 1, a_repondre: true });
+  const cmdPatient = Object.values(b.cols.orders).find((o) => o.phone === '0971234502');
+  if (patient) {
+    discussion(patient, [
+      ['client', 'Bonjour, ma commande arrive quand à Goma ?', 30, { commande: cmdPatient ? cmdPatient.id : '' }],
+      ['boutique', 'Bonjour Patient ! Elle part demain matin avec notre transporteur : livraison à Goma sous 48 h. Nous vous prévenons dès qu’elle est en route.', 29],
+      ['client', 'Merci beaucoup, à bientôt !', 28]
+    ], { lu_client: now - 29 * 3600e3, lu_boutique: now - 27 * 3600e3 });
+  }
+  // Des avis d'anciens clients (pages des articles, page Avis), et celui de Grâce sur sa chemise livrée.
+  AVIS.forEach(([produit, nom, telephone, note, texte, variante, jours, reponse, motif]) => {
+    const id = 'avi' + uid().slice(0, 12); const t = now - jours * JOUR;
+    b.cols.avis[id] = { id, produit, telephone, client: '', appareil: '', commande: '', numero: '', nom: R.nomPublic(nom), note, texte, variante, etat: motif ? 'masque' : 'publie', motif: motif || '',
+      reponse: reponse || '', reponse_par: reponse ? 'Messir' : '', reponse_le: reponse ? t + 5 * 3600e3 : 0, cree: t, maj: t, created: t, updated: t };
   });
+  const livree = Object.values(b.cols.orders).find((o) => o.doc.fulfillment === 'delivered');
+  if (livree) {
+    const id = 'avi' + uid().slice(0, 12); const t = Number(livree.doc.deliveredAt) + 20 * 3600e3; const l = R.articlesANoter(livree.doc)[0];
+    b.cols.avis[id] = { id, produit: l.produit, telephone: livree.phone, client: '', appareil: '', commande: livree.id, numero: livree.doc.number, nom: R.nomPublic(livree.doc.customer.name), note: 5,
+      texte: 'Chemise de bonne qualité, mon mari l’adore. Livraison rapide à Nyawera.', variante: l.variante, etat: 'publie', motif: '', reponse: '', reponse_par: '', reponse_le: 0, cree: t, maj: t, created: t, updated: t };
+  }
   return b;
 }
 function stock(b, entrees, sens) {
@@ -92,6 +144,7 @@ function stock(b, entrees, sens) {
   for (const id of Object.keys(parProduit)) {
     const rec = b.cols.products[id]; if (!rec) continue;
     rec.doc = R.ajusterStock(rec.doc, parProduit[id], sens); rec.doc.updatedAt = Date.now(); rec.updated = Date.now();
+    if (sens > 0) alertesProduit(b, rec);
   }
   return Object.keys(parProduit);
 }
@@ -122,8 +175,10 @@ function commandePublique(doc) {
   const d = R.copie(doc);
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
-  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; delete d.payment.simulation; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
+  if (d.referral) { delete d.referral.by; delete d.referral.byPhone; delete d.referral.reward; }
+  if (d.loyalty) delete d.loyalty.phone;
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
 }
@@ -133,8 +188,11 @@ function vue(col, rec, gerant) {
   const r = { id: rec.id, collectionId: col, collectionName: col, created: new Date(rec.created).toISOString(), updated: new Date(rec.updated).toISOString(), doc: R.copie(rec.doc) };
   if (col === 'products') r.active = rec.active !== false;
   if (col === 'media') r.file = rec.file;
-  if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, created: new Date(rec.created).toISOString().replace('T', ' ') });
+  if (col === 'clients') Object.assign(r, { phone: rec.phone, name: rec.name, seen: rec.seen, relance: rec.relance || 0, created: new Date(rec.created).toISOString().replace('T', ' ') });
+  if (col === 'discussions') { delete r.doc; Object.assign(r, resumeDiscussion(rec)); }
+  if (col === 'avis') { delete r.doc; Object.assign(r, avisEquipeDemo(rec)); }
   if (!gerant) { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = commandePublique(rec.doc); }
+  else if (roleActuel() === 'livreur') { if (col === 'products') r.doc = produitPublic(rec.doc); if (col === 'orders') r.doc = { ...commandePublique(rec.doc), adminNote: rec.doc.adminNote || '' }; }
   // Comme le serveur : la boutique apprend quel paiement est ouvert (ici, le mode test).
   if (col === 'config') { const c = configPaiement(rec.doc); r.doc.payment = { provider: 'simulation', holdMinutes: c.payment.holdMinutes, test: true }; r.doc.accounts = { open: true, test: true, channels: ['whatsapp', 'sms'] }; }
   return r;
@@ -158,12 +216,32 @@ export const Auth = {
   get expireBientot() { return false; }
 };
 const gerant = () => !!auth && !!auth.record && auth.record.collectionName === 'admins';
+/* Rôle dans l'équipe : dans la démo, il se choisit par l'e-mail de connexion (livreur@…, vendeur@…, sinon propriétaire). */
+const roleActuel = () => (gerant() ? R.roleNettoye(auth.record.role) : '');
+const roleDeEmail = (email) => (/^livreur/i.test(email) ? 'livreur' : /^vendeu/i.test(email) ? 'vendeur' : 'proprietaire');
+/* L'équipe de la démo : le propriétaire et deux membres d'exemple. */
+function equipe(b) {
+  if (!Array.isArray(b.equipe)) {
+    const t = Date.now() - 20 * JOUR;
+    b.equipe = [
+      { id: COMPTE.id, email: COMPTE.email, name: 'Messir', role: 'proprietaire', created: t },
+      { id: 'demo-vendeur', email: 'vendeur@sokoyetu.com', name: 'Neema Furaha', role: 'vendeur', created: t + 2 * JOUR },
+      { id: 'demo-livreur', email: 'livreur@sokoyetu.com', name: 'Patrick Mulumba', role: 'livreur', created: t + 5 * JOUR }
+    ];
+  }
+  return b.equipe;
+}
+const vueMembre = (m) => ({ id: m.id, email: m.email, name: m.name, role: m.role, created: new Date(m.created).toISOString().replace('T', ' ') });
 /* Client connecté à son compte (boutique), sinon null. */
 const clientConnecte = (b) => (auth && auth.record && auth.record.collectionName === 'clients' ? b.cols.clients[auth.record.id] || null : null);
 const jetonClient = (id) => `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ id, exp: Math.floor(Date.now() / 1000) + 90 * 86400 })}.demo`;
 const vueCompte = (rec) => ({ id: rec.id, phone: rec.phone, name: rec.name, created: new Date(rec.created).toISOString(), doc: R.docCompte(rec.doc) });
 const commandesDuCompte = (b, rec) => Object.values(b.cols.orders).filter((o) => o.client === rec.id || (o.phone && o.phone === R.chiffres(rec.phone))).sort((x, y) => y.created - x.created).map((o) => ({ id: o.id, t: o.token }));
-function exigerGerant() { if (!gerant()) throw new ErreurApi(403, 'Réservé à l’administration de la boutique.'); }
+function exigerGerant(droit) {
+  if (!gerant()) throw new ErreurApi(403, 'Réservé à l’administration de la boutique.');
+  if (droit && !R.peut(roleActuel(), droit)) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+  return roleActuel();
+}
 
 /* ---------- Temps réel entre les onglets de la démo ---------- */
 
@@ -182,10 +260,10 @@ function recevoir({ col, id, action, avant }) {
     if (c !== col || (cible !== '*' && cible !== id)) continue;
     let message;
     if (gerant()) {
-      if (col === 'media') continue;
+      if (col === 'media' || (col === 'avis' && !R.peut(roleActuel(), 'avis'))) continue;
       message = { action, record: action === 'delete' ? { id, ...(avant ? vue(col, avant, true) : {}) } : vue(col, rec, true) };
     } else {
-      if (col === 'discounts' || col === 'media' || col === 'clients') continue;
+      if (col === 'discounts' || col === 'media' || col === 'clients' || col === 'discussions' || col === 'avis') continue;
       if (col === 'orders') {
         let t = ''; try { t = JSON.parse(decodeURIComponent((options || '').replace(/^options=/, ''))).query.t; } catch (e) { }
         if (cible === '*' || !rec || !t || rec.token !== t) continue;
@@ -209,16 +287,25 @@ export const TempsReel = {
 
 /* ---------- Le « serveur » ---------- */
 
+/* Droits de lecture et d'écriture des collections selon le rôle (comme les règles de la migration « équipe »). */
+const DROIT_ECRITURE = { config: 'reglages', collections: 'catalogue', banners: 'catalogue', products: 'produits', discounts: 'remises', media: 'produits' };
 function routeRecords(b, col, id, method, corps, q) {
   const table = b.cols[col]; if (!table) throw new ErreurApi(404, 'Collection inconnue.');
   const lecturePublique = ['config', 'collections', 'banners', 'products'].includes(col);
+  const role = roleActuel();
+  if (role && ((col === 'discounts' && !R.peut(role, 'remises')) || (col === 'clients' && !R.peut(role, 'clients')) || (col === 'discussions' && !R.peut(role, 'messages')) || (col === 'avis' && !R.peut(role, 'avis')))) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+  if (col === 'discussions' && method !== 'GET') throw new ErreurApi(403, 'Les discussions se modifient par leurs routes.');
+  if (col === 'avis' && method !== 'GET') throw new ErreurApi(403, 'Les avis se modifient par leurs routes.');
   if (col === 'clients' && method !== 'GET') throw new ErreurApi(403, 'Les comptes se modifient par la boutique.');
   if (col === 'clients' && id && !gerant()) throw new ErreurApi(404, 'Introuvable.');
   if (method === 'GET' && !id) {
     if (!lecturePublique && !gerant()) return { items: [], page: 1, perPage: 500 };
     let l = Object.values(table);
     if (col === 'products' && !gerant()) l = l.filter((x) => x.active !== false);
+    if (col === 'orders' && role === 'livreur') l = l.filter((x) => R.pourLivreur(x.doc));
     if (q.get('sort') === '-created') l.sort((x, y) => y.created - x.created);
+    if (q.get('sort') === '-maj') l.sort((x, y) => y.maj - x.maj);
+    if (q.get('sort') === '-cree') l.sort((x, y) => y.cree - x.cree);
     const page = Number(q.get('page') || 1), par = Number(q.get('perPage') || 500);
     return { items: l.slice((page - 1) * par, page * par).map((x) => vue(col, x, gerant())), page, perPage: par };
   }
@@ -226,17 +313,20 @@ function routeRecords(b, col, id, method, corps, q) {
     const rec = table[id];
     if (!rec) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'orders' && !gerant() && rec.token !== q.get('t')) throw new ErreurApi(404, 'Introuvable.');
-    if ((col === 'discounts' || col === 'media') && !gerant()) throw new ErreurApi(404, 'Introuvable.');
+    if (col === 'orders' && role === 'livreur' && !R.pourLivreur(rec.doc)) throw new ErreurApi(404, 'Introuvable.');
+    if ((col === 'discounts' || col === 'media' || col === 'discussions' || col === 'avis') && !gerant()) throw new ErreurApi(404, 'Introuvable.');
     if (col === 'products' && !gerant() && rec.active === false) throw new ErreurApi(404, 'Introuvable.');
     return vue(col, rec, gerant());
   }
-  exigerGerant();
+  exigerGerant(DROIT_ECRITURE[col]);
   // Comme sur le serveur : une commande ne change que par les routes de paiement et d'étapes.
   if (col === 'orders') throw new ErreurApi(403, 'Les commandes se modifient par leurs étapes.');
   const now = Date.now();
   if (method === 'DELETE') {
     const avant = table[id]; if (!avant) throw new ErreurApi(404, 'Introuvable.');
-    delete table[id]; enregistrer(b);
+    delete table[id];
+    if (col === 'products') b.alertes = (b.alertes || []).filter((x) => x.produit !== id);
+    enregistrer(b);
     if (col === 'media') try { localStorage.removeItem(CLE_MEDIA + id); } catch (e) { }
     diffuser(col, id, 'delete', avant); return null;
   }
@@ -249,6 +339,7 @@ function routeRecords(b, col, id, method, corps, q) {
   if (col === 'products') { if (!doc.createdAt) doc.createdAt = (rec.doc && rec.doc.createdAt) || now; doc.updatedAt = now; rec.active = doc.status !== 'draft'; }
   if (col === 'discounts') rec.code = R.valider.codePromo(doc.code);
   rec.doc = doc; rec.updated = now; table[rid] = rec;
+  if (col === 'products' && !nouveau) alertesProduit(b, rec);
   enregistrer(b); diffuser(col, rid, nouveau ? 'create' : 'update');
   return vue(col, rec, true);
 }
@@ -259,7 +350,9 @@ async function serveur(chemin, method, corps) {
   let m;
   if (p === 'collections/admins/auth-with-password') {
     if (!corps || !String(corps.identity || '').includes('@') || !corps.password) throw new ErreurApi(400, 'E-mail ou mot de passe incorrect.');
-    return { token: fauxJeton(), record: { ...COMPTE, email: String(corps.identity).trim().toLowerCase() } };
+    const email = String(corps.identity).trim().toLowerCase();
+    const membre = equipe(b).find((x) => x.email === email);
+    return { token: fauxJeton(), record: membre ? { ...COMPTE, id: membre.id, email, name: membre.name, role: membre.role } : { ...COMPTE, email, role: roleDeEmail(email) } };
   }
   if (p === 'collections/admins/auth-refresh') { exigerGerant(); return { token: fauxJeton(), record: Auth.compte }; }
   if (p === 'collections/clients/auth-refresh') { const c = clientConnecte(b); if (!c) throw new ErreurApi(401, 'Connectez-vous à votre compte.'); return { token: jetonClient(c.id), record: { id: c.id, collectionName: 'clients', phone: c.phone, name: c.name } }; }
@@ -274,7 +367,7 @@ async function serveur(chemin, method, corps) {
     if (gerant()) r.details = { sauvegardes: { nombre: 7, derniere: Date.now() - 5 * 3600e3, verification: { quand: Date.now() - 2 * JOUR, ok: true, fichier: '@auto_pb_backup_sokoyetu.zip', message: 'Restauration réussie (exemple de la démonstration).' } }, paiement: { fournisseur: 'simulation', pret: true, test: true, panne: 0 }, erreurs: { heure: 0, jour: 0 }, alerte: { configuree: false, dernier: 0 }, problemes: [{ grave: false, texte: 'Démonstration : sur votre serveur, cette page montre l’état réel des sauvegardes, du paiement et des erreurs.' }] };
     return r;
   }
-  if (p === 'sokoyetu/journal') { exigerGerant(); return { erreurs: [] }; }
+  if (p === 'sokoyetu/journal') { exigerGerant('journal'); return { erreurs: [] }; }
 
   // Comptes clients (comme serveur/pb_hooks/lib/comptes.js) : code affiché à l'écran, comme en mode test.
   if (p === 'sokoyetu/compte/code') {
@@ -303,6 +396,11 @@ async function serveur(chemin, method, corps) {
     const rec = clientConnecte(b); if (!rec) throw new ErreurApi(401, 'Connectez-vous à votre compte.');
     if (p === 'sokoyetu/compte/supprimer') {
       Object.values(b.cols.orders).filter((o) => o.client === rec.id).forEach((o) => { o.client = ''; });
+      // Comme notifications.detacher : ce qui n'appartenait qu'au compte disparaît, l'appareil garde le reste.
+      ['notifications', 'alertes'].forEach((k) => { b[k] = (b[k] || []).map((x) => (x.client === rec.id ? { ...x, client: '' } : x)).filter((x) => x.client || x.appareil); });
+      effacerDiscussions(b, (d) => d.client === rec.id);
+      effacerAvis(b, (x) => x.client === rec.id || (x.telephone && x.telephone === R.chiffres(rec.phone)));
+      effacerCagnotteDemo(b, rec.phone);
       delete b.cols.clients[rec.id]; enregistrer(b); diffuser('clients', rec.id, 'delete', rec); return { ok: true };
     }
     if (method === 'GET') return { compte: vueCompte(rec), commandes: commandesDuCompte(b, rec) };
@@ -324,10 +422,12 @@ async function serveur(chemin, method, corps) {
   const cfg = () => configPaiement(b.cols.config.store ? b.cols.config.store.doc : {});
   const produit = (id) => (b.cols.products[id] ? b.cols.products[id].doc : null);
   if (p === 'sokoyetu/devis') {
-    const code = R.valider.codePromo(corps.discountCode);
-    const d = R.devis({ cfg: cfg(), produit, lignes: corps.items, zoneId: corps.zoneId, code: corps.discountCode, remise: code ? remiseParCode(b, code) : null, maintenant: Date.now() });
+    const code = R.valider.codePromo(corps.discountCode); const c = cfg();
+    const fi = pourCommandeDemo(b, clientConnecte(b), corps, c);
+    const d = R.devis({ cfg: c, produit, lignes: corps.items, zoneId: corps.zoneId, code: corps.discountCode, remise: code ? remiseParCode(b, code) : null, parrainage: fi.parrainage, cagnotte: corps.cagnotte === true ? fi.cagnotte : 0, maintenant: Date.now() });
     d.lignes.forEach((l) => { delete l.cost; });
-    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' };
+    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, bienvenue: d.bienvenue, cagnotte: d.cagnotte, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, gain: d.gain, poids: d.poids, zoneId: d.zone ? d.zone.id : '',
+      fidelite: { solde: fi.cagnotte, raison: fi.raison } };
   }
   if (p === 'sokoyetu/commander') {
     if (corps.website) throw new ErreurApi(400, 'Vérification impossible. Rechargez la page et réessayez.');
@@ -335,20 +435,31 @@ async function serveur(chemin, method, corps) {
     if (!t) throw new ErreurApi(400, 'Jeton de commande invalide. Rechargez la page et réessayez.');
     const deja = Object.values(b.cols.orders).find((x) => x.token === t);
     if (deja) { suivrePaiement(b, deja); return reponseClient(deja); }
+    const cl = clientConnecte(b);
     let prep;
     try {
-      const code = R.valider.codePromo(corps.discountCode);
-      prep = R.preparerCommande({ cfg: cfg(), produit, remise: code ? remiseParCode(b, code) : null, saisie: corps, maintenant: Date.now(), numero: R.numeroCommande() });
+      const code = R.valider.codePromo(corps.discountCode); const c = cfg();
+      const fi = pourCommandeDemo(b, cl, corps, c);
+      prep = R.preparerCommande({ cfg: c, produit, remise: code ? remiseParCode(b, code) : null, parrainage: fi.parrainage, cagnotte: fi.cagnotte, titulaire: fi.titulaire, saisie: corps, maintenant: Date.now(), numero: R.numeroCommande() });
     } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message, { champ: err.champ || '' }); throw err; }
     const modifies = stock(b, prep.reserve, -1);
     const id = 'cmd' + uid().slice(0, 12); const now = Date.now();
-    const cl = clientConnecte(b);
-    b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now, client: cl ? cl.id : '' };
+    b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now, client: cl ? cl.id : '', appareil: R.valider.jeton(corps.appareil) };
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
     diffuser('orders', id, 'create');
     demanderPaiement(b, b.cols.orders[id], {});
     return reponseClient(b.cols.orders[id]);
+  }
+  // Page de test du paiement par carte (comme la route carte-test du serveur en mode test) : { issue: ok | refus | annule }.
+  if ((m = p.match(/^sokoyetu\/paiement\/([^/]+)\/carte-test$/))) {
+    const rec = b.cols.orders[decodeURIComponent(m[1])];
+    if (!rec || rec.token !== q.get('t')) throw new ErreurApi(404, 'Commande introuvable.');
+    if (!R.estCarte(rec.doc.payment.method)) throw new ErreurApi(404, 'Page de test indisponible.');
+    if (!['ok', 'refus', 'annule'].includes(corps.issue)) throw new ErreurApi(400, 'Issue inconnue.');
+    if (R.enAttentePaiement(rec.doc) && rec.doc.payment.status === 'pending') { rec.doc.payment.simulation = { id: rec.doc.payment.providerId, issue: corps.issue }; rec.doc.payment.checkedAt = 0; }
+    suivrePaiement(b, rec);
+    return reponseClient(rec);
   }
   if ((m = p.match(/^sokoyetu\/paiement\/([^/]+)(\/relancer)?$/))) {
     const rec = b.cols.orders[decodeURIComponent(m[1])];
@@ -356,14 +467,106 @@ async function serveur(chemin, method, corps) {
     suivrePaiement(b, rec);
     if (!m[2]) return reponseClient(rec);
     const raison = R.relancePossible(rec.doc); if (raison) throw new ErreurApi(400, raison);
-    if (rec.doc.payment.status === 'pending' && Date.now() - Number(rec.doc.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
+    if (rec.doc.payment.status === 'pending' && !R.estCarte(rec.doc.payment.method) && Date.now() - Number(rec.doc.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
     const moyen = R.moyensDePaiement(cfg()).find((x) => x.k === ((corps && corps.method) || rec.doc.payment.method));
     if (!moyen) throw new ErreurApi(400, 'Ce mode de paiement n’est pas disponible.', { champ: 'method' });
-    const tel = R.valider.mobileMoney((corps && corps.phone) || rec.doc.payment.phone);
-    if (!tel) throw new ErreurApi(400, `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, { champ: 'payphone' });
+    const tel = moyen.carte ? '' : R.valider.mobileMoney((corps && corps.phone) || rec.doc.payment.phone);
+    if (!moyen.carte && !tel) throw new ErreurApi(400, `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, { champ: 'payphone' });
     demanderPaiement(b, rec, { methode: moyen.k, label: moyen.label, telephone: tel });
     return reponseClient(rec);
   }
+  // Cagnotte de fidélité et parrainage (comme lib/fidelite.js).
+  if (p === 'sokoyetu/cagnotte') { const c = clientConnecte(b); if (!c) throw new ErreurApi(401, 'Connectez-vous à votre compte.'); return vueCagnotteDemo(b, c); }
+  if (p === 'sokoyetu/parrainage') {
+    const c = cfg(); const x = c.referral.enabled ? parrainDemo(b, q.get('code')) : null;
+    return x ? { ok: true, code: x.parrain_code, prenom: x.name ? R.nomPublic(x.name) : '', bienvenue: c.referral.welcome, min: c.referral.min } : { ok: false };
+  }
+  if ((m = p.match(/^sokoyetu\/clients\/([^/]+)\/cagnotte$/))) {
+    if (method === 'POST') { exigerGerant('cagnotte'); return offrirDemo(b, decodeURIComponent(m[1]), corps); }
+    exigerGerant('clients'); return pourClientDemo(b, decodeURIComponent(m[1]));
+  }
+  // Notifications (comme lib/notifications.js) : centre de notifications ; la démo n'a pas de service de notification du téléphone.
+  if (p === 'sokoyetu/notifications') {
+    const l = notificationsPour(b, corps).sort((x, y) => y.cree - x.cree || y.id - x.id).slice(0, 50)
+      .map((x) => ({ id: x.id, type: x.type, ...R.texteNotification(x, corps.langue), url: x.url, cree: x.cree, lu: !!x.lu }));
+    return { notifications: l, nonLues: l.filter((x) => !x.lu).length, alertes: alertesPour(b, corps) };
+  }
+  // « Prévenez-moi » (comme lib/alertes.js).
+  if (p === 'sokoyetu/alertes' || p === 'sokoyetu/alertes/retirer') {
+    const c = clientConnecte(b); const a = R.valider.jeton(corps.appareil);
+    if (!c && !a) throw new ErreurApi(400, 'Appareil inconnu : rechargez la page.');
+    const l = (b.alertes = Array.isArray(b.alertes) ? b.alertes : []);
+    const moi = (x) => (c && x.client === c.id) || (a && x.appareil === a);
+    if (p === 'sokoyetu/alertes/retirer') {
+      b.alertes = l.filter((x) => !(moi(x) && x.produit === corps.produit && x.variante === String(corps.variante || '')));
+      enregistrer(b); return { ok: true, alertes: alertesPour(b, corps) };
+    }
+    const prod = produit(String(corps.produit || ''));
+    if (!prod || !R.estEnVente(prod)) throw new ErreurApi(404, 'Article introuvable.');
+    const variante = R.varianteAlerte(prod, corps.variante);
+    if (variante === null) throw new ErreurApi(400, 'Cette option n’existe plus : rechargez la page.');
+    if (R.alerteDisponible(prod, variante)) throw new ErreurApi(400, 'Bonne nouvelle : il est de nouveau disponible. Ajoutez-le au panier.');
+    if (alertesPour(b, corps).length >= R.MAX_ALERTES) throw new ErreurApi(400, `Vous attendez déjà ${R.MAX_ALERTES} articles : retirez-en quelques-uns (Compte → Notifications).`);
+    if (!l.some((x) => x.produit === corps.produit && x.variante === variante && x.client === (c ? c.id : '') && x.appareil === (a || ''))) {
+      l.push({ id: l.reduce((m, x) => Math.max(m, x.id), 0) + 1, produit: corps.produit, variante, client: c ? c.id : '', appareil: a || '', cree: Date.now() });
+    }
+    enregistrer(b); return { ok: true, alertes: alertesPour(b, corps) };
+  }
+  if (p === 'sokoyetu/relances') { exigerGerant('reglages'); return { relances: relancerPaniers(b), avis: rappelerAvis(b) }; }
+  // Avis des clients (comme lib/avis.js).
+  if (p === 'sokoyetu/avis') return avisPublicsDemo(b, q);
+  if (p === 'sokoyetu/avis/a-donner') return { articles: aNoterDemo(b, corps) };
+  if (p === 'sokoyetu/avis/donner') return donnerAvisDemo(b, corps);
+  if ((m = p.match(/^sokoyetu\/avis\/([^/]+)$/))) { exigerGerant('avis'); return modererAvisDemo(b, decodeURIComponent(m[1]), corps); }
+  if (p === 'sokoyetu/alertes/attente') {
+    exigerGerant('produits');
+    const out = {};
+    (b.alertes || []).forEach((x) => {
+      const o = out[x.produit] = out[x.produit] || { total: 0, variantes: {}, cibles: {} };
+      const cible = x.client ? 'c' + x.client : 'a' + x.appareil;
+      o.variantes[x.variante] = (o.variantes[x.variante] || 0) + 1; o.cibles[cible] = true; o.total = Object.keys(o.cibles).length;
+    });
+    Object.values(out).forEach((o) => { delete o.cibles; });
+    return { produits: out };
+  }
+  // Annonces aux clients (comme lib/alertes.js) : dans la démo, le seul téléphone est ce navigateur.
+  if (p === 'sokoyetu/annonces') {
+    exigerGerant('annonces');
+    const l = (b.annonces = Array.isArray(b.annonces) ? b.annonces : []);
+    const vue24h = () => l.filter((x) => x.cree > Date.now() - JOUR).length;
+    const abonne = !!Local.lire('pushDemo', false), promo = abonne && !!Local.lire('pushPromos', false);
+    if (method === 'POST') {
+      let x; try { x = R.annonceNettoyee(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message, { champ: err.champ }); throw err; }
+      if (vue24h() >= R.ANNONCES_PAR_JOUR) throw new ErreurApi(400, `${R.ANNONCES_PAR_JOUR} annonces par 24 heures au plus : au-delà, vos clients risquent de couper les notifications.`);
+      const id = l.reduce((m, y) => Math.max(m, y.id), 0) + 1; const appareil = R.valider.jeton(Local.lire('appareil', ''));
+      const n = promo && appareil ? 1 : 0;
+      if (n) ajouterNotification(b, { client: '', appareil, type: 'promo', details: { titre: x.titre, texte: x.texte }, url: x.url, cle: 'annonce:' + id });
+      l.unshift({ id, ...x, auteur: (Auth.compte && (Auth.compte.name || Auth.compte.email)) || '', cree: Date.now(), destinataires: n });
+      enregistrer(b);
+    }
+    return { abonnes: { telephones: abonne ? 1 : 0, promos: promo ? 1 : 0 }, restantes: Math.max(0, R.ANNONCES_PAR_JOUR - vue24h()), parJour: R.ANNONCES_PAR_JOUR, annonces: l.slice(0, 30) };
+  }
+  // Discussion avec la boutique (comme lib/discussions.js).
+  if (p === 'sokoyetu/discussion') return lireDiscussionDemo(b, trouverDiscussion(b, corps), corps);
+  if (p === 'sokoyetu/discussion/envoyer') return envoyerDiscussionDemo(b, corps);
+  if ((m = p.match(/^sokoyetu\/discussions\/([^/]+)$/))) {
+    exigerGerant('messages');
+    const d = (b.cols.discussions || {})[decodeURIComponent(m[1])];
+    if (!d) throw new ErreurApi(404, 'Discussion introuvable.');
+    if (method === 'DELETE') { effacerDiscussions(b, (x) => x.id === d.id); enregistrer(b); return { ok: true }; }
+    if (method === 'POST' && corps.action) {
+      if (corps.action !== 'lue' && corps.action !== 'traitee') throw new ErreurApi(400, 'Action inconnue.');
+      if (d.non_lus > 0 || (corps.action === 'traitee' && d.a_repondre)) {
+        d.non_lus = 0; d.lu_boutique = Date.now(); if (corps.action === 'traitee') d.a_repondre = false;
+        d.updated = Date.now(); enregistrer(b); diffuser('discussions', d.id, 'update');
+      }
+      return { discussion: resumeDiscussion(d) };
+    }
+    if (method === 'POST') repondreDiscussionDemo(b, d, corps);
+    return { discussion: resumeDiscussion(d), messages: messagesDiscussion(b, d.id, method === 'POST' ? corps.apres : q.get('apres'), true), commandes: commandesDiscussion(b, d) };
+  }
+  if (p === 'sokoyetu/notifications/lues') { notificationsPour(b, corps).forEach((x) => { x.lu = x.lu || Date.now(); }); enregistrer(b); return { ok: true }; }
+  if (p.startsWith('sokoyetu/push/')) throw new ErreurApi(503, 'Les notifications du téléphone passent par le serveur de la boutique : indisponibles dans la démonstration.');
   if (p === 'sokoyetu/retrouver') {
     const n = R.numeroNettoye(corps.numero); const tel = R.chiffres(R.valider.telephone(corps.telephone));
     if (!R.numeroValide(n) || !tel) throw new ErreurApi(400, 'Indiquez le numéro de commande (6 caractères) et votre numéro de téléphone.');
@@ -373,20 +576,56 @@ async function serveur(chemin, method, corps) {
     return { id: rec.id, token: rec.token };
   }
   if ((m = p.match(/^sokoyetu\/commandes\/(.+)$/))) {
-    exigerGerant();
-    const rec = b.cols.orders[decodeURIComponent(m[1])]; if (!rec) throw new ErreurApi(404, 'Commande introuvable.');
+    const role = exigerGerant();
+    if (!R.etapePermise(role, String(corps.action || ''))) throw new ErreurApi(403, 'Votre rôle dans l’équipe ne permet pas cette action.');
+    const rec = b.cols.orders[decodeURIComponent(m[1])]; if (!rec || (role === 'livreur' && !R.pourLivreur(rec.doc))) throw new ErreurApi(404, 'Commande introuvable.');
     let r;
     try { r = R.etapeCommande(rec.doc, String(corps.action || ''), { maintenant: Date.now(), note: corps.note, produit }); }
     catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
     const modifies = r.stock === 'reserver' ? stock(b, r.entrees, -1) : r.stock === 'restituer' ? stock(b, r.entrees, 1) : [];
+    apresCommandeDemo(b, rec, rec.doc, r.commande);
+    notifierCommande(b, rec, rec.doc, r.commande);
     rec.doc = r.commande; rec.status = r.commande.status; rec.updated = Date.now();
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
     diffuser('orders', rec.id, 'update');
-    return { id: rec.id, doc: r.commande };
+    return { id: rec.id, doc: role === 'livreur' ? { ...commandePublique(r.commande), adminNote: r.commande.adminNote || '' } : r.commande };
+  }
+  // L'équipe (propriétaire) : comme lib/equipe.js, sans vrai mot de passe.
+  if (p === 'sokoyetu/equipe' && method === 'GET') { exigerGerant('equipe'); return { membres: equipe(b).map(vueMembre) }; }
+  if (p === 'sokoyetu/equipe') {
+    exigerGerant('equipe');
+    const email = String(corps.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new ErreurApi(400, 'Adresse e-mail invalide.');
+    if (!R.ROLES[corps.role]) throw new ErreurApi(400, 'Choisissez un rôle : propriétaire, vendeur ou livreur.');
+    if (!R.valider.nom(corps.name)) throw new ErreurApi(400, 'Indiquez le nom du membre (2 à 60 lettres).');
+    if (equipe(b).some((x) => x.email === email)) throw new ErreurApi(400, 'Cette adresse a déjà un compte dans l’équipe.');
+    const membre = { id: 'adm' + uid().slice(0, 12), email, name: R.valider.nom(corps.name), role: corps.role, created: Date.now() };
+    equipe(b).push(membre); enregistrer(b);
+    return { membre: vueMembre(membre), motDePasse: 'DEMO-essai-2026' };
+  }
+  if ((m = p.match(/^sokoyetu\/equipe\/(.+)$/))) {
+    exigerGerant('equipe');
+    const l = equipe(b); const membre = l.find((x) => x.id === decodeURIComponent(m[1]));
+    if (!membre) throw new ErreurApi(404, 'Ce membre de l’équipe n’existe plus.');
+    const proprios = l.filter((x) => x.role === 'proprietaire').length;
+    const moi = Auth.compte && Auth.compte.id === membre.id;
+    if (method === 'DELETE') {
+      if (moi) throw new ErreurApi(400, 'Vous ne pouvez pas retirer votre propre compte.');
+      if (membre.role === 'proprietaire' && proprios <= 1) throw new ErreurApi(400, 'La boutique doit garder au moins un propriétaire.');
+      b.equipe = l.filter((x) => x !== membre); enregistrer(b); return { ok: true };
+    }
+    if (corps.role !== undefined) {
+      if (!R.ROLES[corps.role]) throw new ErreurApi(400, 'Choisissez un rôle : propriétaire, vendeur ou livreur.');
+      if (membre.role === 'proprietaire' && corps.role !== 'proprietaire' && proprios <= 1) throw new ErreurApi(400, 'La boutique doit garder au moins un propriétaire.');
+      membre.role = corps.role;
+    }
+    if (corps.reinitialiser && moi) throw new ErreurApi(400, 'Changez votre propre mot de passe dans « Mon compte ».');
+    enregistrer(b);
+    return { membre: vueMembre(membre), motDePasse: corps.reinitialiser ? 'DEMO-essai-2026' : '' };
   }
   if (p === 'sokoyetu/clients/effacer') {
-    exigerGerant();
+    exigerGerant('effacer');
     const tel = R.chiffres(corps.phone); if (tel.length < 6) throw new ErreurApi(400, 'Numéro de téléphone manquant.');
     const l = Object.values(b.cols.orders).filter((x) => x.phone === tel);
     l.forEach((rec) => {
@@ -398,6 +637,12 @@ async function serveur(chemin, method, corps) {
       rec.phone = ''; rec.updated = Date.now();
     });
     const comptes = Object.values(b.cols.clients).filter((c) => R.chiffres(c.phone) === tel);
+    const appareils = l.map((rec) => rec.appareil).filter(Boolean); l.forEach((rec) => { rec.appareil = ''; });
+    b.notifications = (b.notifications || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
+    b.alertes = (b.alertes || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
+    effacerDiscussions(b, (d) => R.chiffres(d.telephone) === tel || comptes.some((c) => c.id === d.client) || (d.appareil && appareils.includes(d.appareil)));
+    effacerAvis(b, (x) => R.chiffres(x.telephone) === tel || comptes.some((c) => c.id === x.client));
+    effacerCagnotteDemo(b, tel);
     comptes.forEach((c) => { delete b.cols.clients[c.id]; });
     enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update')); comptes.forEach((c) => diffuser('clients', c.id, 'delete', c));
     return { effacees: l.length, comptes: comptes.length };
@@ -405,8 +650,8 @@ async function serveur(chemin, method, corps) {
   if (p === 'sokoyetu/visite') { visiteDemo(corps); return null; }
   // Démo : un seul visiteur, ses propres recherches servent de recherches populaires.
   if (p === 'sokoyetu/recherches') return { termes: recherchesDemo(periodeDemo(30)[0]).trouvees.slice(0, 12).map((x) => x.terme) };
-  if (p === 'sokoyetu/audience') { exigerGerant(); return resumeDemo(q.get('jours'), q.get('graphe')); }
-  if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant(); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
+  if (p === 'sokoyetu/audience') { exigerGerant('audience'); return resumeDemo(q.get('jours'), q.get('graphe')); }
+  if ((m = p.match(/^sokoyetu\/audience\/(.+)$/))) { exigerGerant('audience'); return articleDemo(decodeURIComponent(m[1]), q.get('jours'), q.get('graphe')); }
   if (p === 'sokoyetu/ia/produit') { exigerGerant(); throw new ErreurApi(503, 'Assistant indisponible dans la démonstration.', { code: 'no_key' }); }
   // Import depuis un fournisseur : la démo ne peut pas lire les sites chinois, elle montre un exemple de lecture.
   if (p === 'sokoyetu/import/lien') {
@@ -523,19 +768,383 @@ function articleDemo(id, jours, graphe) {
   };
 }
 
+/* ---------- Notifications (comme serveur/pb_hooks/lib/notifications.js) ---------- */
+
+/* Commande changée : le client est prévenu (son appareil et son compte, ou le compte de son téléphone), une fois par étape. */
+function notifierCommande(b, rec, avant, apres) {
+  const l = R.evenementsCommande(avant, apres); if (!l.length) return;
+  const client = rec.client || (Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === rec.phone) || {}).id || '';
+  l.forEach((ev) => ajouterNotification(b, { client, appareil: rec.appareil || '', type: ev.type, details: ev.details, url: '/suivi/' + rec.id, cle: rec.id + ':' + ev.type }));
+}
+function ajouterNotification(b, x) {
+  const n = (b.notifications = Array.isArray(b.notifications) ? b.notifications : []);
+  if (x.cle && n.some((y) => y.cle === x.cle)) return;
+  n.push({ id: n.reduce((m, y) => Math.max(m, y.id), 0) + 1, ...x, cree: Date.now(), lu: 0 });
+  if (n.length > 300) b.notifications = n.slice(-300);
+}
+/* Article de nouveau disponible : chaque client qui l'attendait est prévenu une fois, son alerte disparaît. */
+function alertesProduit(b, rec) {
+  const l = Array.isArray(b.alertes) ? b.alertes : []; const p = rec.doc;
+  const servies = l.filter((x) => x.produit === rec.id && R.alerteDisponible(p, x.variante));
+  if (!servies.length) return;
+  const vus = new Set();
+  servies.forEach((x) => {
+    const cible = x.client ? 'c' + x.client : 'a' + x.appareil; if (vus.has(cible)) return; vus.add(cible);
+    ajouterNotification(b, { client: x.client, appareil: x.appareil, type: 'stock', details: { titre: p.title || 'Article', option: R.libelleVariante(x.variante) }, url: '/p/' + rec.id + '/' + R.slug(p.title), cle: 'stock:' + x.id });
+  });
+  b.alertes = l.filter((x) => !servies.includes(x));
+}
+function alertesPour(b, corps) {
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  const vus = new Set();
+  return (b.alertes || []).filter((x) => (c && x.client === c.id) || (a && x.appareil === a)).sort((x, y) => y.cree - x.cree)
+    .filter((x) => { const k = x.produit + '#' + x.variante; if (vus.has(k)) return false; vus.add(k); return true; })
+    .map((x) => ({ produit: x.produit, variante: x.variante }));
+}
+function notificationsPour(b, corps) {
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  return (b.notifications || []).filter((x) => (c && x.client === c.id) || (a && x.appareil === a));
+}
+
+/* Relance des paniers laissés (comme comptes.relancerPaniers) : notification gratuite, une fois par panier. */
+function relancerPaniers(b) {
+  const cfg = configPaiement(b.cols.config.store ? b.cols.config.store.doc : {}); const now = Date.now(); let n = 0;
+  if (!cfg.cartReminder.enabled) return 0;
+  Object.values(b.cols.clients).forEach((rec) => {
+    const tel = R.chiffres(rec.phone);
+    const r = R.relancePanier({ doc: rec.doc, cfg, relance: rec.relance, maintenant: now, produit: (id) => (b.cols.products[id] ? b.cols.products[id].doc : null),
+      commandeDepuis: (t) => Object.values(b.cols.orders).some((o) => (o.client === rec.id || (tel && o.phone === tel)) && o.created > t) });
+    if (!r) return;
+    ajouterNotification(b, { client: rec.id, appareil: '', type: 'panier', details: { titre: r.titre, autres: r.autres }, url: '/panier', cle: 'panier:' + rec.id + ':' + r.depuis });
+    rec.relance = now; n++;
+    diffuser('clients', rec.id, 'update');
+  });
+  if (n) enregistrer(b);
+  return n;
+}
+
+/* ---------- Discussion avec la boutique (comme serveur/pb_hooks/lib/discussions.js) ---------- */
+
+const resumeDiscussion = (d) => ({ id: d.id, client: d.client || '', nom: d.nom || '', telephone: d.telephone || '', dernier: d.dernier || '', auteur: d.auteur || '', maj: d.maj || 0, non_lus: d.non_lus || 0, a_repondre: !!d.a_repondre, lu_client: d.lu_client || 0, lu_boutique: d.lu_boutique || 0 });
+function messagesDiscussion(b, id, apres, equipe) {
+  return (b.messages || []).filter((m) => m.discussion === id && m.id > (Number(apres) || 0)).slice(-100).map((m) => {
+    const o = m.commande ? b.cols.orders[m.commande] : null;
+    const x = { id: m.id, auteur: m.auteur, texte: m.texte, produit: m.produit || '', commande: m.commande ? { id: m.commande, numero: o ? o.doc.number : '' } : null, cree: m.cree };
+    if (equipe) x.par = m.par || '';
+    return x;
+  });
+}
+function commandesDiscussion(b, d) {
+  const tel = R.chiffres(d.telephone);
+  return Object.values(b.cols.orders).filter((o) => (d.client && o.client === d.client) || (tel && o.phone === tel) || (d.appareil && o.appareil === d.appareil))
+    .sort((x, y) => y.created - x.created).slice(0, 20).map((o) => o.id);
+}
+function resumerDiscussion(b, d) {
+  const l = (b.messages || []).filter((m) => m.discussion === d.id); const der = l[l.length - 1];
+  Object.assign(d, { dernier: der ? R.apercuMessage(der.texte, 160) : '', auteur: der ? der.auteur : '', maj: der ? der.cree : d.maj, a_repondre: !!der && der.auteur === 'client',
+    non_lus: l.filter((m) => m.auteur === 'client' && m.cree > (d.lu_boutique || 0)).length, updated: Date.now() });
+}
+/* La discussion de ce client : son compte, sinon cet appareil ; connecté, celle de l'appareil rejoint son compte. */
+function trouverDiscussion(b, corps) {
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  const l = Object.values((b.cols.discussions = b.cols.discussions || {}));
+  b.messages = Array.isArray(b.messages) ? b.messages : [];
+  const parCompte = c ? l.find((d) => d.client === c.id) : null;
+  const parAppareil = a ? l.find((d) => !d.client && d.appareil === a) : null;
+  const qui = { c, a };
+  if (!c || !parAppareil) return { ...qui, d: parCompte || parAppareil || null };
+  if (!parCompte) {
+    Object.assign(parAppareil, { client: c.id, appareil: '', telephone: c.phone, nom: c.name || parAppareil.nom, updated: Date.now() });
+    enregistrer(b); diffuser('discussions', parAppareil.id, 'update');
+    return { ...qui, d: parAppareil };
+  }
+  b.messages.forEach((m) => { if (m.discussion === parAppareil.id) m.discussion = parCompte.id; });
+  b.messages.sort((x, y) => x.id - y.id);
+  delete b.cols.discussions[parAppareil.id]; resumerDiscussion(b, parCompte);
+  enregistrer(b); diffuser('discussions', parAppareil.id, 'delete', parAppareil); diffuser('discussions', parCompte.id, 'update');
+  return { ...qui, d: parCompte };
+}
+function lireDiscussionDemo(b, { c, a, d }, corps) {
+  if (!d) return { discussion: null, messages: [] };
+  const recu = (b.messages || []).filter((m) => m.discussion === d.id && m.auteur === 'boutique').reduce((x, m) => Math.max(x, m.cree), 0);
+  if (recu > (d.lu_client || 0)) {
+    d.lu_client = Date.now(); d.updated = Date.now();
+    (b.notifications || []).forEach((n) => { if (n.type === 'message' && !n.lu && ((c && n.client === c.id) || (a && n.appareil === a))) n.lu = Date.now(); });
+    enregistrer(b); diffuser('discussions', d.id, 'update');
+  }
+  return { discussion: { id: d.id, luBoutique: d.lu_boutique || 0 }, messages: messagesDiscussion(b, d.id, corps && corps.apres, false) };
+}
+function envoyerDiscussionDemo(b, corps) {
+  const qui = trouverDiscussion(b, corps); const { c, a } = qui; let { d } = qui;
+  if (!c && !a) throw new ErreurApi(400, 'Appareil inconnu : rechargez la page.');
+  let m; try { m = R.messageNettoye(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
+  const prod = m.produit && b.cols.products[m.produit];
+  if (!prod || !R.estEnVente(prod.doc)) m.produit = '';
+  const o = m.commande && b.cols.orders[m.commande];
+  if (!o || !((R.valider.jeton(corps.t) && o.token === corps.t) || (c && o.client === c.id) || (a && o.appareil === a))) m.commande = '';
+  const now = Date.now();
+  if (d && b.messages.filter((x) => x.discussion === d.id && x.auteur === 'client' && x.cree > now - JOUR).length >= R.MESSAGES_PAR_JOUR) throw new ErreurApi(400, 'Beaucoup de messages d’un coup : attendez la réponse de la boutique, elle vous répond ici.');
+  if (!d) {
+    const id = 'dis' + uid().slice(0, 12);
+    d = b.cols.discussions[id] = { id, created: now, client: c ? c.id : '', appareil: c ? '' : a, nom: '', telephone: '', non_lus: 0, lu_client: 0, lu_boutique: 0 };
+  }
+  const derniere = Object.values(b.cols.orders).filter((x) => (c && x.client === c.id) || (a && x.appareil === a)).sort((x, y) => y.created - x.created)[0];
+  if (c) { d.telephone = c.phone; if (c.name) d.nom = c.name; }
+  if (!(c && c.name) && R.nettoyer(corps.nom, 60)) d.nom = R.nettoyer(corps.nom, 60);
+  if (!d.nom && derniere) d.nom = (derniere.doc.customer && derniere.doc.customer.name) || '';
+  if (!d.telephone && derniere) d.telephone = derniere.phone || '';
+  b.messages.push({ id: b.messages.reduce((x, y) => Math.max(x, y.id), 0) + 1, discussion: d.id, auteur: 'client', texte: m.texte, produit: m.produit, commande: m.commande, par: '', cree: now });
+  Object.assign(d, { dernier: R.apercuMessage(m.texte, 160), auteur: 'client', maj: now, non_lus: (d.non_lus || 0) + 1, a_repondre: true, updated: now });
+  enregistrer(b); diffuser('discussions', d.id, 'update');
+  return lireDiscussionDemo(b, { c, a, d }, corps);
+}
+function repondreDiscussionDemo(b, d, corps) {
+  let m; try { m = R.messageNettoye(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
+  if (m.produit && !b.cols.products[m.produit]) m.produit = '';
+  if (m.commande && !commandesDiscussion(b, d).includes(m.commande)) m.commande = '';
+  const now = Date.now(); const id = b.messages.reduce((x, y) => Math.max(x, y.id), 0) + 1;
+  b.messages.push({ id, discussion: d.id, auteur: 'boutique', texte: m.texte, produit: m.produit, commande: m.commande, par: (Auth.compte && (Auth.compte.name || Auth.compte.email)) || '', cree: now });
+  Object.assign(d, { dernier: R.apercuMessage(m.texte, 160), auteur: 'boutique', maj: now, non_lus: 0, a_repondre: false, lu_boutique: now, updated: now });
+  ajouterNotification(b, { client: d.client, appareil: d.appareil, type: 'message', details: { texte: R.apercuMessage(m.texte, 120) }, url: '/discussion', cle: 'message:' + id });
+  enregistrer(b); diffuser('discussions', d.id, 'update');
+}
+/* Droit à l'effacement, compte supprimé, discussion supprimée par l'équipe : ses messages disparaissent avec elle. */
+function effacerDiscussions(b, choix) {
+  Object.values(b.cols.discussions || {}).filter(choix).forEach((d) => {
+    b.messages = (b.messages || []).filter((m) => m.discussion !== d.id);
+    delete b.cols.discussions[d.id]; diffuser('discussions', d.id, 'delete', d);
+  });
+}
+
+/* ---------- Avis des clients (comme serveur/pb_hooks/lib/avis.js) ---------- */
+
+const avisPublicDemo = (x) => ({ id: x.id, nom: x.nom, note: x.note, texte: x.texte, variante: x.variante || '', cree: x.cree, reponse: x.reponse || '', reponseLe: x.reponse_le || 0 });
+const avisAuteurDemo = (x) => ({ ...avisPublicDemo(x), etat: x.etat, motif: R.MOTIFS_AVIS[x.motif] || '', maj: x.maj || x.cree });
+const avisEquipeDemo = (x) => ({ ...avisPublicDemo(x), produit: x.produit, commande: x.commande || '', numero: x.numero || '', telephone: x.telephone || '', client: x.client || '', etat: x.etat, motif: x.motif || '', reponse_par: x.reponse_par || '', reponse_le: x.reponse_le || 0, maj: x.maj || x.cree });
+const reglesAvis = (b) => configPaiement(b.cols.config.store ? b.cols.config.store.doc : {}).reviews;
+const enVenteDemo = (b, id) => { const rec = b.cols.products[id]; return !!rec && rec.active !== false && R.estEnVente(rec.doc); };
+/* Note moyenne et nombre d'avis publiés de chaque article (catalogue public). */
+function notesDemo(b) {
+  const r = {};
+  Object.values(b.cols.avis || {}).forEach((x) => { if (x.etat !== 'publie') return; const k = (r[x.produit] = r[x.produit] || {}); k[x.note] = (k[x.note] || 0) + 1; });
+  const out = {};
+  Object.keys(r).forEach((k) => { const s = R.resumeAvis(r[k]); out[k] = { note: s.note, nombre: s.nombre }; });
+  return out;
+}
+function avisPublicsDemo(b, q) {
+  const p = R.valider.identifiant(q.get('produit'));
+  if (!p || !reglesAvis(b).enabled) return { resume: R.resumeAvis({}), avis: [], suite: false };
+  const l = Object.values(b.cols.avis || {}).filter((x) => x.produit === p && x.etat === 'publie');
+  const rep = {}; l.forEach((x) => { rep[x.note] = (rep[x.note] || 0) + 1; });
+  const page = Math.min(500, Math.max(0, R.int(q.get('page')))); const note = R.int(q.get('note')) >= 1 && R.int(q.get('note')) <= 5 ? R.int(q.get('note')) : 0;
+  const tranche = l.filter((x) => !note || x.note === note).sort((x, y) => y.cree - x.cree).slice(page * R.AVIS_PAR_PAGE, (page + 1) * R.AVIS_PAR_PAGE + 1);
+  return { resume: R.resumeAvis(rep), avis: tranche.slice(0, R.AVIS_PAR_PAGE).map(avisPublicDemo), suite: tranche.length > R.AVIS_PAR_PAGE };
+}
+/* Articles reçus que ce client peut noter : son compte, cet appareil, ou les commandes suivies sur ce téléphone. */
+function aNoterDemo(b, corps) {
+  if (!reglesAvis(b).enabled) return [];
+  const c = clientConnecte(b); const a = R.valider.jeton(corps && corps.appareil);
+  const suivis = (Array.isArray(corps && corps.suivis) ? corps.suivis : []).slice(0, 30);
+  const vus = {}; const out = [];
+  Object.values(b.cols.orders).filter((o) => o.doc.fulfillment === 'delivered' && ((c && o.client === c.id) || (a && o.appareil === a) || suivis.some((s) => s && s.id === o.id && R.valider.jeton(s.t) && s.t === o.token)))
+    .sort((x, y) => y.created - x.created).slice(0, 30).forEach((o) => {
+      R.articlesANoter(o.doc).forEach((l) => {
+        if (vus[l.produit] || !enVenteDemo(b, l.produit)) return;
+        vus[l.produit] = true;
+        const deja = Object.values(b.cols.avis || {}).find((x) => x.produit === l.produit && x.telephone && x.telephone === o.phone);
+        out.push({ produit: l.produit, titre: l.titre, variante: l.variante, commande: o.id, numero: o.doc.number, livree: R.int(o.doc.deliveredAt), avis: deja ? avisAuteurDemo(deja) : null });
+      });
+    });
+  return out;
+}
+function donnerAvisDemo(b, corps) {
+  const cfg = configPaiement(b.cols.config.store ? b.cols.config.store.doc : {});
+  if (!cfg.reviews.enabled) throw new ErreurApi(400, 'Les avis sont fermés pour le moment.');
+  let saisie; try { saisie = R.avisNettoye(corps); } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message, { champ: err.champ }); throw err; }
+  const c = clientConnecte(b); const a = R.valider.jeton(corps.appareil); const t = R.valider.jeton(corps.t);
+  const o = b.cols.orders[String(corps.commande || '')];
+  if (!o || !((t && o.token === t) || (c && o.client === c.id) || (a && o.appareil === a))) throw new ErreurApi(404, 'Commande introuvable.');
+  if (o.doc.fulfillment !== 'delivered') throw new ErreurApi(400, 'Vous pourrez donner votre avis une fois la commande reçue.');
+  const produitId = R.valider.identifiant(corps.produit);
+  const ligne = R.articlesANoter(o.doc).find((x) => x.produit === produitId);
+  if (!ligne) throw new ErreurApi(400, 'Cet article ne fait pas partie de cette commande.');
+  if (!enVenteDemo(b, produitId)) throw new ErreurApi(400, 'Cet article n’est plus en vente : impossible de le noter.');
+  const l = (b.cols.avis = b.cols.avis || {}); const now = Date.now();
+  let x = Object.values(l).find((y) => y.produit === produitId && y.telephone === o.phone);
+  const avant = x ? { etat: x.etat } : null;
+  if (!x) { const id = 'avi' + uid().slice(0, 12); x = l[id] = { id, produit: produitId, telephone: o.phone, cree: now, created: now, reponse: '', reponse_par: '', reponse_le: 0 }; }
+  Object.assign(x, { commande: o.id, numero: o.doc.number, client: o.client || (c ? c.id : '') || x.client || '', appareil: a || x.appareil || '', nom: R.nomPublic(o.doc.customer && o.doc.customer.name),
+    note: saisie.note, texte: saisie.texte, variante: ligne.variante, etat: R.etatAvis(cfg, avant), motif: '', maj: now, updated: now });
+  enregistrer(b); diffuser('avis', x.id, avant ? 'update' : 'create');
+  return { avis: avisAuteurDemo(x) };
+}
+function modererAvisDemo(b, id, corps) {
+  const x = (b.cols.avis || {})[id]; if (!x) throw new ErreurApi(404, 'Avis introuvable.');
+  const c = corps || {};
+  if (c.action === 'publier') { x.etat = 'publie'; x.motif = ''; }
+  else if (c.action === 'masquer') { x.etat = 'masque'; x.motif = R.MOTIFS_AVIS[c.motif] ? c.motif : 'autre'; }
+  else if (typeof c.reponse === 'string') {
+    const texte = R.reponseAvisNettoyee(c.reponse);
+    x.reponse = texte; x.reponse_par = texte ? String((Auth.compte && (Auth.compte.name || Auth.compte.email)) || '').slice(0, 80) : ''; x.reponse_le = texte ? Date.now() : 0;
+  } else throw new ErreurApi(400, 'Action inconnue.');
+  x.maj = Date.now(); x.updated = Date.now();
+  if (x.reponse && x.etat !== 'masque') {
+    const p = b.cols.products[x.produit]; const titre = (p && p.doc.title) || 'votre article';
+    ajouterNotification(b, { client: x.client || '', appareil: x.appareil || '', type: 'avis_reponse', details: { titre, texte: R.apercuMessage(x.reponse, 110) }, url: `/p/${x.produit}/${R.slug(titre)}`, cle: 'avis_reponse:' + x.id });
+  }
+  enregistrer(b); diffuser('avis', x.id, 'update');
+  return { avis: avisEquipeDemo(x) };
+}
+/* « Votre avis compte » : une fois par commande, de 2 à 14 jours après la livraison (chaque minute dans la démo). */
+function rappelerAvis(b) {
+  const cfg = configPaiement(b.cols.config.store ? b.cols.config.store.doc : {}); const now = Date.now(); let n = 0;
+  if (!cfg.reviews.enabled || !cfg.reviews.reminder) return 0;
+  Object.values(b.cols.orders).forEach((o) => {
+    if (o.doc.fulfillment !== 'delivered' || (b.notifications || []).some((x) => x.cle === 'avis:' + o.id)) return;
+    const deja = (pid) => !enVenteDemo(b, pid) || Object.values(b.cols.avis || {}).some((x) => x.produit === pid && x.telephone && x.telephone === o.phone);
+    const r = R.rappelAvis({ cfg, o: o.doc, notes: deja, maintenant: now });
+    if (!r) return;
+    const client = o.client || (Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === o.phone) || {}).id || '';
+    if (!client && !o.appareil) return;
+    ajouterNotification(b, { client, appareil: o.appareil || '', type: 'avis', details: r, url: '/avis', cle: 'avis:' + o.id }); n++;
+  });
+  if (n) enregistrer(b);
+  return n;
+}
+function effacerAvis(b, choix) {
+  Object.values(b.cols.avis || {}).filter(choix).forEach((x) => { delete b.cols.avis[x.id]; diffuser('avis', x.id, 'delete', x); });
+}
+
+/* ---------- Cagnotte de fidélité et parrainage (comme serveur/pb_hooks/lib/fidelite.js) ---------- */
+
+const ALPHABET_PARRAIN = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const cagnotteDe = (b) => (b.cagnotte = Array.isArray(b.cagnotte) ? b.cagnotte : []);
+const gainsDemo = (b, tel) => (tel ? R.arrondi(cagnotteDe(b).filter((x) => x.telephone === tel).reduce((s, x) => s + R.num(x.montant), 0)) : 0);
+const utiliseDemo = (b, id) => (id ? R.arrondi(Object.values(b.cols.orders).filter((o) => o.client === id && o.doc.status !== 'cancelled').reduce((s, o) => s + R.num(o.doc.wallet && o.doc.wallet.used), 0)) : 0);
+const soldeDemo = (b, c) => (c ? Math.max(0, R.arrondi(gainsDemo(b, R.chiffres(c.phone)) - utiliseDemo(b, c.id))) : 0);
+const premiereDemo = (b, c) => !Object.values(b.cols.orders).some((o) => o.doc.status !== 'cancelled' && (o.client === c.id || (o.phone && o.phone === R.chiffres(c.phone))));
+const parrainDemo = (b, code) => { const k = R.codeParrainValide(code); return (k && Object.values(b.cols.clients).find((c) => c.parrain_code === k)) || null; };
+const mouvementDemo = (x) => ({ type: x.type, montant: R.arrondi(x.montant), numero: x.details.numero || '', filleul: x.details.filleul || '', motif: x.details.motif || '', par: x.details.par || '', le: x.cree });
+/* Code de parrainage du compte, créé au premier besoin. */
+function codeDemo(b, c) {
+  while (!c.parrain_code) {
+    const k = Array.from({ length: 6 }, () => ALPHABET_PARRAIN[Math.floor(Math.random() * ALPHABET_PARRAIN.length)]).join('');
+    if (!parrainDemo(b, k)) { c.parrain_code = k; enregistrer(b); }
+  }
+  return c.parrain_code;
+}
+/* Cagnotte utilisable et cadeau de bienvenue d'une commande (devis, commande), pour le compte connecté (ou null). */
+function pourCommandeDemo(b, compte, corps, cfg) {
+  const out = { cagnotte: 0, titulaire: compte ? R.chiffres(compte.phone) : '', parrainage: null, raison: '' };
+  if (compte && cfg.loyalty.enabled) out.cagnotte = soldeDemo(b, compte);
+  const code = R.codeParrainValide(corps && corps.parrain);
+  if (!code) return out;
+  const p = cfg.referral.enabled ? parrainDemo(b, code) : null;
+  if (!p) out.raison = 'code';
+  else if (!compte) out.raison = 'compte';
+  else if (p.id === compte.id || R.chiffres(p.phone) === out.titulaire) out.raison = 'soi-meme';
+  else if (!premiereDemo(b, compte)) out.raison = 'deja-client';
+  else out.parrainage = { code, montant: cfg.referral.welcome, min: cfg.referral.min, recompense: cfg.referral.reward, parrain: p.id, parrainTel: R.chiffres(p.phone) };
+  return out;
+}
+/* Un gain dans la cagnotte d'un téléphone ; false s'il y est déjà (même cle). */
+function crediterDemo(b, m) {
+  const l = cagnotteDe(b);
+  if (!m.telephone || !(R.num(m.montant) > 0) || l.some((x) => x.cle === m.cle)) return false;
+  l.push({ id: l.reduce((n, x) => Math.max(n, x.id), 0) + 1, telephone: m.telephone, montant: R.arrondi(m.montant), type: m.type, commande: m.commande || '', details: m.details || {}, cle: m.cle, cree: m.cree || Date.now() });
+  return true;
+}
+/* Commande livrée : le gain promis rejoint la cagnotte du client, la récompense du parrain la sienne (il en est prévenu). */
+function apresCommandeDemo(b, rec, avant, apres) {
+  if (!apres || apres.status === 'cancelled' || apres.fulfillment !== 'delivered' || (avant && avant.fulfillment === 'delivered')) return;
+  const l = apres.loyalty;
+  if (l && l.phone) crediterDemo(b, { telephone: l.phone, montant: l.amount, type: 'achat', commande: rec.id, details: { numero: apres.number }, cle: 'achat:' + rec.id });
+  const r = apres.referral;
+  if (!r || !r.byPhone) return;
+  const filleul = R.nomPublic(apres.customer && apres.customer.name);
+  if (!crediterDemo(b, { telephone: r.byPhone, montant: r.reward, type: 'parrainage', commande: rec.id, details: { numero: apres.number, filleul }, cle: 'parrainage:' + rec.id })) return;
+  const client = (b.cols.clients[r.by] || Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === r.byPhone) || {}).id || '';
+  if (client) ajouterNotification(b, { client, appareil: '', type: 'parrainage', details: { filleul, montant: R.arrondi(r.reward) }, url: '/compte/cagnotte', cle: 'parrainage:' + rec.id });
+}
+/* « Ma cagnotte » du client connecté : solde, gains à venir, historique, et son parrainage. */
+function vueCagnotteDemo(b, c) {
+  const cfg = configPaiement(b.cols.config.store ? b.cols.config.store.doc : {}); const tel = R.chiffres(c.phone);
+  const out = { ouverte: cfg.loyalty.enabled, pct: cfg.loyalty.pct, part: R.PART_CAGNOTTE, solde: soldeDemo(b, c), aVenir: 0, premiere: premiereDemo(b, c), mouvements: cagnotteDe(b).filter((x) => x.telephone === tel).map(mouvementDemo), parrainage: null };
+  Object.values(b.cols.orders).filter((o) => o.client === c.id || (o.phone && o.phone === tel)).forEach((o) => {
+    const d = o.doc;
+    if (d.status === 'cancelled') return;
+    if (o.client === c.id && d.wallet && R.num(d.wallet.used) > 0) out.mouvements.push({ type: 'utilise', montant: -R.arrondi(d.wallet.used), numero: d.number || '', le: R.int(d.createdAt) });
+    if (d.loyalty && d.loyalty.phone === tel && d.fulfillment !== 'delivered' && R.estPayee(d)) out.aVenir += R.num(d.loyalty.amount);
+  });
+  out.mouvements = out.mouvements.sort((x, y) => y.le - x.le).slice(0, R.MOUVEMENTS_CAGNOTTE);
+  out.aVenir = R.arrondi(out.aVenir);
+  if (cfg.referral.enabled) {
+    const f = cagnotteDe(b).filter((x) => x.telephone === tel && x.type === 'parrainage');
+    // Premières commandes de ses filleuls, payées et pas encore livrées : la récompense arrive à la livraison.
+    const enCours = Object.values(b.cols.orders).filter((o) => o.doc.status === 'open' && R.estPayee(o.doc) && o.doc.fulfillment !== 'delivered' && o.doc.referral && o.doc.referral.by === c.id)
+      .sort((x, y) => y.created - x.created).slice(0, 20).map((o) => ({ filleul: R.nomPublic(o.doc.customer && o.doc.customer.name), montant: R.arrondi(o.doc.referral.reward) }));
+    out.parrainage = { code: codeDemo(b, c), bienvenue: cfg.referral.welcome, recompense: cfg.referral.reward, min: cfg.referral.min, filleuls: f.length, gagne: R.arrondi(f.reduce((s, x) => s + x.montant, 0)), enCours };
+  }
+  return out;
+}
+/* Administration (fiche d'un client, par téléphone) : solde, gains, cagnotte utilisée, filleuls, derniers mouvements. */
+function pourClientDemo(b, tel) {
+  const t = R.chiffres(tel);
+  const compte = Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === t) || null;
+  const gagne = gainsDemo(b, t); const depense = compte ? utiliseDemo(b, compte.id) : 0;
+  const l = cagnotteDe(b).filter((x) => x.telephone === t).sort((x, y) => y.cree - x.cree || y.id - x.id);
+  return { solde: Math.max(0, R.arrondi(gagne - depense)), gagne, utilise: depense, filleuls: l.filter((x) => x.type === 'parrainage').length, compte: !!compte, code: compte ? compte.parrain_code || '' : '', mouvements: l.slice(0, 20).map(mouvementDemo) };
+}
+/* Geste de la boutique (propriétaire) : ajouté une fois par jeton, le client en est prévenu. */
+function offrirDemo(b, tel, corps) {
+  const t = R.chiffres(tel); const montant = R.arrondi(corps && corps.montant);
+  if (t.length < 6) throw new ErreurApi(400, 'Numéro de téléphone manquant.');
+  if (!(montant > 0) || montant > 100) throw new ErreurApi(400, 'Montant de 0,01 à 100 $.');
+  const jeton = R.valider.jeton(corps && corps.jeton);
+  if (!jeton) throw new ErreurApi(400, 'Rechargez la page et réessayez.');
+  const motif = R.nettoyer(corps && corps.motif, 80);
+  const fait = crediterDemo(b, { telephone: t, montant, type: 'geste', details: { motif, par: (Auth.compte && (Auth.compte.name || Auth.compte.email)) || '' }, cle: 'geste:' + jeton });
+  if (fait) {
+    const client = (Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === t) || {}).id || '';
+    if (client) ajouterNotification(b, { client, appareil: '', type: 'cagnotte', details: { montant, motif }, url: '/compte/cagnotte', cle: 'geste:' + jeton });
+    enregistrer(b);
+  }
+  return { ajoute: fait, ...pourClientDemo(b, t) };
+}
+/* Compte supprimé ou effacement demandé : la cagnotte disparaît, les gains promis ne lui seront plus versés. */
+function effacerCagnotteDemo(b, tel) {
+  const t = R.chiffres(tel);
+  if (!t) return;
+  b.cagnotte = cagnotteDe(b).filter((x) => x.telephone !== t);
+  Object.values(b.cols.orders).forEach((o) => {
+    const d = o.doc; let change = false;
+    if (d.loyalty && d.loyalty.phone === t) { d.loyalty.phone = ''; change = true; }
+    if (d.referral && d.referral.byPhone === t) { d.referral.byPhone = ''; d.referral.by = ''; change = true; }
+    if (change) { o.updated = Date.now(); diffuser('orders', o.id, 'update'); }
+  });
+}
+
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
 
 function verifierSimulation(d) {
+  // Carte : l'issue choisie sur la page de test, pour la demande en cours.
+  if (R.estCarte(d.payment.method)) {
+    const x = d.payment.simulation;
+    if (!x || x.id !== d.payment.providerId) return { etat: 'en_attente' };
+    return x.issue === 'ok' ? { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) } : { etat: 'echec', message: x.issue === 'refus' ? 'Carte refusée (simulation).' : 'Paiement par carte annulé.' };
+  }
   if (Date.now() - Number(d.payment.startedAt || 0) < DELAI_PAIEMENT) return { etat: 'en_attente' };
   if (/0000$/.test(String(d.payment.phone || ''))) return { etat: 'echec', message: 'Solde insuffisant (simulation).' };
   return { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) };
 }
 function appliquerPaiement(b, rec, r) {
+  const avant = R.copie(rec.doc);
   let d = rec.doc; const now = Date.now(); let modifies = [];
   d.payment.checkedAt = now;
   if (r && r.etat === 'paye') { const x = R.paiementConfirme(d, { maintenant: now, reference: r.reference }); if (x.stock === 'reserver') modifies = stock(b, x.entrees, -1); d = x.commande; }
   else if (r && r.etat === 'echec' && d.payment.status === 'pending') d = R.paiementEchoue(d, { maintenant: now, raison: r.message });
   if (R.enAttentePaiement(d) && Number(d.expiresAt) && now > Number(d.expiresAt)) { const x = R.paiementExpire(d, { maintenant: now }); if (x.stock === 'restituer') modifies = modifies.concat(stock(b, x.entrees, 1)); d = x.commande; }
+  notifierCommande(b, rec, avant, d);
   rec.doc = d; rec.status = d.status; rec.updated = now;
   enregistrer(b);
   modifies.forEach((pid) => diffuser('products', pid, 'update'));
@@ -551,17 +1160,23 @@ function suivrePaiement(b, rec) {
 }
 function demanderPaiement(b, rec, opts) {
   const now = Date.now();
-  rec.doc = R.paiementEnvoye(rec.doc, { maintenant: now, providerId: `SIM-${rec.doc.number}-${R.int(rec.doc.payment.attempts) + 1}`, ...opts });
+  // Carte : la page de test de la boutique tient lieu de page sécurisée du fournisseur.
+  const url = R.estCarte(opts.methode || rec.doc.payment.method) ? '/paiement/' + rec.id + '/carte-test' : '';
+  rec.doc = R.paiementEnvoye(rec.doc, { maintenant: now, providerId: `SIM-${rec.doc.number}-${R.int(rec.doc.payment.attempts) + 1}`, ...opts, url });
   rec.updated = now; enregistrer(b); diffuser('orders', rec.id, 'update');
 }
 function reponseClient(rec) {
   const d = rec.doc; const p = d.payment || {};
-  return { id: rec.id, order: commandePublique(d), paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: R.int(p.attempts), relance: R.relancePossible(d) === '', test: true } };
+  return { id: rec.id, order: commandePublique(d), paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: R.int(p.attempts), relance: R.relancePossible(d) === '', test: true,
+    url: R.estCarte(p.method) && p.status === 'pending' && d.status === 'open' ? String(p.url || '') : '' } };
 }
-// Comme la tâche minute du serveur : les paiements en cours avancent même si le client a fermé la page.
+// Comme les tâches du serveur : les paiements en cours avancent même si le client a fermé la page ; les paniers laissés
+// sont rappelés (chaque minute dans la démo).
+let derniereRelance = 0;
 setInterval(() => {
   if (document.visibilityState !== 'visible') return;
   try { const b = base(); Object.values(b.cols.orders).filter((r) => R.enAttentePaiement(r.doc)).forEach((r) => suivrePaiement(b, r)); } catch (e) { }
+  if (Date.now() - derniereRelance > 60000) { derniereRelance = Date.now(); try { relancerPaniers(base()); rappelerAvis(base()); } catch (e) { } }
 }, 4000);
 
 /* ---------- Même interface que src/commun/js/api.js ---------- */
@@ -592,7 +1207,8 @@ let derniere = '';
 export async function lireCatalogue(etag) {
   await pause(120);
   const b = base(); const l = (col) => Object.values(b.cols[col]).map((x) => versLigne(vue(col, x, false)));
-  const donnees = { config: b.cols.config.store ? versLigne(vue('config', b.cols.config.store, false)) : null, collections: l('collections'), banners: l('banners'), products: Object.values(b.cols.products).filter((x) => x.active !== false).map((x) => versLigne(vue('products', x, false))) };
+  const notes = reglesAvis(b).enabled ? notesDemo(b) : {};
+  const donnees = { config: b.cols.config.store ? versLigne(vue('config', b.cols.config.store, false)) : null, collections: l('collections'), banners: l('banners'), products: Object.values(b.cols.products).filter((x) => x.active !== false).map((x) => Object.assign(versLigne(vue('products', x, false)), notes[x.id] ? { avis: notes[x.id] } : {})) };
   const json = JSON.stringify(donnees);
   let h = 0; for (let i = 0; i < json.length; i++) h = (h * 31 + json.charCodeAt(i)) | 0;
   derniere = '"' + (h >>> 0).toString(36) + json.length + '"';

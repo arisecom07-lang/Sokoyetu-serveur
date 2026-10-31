@@ -8,7 +8,7 @@ import { Local } from '../../commun/js/stockage.js';
 import { DEMO } from '../../commun/js/api.js';
 import { dollars, date, debutJour, JOUR, pluriel, ilya, classes } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, erreurChargement, demarrer, paiementServeur, sante, lireAudience } from '../etat.js';
+import { cfg, commandes, produits, produitsParId, nbExemples, seConnecter, pret, erreurChargement, demarrer, paiementServeur, sante, lireAudience, peut, aRepondre, avis, avisAVerifier } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Histogramme } from '../composants/graphique.jsx';
 import { statutPaiement, statutPreparation, avecPoints } from './commandes.jsx';
@@ -36,7 +36,7 @@ export function Connexion() {
         <img src="icone-192.png" alt="" width="64" height="64" class="connexion-logo" />
         <h1><span class="marque">Sokoyetu</span><small>Administration</small></h1>
         <p class="attenue">Connectez-vous avec le compte administrateur de la boutique.</p>
-        {DEMO ? <Note ton="info" icone="info">Démonstration : le compte est déjà rempli, touchez « Se connecter ».</Note> : null}
+        {DEMO ? <Note ton="info" icone="info">Démonstration : le compte est déjà rempli, touchez « Se connecter ». Pour voir l’écran d’un membre de l’équipe, entrez <b>vendeur@sokoyetu.com</b> ou <b>livreur@sokoyetu.com</b>.</Note> : null}
         <div class="formulaire">
           <Champ libelle="E-mail">{(a) => <input class="saisie" {...a} type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck={false} value={email} onInput={(e) => setEmail(e.currentTarget.value)} autofocus={!email} />}</Champ>
           <Champ libelle="Mot de passe">{(a) => (
@@ -104,6 +104,10 @@ export function Tableau() {
 
   const nPaiement = os.filter(R.enAttentePaiement).length, nPrep = os.filter(R.aPreparer).length, nLiv = os.filter(R.aExpedier).length;
   const nPoints = os.filter(avecPoints).length;
+  const nMessages = peut('messages') ? aRepondre.value : 0;
+  // Avis à vérifier, et notes basses (3 étoiles ou moins) encore sans réponse de la boutique.
+  const nAvis = peut('avis') ? avisAVerifier.value : 0;
+  const nNotesBasses = peut('avis') ? avis.value.filter((a) => a.etat === 'publie' && a.note <= 3 && !a.reponse).length : 0;
   const p = paiementServeur.value;
   const faibles = produits.value.filter((p) => R.estEnVente(p) && !R.estImport(p) && R.stockTotal(p) <= R.int(c.lowStock));
   const top = {};
@@ -120,10 +124,10 @@ export function Tableau() {
       <TetePage grand titre={`${h < 18 ? 'Bonjour' : 'Bonsoir'}${c.ownerName ? ', ' + c.ownerName : ''}`} sous={`${date(maintenant, { weekday: 'long', day: 'numeric', month: 'long' })} · ${os.length ? pluriel(os.length, 'commande') + ' au total' : 'prêt pour vos premières ventes'}`}
         actions={<Segment libelle="Période" options={[[1, 'Aujourd’hui'], [7, '7 jours'], [30, '30 jours']]} valeur={periode} onChange={(v) => changer(Number(v))} />} />
       <div class="pile-l">
-        {!p.pret ? <Note ton="danger" icone="portefeuille">La boutique n’encaisse pas encore : le paiement Mobile Money n’est pas branché sur le serveur. <a class="lien" href={lien('/reglages/paiements')}>Voir comment l’activer</a></Note>
+        {!peut('reglages') ? null : !p.pret ? <Note ton="danger" icone="portefeuille">La boutique n’encaisse pas encore : le paiement en ligne n’est pas branché sur le serveur. <a class="lien" href={lien('/reglages/paiements')}>Voir comment l’activer</a></Note>
           : p.test ? <Note ton="alerte" icone="portefeuille">Paiement en <b>mode test</b> : les commandes sont confirmées sans argent. <a class="lien" href={lien('/reglages/paiements')}>Brancher FlexPay</a></Note> : null}
-        {graves.length ? <Note ton="danger" icone="alerte"><b>Le serveur signale un problème :</b> {graves[0].texte}{graves.length > 1 ? ` (et ${pluriel(graves.length - 1, 'autre')})` : ''} <a class="lien" href={lien('/journal')}>Voir Santé et journal</a></Note> : null}
-        {nbExemples.value ? <Note ton="info" icone="info">Le catalogue d’exemple est affiché dans la boutique ({pluriel(nbExemples.value, 'élément')}). Remplacez-le par vos articles, ou retirez-le dans <a class="lien" href={lien('/reglages/general')}>Réglages → Général</a>.</Note> : null}
+        {graves.length && peut('journal') ? <Note ton="danger" icone="alerte"><b>Le serveur signale un problème :</b> {graves[0].texte}{graves.length > 1 ? ` (et ${pluriel(graves.length - 1, 'autre')})` : ''} <a class="lien" href={lien('/journal')}>Voir Santé et journal</a></Note> : null}
+        {nbExemples.value && peut('reglages') ? <Note ton="info" icone="info">Le catalogue d’exemple est affiché dans la boutique ({pluriel(nbExemples.value, 'élément')}). Remplacez-le par vos articles, ou retirez-le dans <a class="lien" href={lien('/reglages/general')}>Réglages → Général</a>.</Note> : null}
         <div class="kpis">
           <Kpi grand libelle={`Ventes ${lib}`} icone="graphique" valeur={dollars(st.ventes)} sous={evV ? evV.texte : 'Commandes payées'} ton={evV && evV.ton} />
           <Kpi libelle="Commandes payées" icone="recu" valeur={String(st.n)} sous={nPrep ? `${nPrep} à préparer` : 'Tout est à jour'} href={lien('/commandes')} ton={nPrep ? 'alerte' : 'ok'} />
@@ -146,8 +150,11 @@ export function Tableau() {
             <EnDirectBoutique />
             <section class="carte">
               <h2 class="carte-titre"><Icone n="coche" />À faire</h2>
-              {nPrep || nLiv || faibles.length || nPoints ? (
+              {nPrep || nLiv || faibles.length || nPoints || nMessages || nAvis || nNotesBasses ? (
                 <div class="a-faire">
+                  {nMessages ? <a href={lien('/messages')}><span class="af-n ton-alerte">{nMessages}</span><b>{nMessages > 1 ? 'Clients qui attendent une réponse' : 'Client qui attend une réponse'}</b><Icone n="droite" /></a> : null}
+                  {nAvis ? <a href={lien('/avis')}><span class="af-n ton-alerte">{nAvis}</span><b>Avis à vérifier avant publication</b><Icone n="droite" /></a> : null}
+                  {nNotesBasses ? <a href={lien('/avis')}><span class="af-n ton-info">{nNotesBasses}</span><b>{nNotesBasses > 1 ? 'Avis déçus sans réponse' : 'Avis déçu sans réponse'}</b><Icone n="droite" /></a> : null}
                   {nPoints ? <a href={lien('/commandes?f=points')}><span class="af-n ton-danger">{nPoints}</span><b>Commande{nPoints > 1 ? 's' : ''} payée{nPoints > 1 ? 's' : ''} avec un point à vérifier</b><Icone n="droite" /></a> : null}
                   {nPrep ? <a href={lien('/commandes?f=preparer')}><span class="af-n ton-info">{nPrep}</span><b>Commande{nPrep > 1 ? 's' : ''} à préparer</b><Icone n="droite" /></a> : null}
                   {nLiv ? <a href={lien('/commandes?f=expediees')}><span class="af-n ton-marque">{nLiv}</span><b>Commande{nLiv > 1 ? 's' : ''} en route à livrer</b><Icone n="droite" /></a> : null}
@@ -166,7 +173,7 @@ export function Tableau() {
                 </a>
               ))}</div> : <p class="attenue petit">Vos articles les plus vendus sur la période apparaîtront ici.</p>}
             </section>
-            {faits < guide.length ? (
+            {faits < guide.length && peut('reglages') ? (
               <section class="carte">
                 <h2 class="carte-titre"><Icone n="drapeau" />Bien démarrer<span class="fin">{faits} sur {guide.length}</span></h2>
                 <div class="jauge" aria-hidden="true"><i style={{ width: Math.round((faits / guide.length) * 100) + '%' }} /></div>

@@ -1,4 +1,4 @@
-# Sokoyetu 2.5.0 — une recherche qui comprend les fautes et propose des suggestions (octobre 2026)
+# Sokoyetu 3.1.0 — une recherche qui comprend les fautes et propose des suggestions (octobre 2026)
 
 ## Ce qui change pour vous
 
@@ -24,9 +24,43 @@ Dans la console du Droplet : `sudo /opt/sokoyetu/mise-a-jour.sh` (la mise à jou
 
 - `src/commun/js/recherche.js` (CommonJS, testé avec node) : normalisation, racine (pluriels), son approximatif du français, distance de Damerau (une faute jusqu'à 6 lettres, deux au-delà, mots de 3 lettres exacts), familles de synonymes (français, swahili, anglais, couleurs). `indexer` (poids : titre 3, rayon et mots-clés 2, couleur 1,5, caractéristiques 1, description 0,5), `chercher` (tous les mots, sinon les plus proches ; correction annoncée et résultats de la recherche corrigée), `suggestions`, `populairesSures`. Un mot bien écrit ne cherche pas ses voisins (« robe » ne trouve pas « rose ») ; un mot qui n'est que dans les descriptions doit être exact.
 - Boutique : `indexRecherche` (etat.js, refait quand le catalogue change), `composants/recherche.jsx` (`RechercheOrdi` : motif combobox, `PucesSuggestions`), page `Recherche` réécrite ; `signalerRecherche` (visites.js) après 1,8 s sans frappe ou à la validation, une fois par mot et par visite ; mesure `search`.
-- Serveur : migration `1793600000_sokoyetu_recherches.js` (table `sokoyetu_recherches`, limites de `/api/sokoyetu/recherches` et `/panier/partage`), `audience.termeRecherche`, `audience.populaires`, `GET /api/sokoyetu/recherches` (mis en cache une heure), rapport `recherches` dans `/api/sokoyetu/audience`, purge à 90 jours.
+- Serveur : migration `1794300000_sokoyetu_recherches.js` (table `sokoyetu_recherches`, limites de `/api/sokoyetu/recherches` et `/panier/partage`), `audience.termeRecherche`, `audience.populaires`, `GET /api/sokoyetu/recherches` (mis en cache une heure), rapport `recherches` dans `/api/sokoyetu/audience`, purge à 90 jours.
 - Démo : recherches comptées dans le navigateur, populaires = celles du visiteur.
 - Essais : `tests/recherche.test.js` (nouveau, 7 tests), `tests/serveur.test.mjs` (recherches comptées, populaires, sans résultat, numéros refusés, robots ignorés), `tests/recherche.mjs` (nouveau, vrais navigateurs, accessibilité de la liste), `tests/accessibilite.mjs` (recherche corrigée).
+
+---
+
+# Sokoyetu 3.0.0 — clients prévenus, avis, discussion, fidélité, carte bancaire et équipe (octobre 2026)
+
+## Ce qui change pour vous
+
+- **Le client est prévenu à chaque étape de sa commande**, gratuitement (ni SMS ni WhatsApp) : paiement reçu, préparation, en route ou prête au retrait, livrée, annulée, remboursée. Dans la **cloche** de la boutique et, s'il l'accepte, en **notification sur son téléphone**, même boutique fermée. Le client sans compte est prévenu aussi, sur le téléphone qui a commandé.
+- **Avis et notes** : seuls les clients qui ont reçu l'article le notent (de 1 à 5 étoiles, avec un commentaire s'il le veut). La note s'affiche sur chaque article ; la fiche montre la moyenne, la répartition et les avis. Rappel gratuit 2 jours après la livraison. Page **Avis** dans l'administration : répondre publiquement, masquer un avis abusif avec un motif.
+- **« Prévenez-moi »** sur un article épuisé (ou une seule couleur, une seule taille) : le client est prévenu dès que le stock revient. **Annonces** de promotions et de nouveautés aux clients qui les acceptent (**Clients → Annonces aux clients**, 3 par jour au plus).
+- **Paniers laissés** : un client avec compte qui oublie son panier reçoit un rappel gratuit, une fois (**Réglages → Général**).
+- **Paiement par carte Visa / Mastercard** sur la page sécurisée de FlexPay : le client n'a aucun numéro à saisir. Fermé tant que vous ne l'ouvrez pas (**Réglages → Paiements**).
+- **Questions au vendeur** : le client écrit depuis la boutique, à propos d'un article ou d'une commande ; vous répondez dans **Messages** (alerte et carillon), il est prévenu.
+- **Équipe** : ajoutez des **vendeurs** (commandes, produits, clients, messages, avis) et des **livreurs** (seulement leurs livraisons : adresse, appel, itinéraire, « Livrée »). **Plus → Équipe**.
+- **Cagnotte de fidélité et parrainage** : chaque commande livrée rapporte au client un pourcentage de ses articles, qu'il dépense sur ses commandes suivantes ; ses proches parrainés reçoivent un cadeau de bienvenue, et lui une récompense. Fermé au départ (**Réglages → Général → Fidélité et parrainage**).
+
+## Bon à savoir
+
+- **Notifications du téléphone** : vérifiées avec un faux service de notification, jamais encore avec de vrais téléphones. À essayer dès la mise en ligne (HTTPS obligatoire) : passer une commande de test et laisser la boutique fermée. Sur iPhone, le client doit d'abord installer l'application.
+- **Carte** : demandez à FlexPay d'ouvrir le paiement par carte (VPOS) et confirmez avec eux l'adresse de leur page de paiement (`paiement.sh carte 'https://…'` si elle diffère). Les frais de service sont les mêmes que pour le Mobile Money.
+- **Paiement plus sûr** : un paiement n'est reconnu que s'il porte la référence et au moins le montant de sa commande, en dollars.
+- **Cagnotte et parrainage** demandent les comptes clients (section 6 du LISEZMOI). Le code de parrainage se tape aussi dans la case du code promo.
+- **Administration sur téléphone** : **Messages** prend la place de **Clients** dans la barre du bas (Clients et Avis sont dans **Plus**).
+
+## Après la fusion
+
+Dans la console du Droplet : `sudo /opt/sokoyetu/mise-a-jour.sh`. Ensuite, selon vos besoins : ouvrir la carte (après l'accord de FlexPay), la cagnotte et le parrainage, et ajouter votre équipe.
+
+## Détails techniques
+
+- Migrations : `sokoyetu_equipe` (`admins.role`, `orders.etape`, règles des collections par rôle), `sokoyetu_notifications` (`sokoyetu_notifications`, `sokoyetu_abonnements`, `sokoyetu_cles`, `orders.appareil`), `sokoyetu_alertes` (`sokoyetu_alertes`, `sokoyetu_annonces`), `sokoyetu_relances` (`clients.relance`), `sokoyetu_discussions` (collection `discussions`, `sokoyetu_messages`), `sokoyetu_avis` (collection `avis`), `sokoyetu_fidelite` (`sokoyetu_cagnotte`, `clients.parrain_code`).
+- Serveur : `lib/equipe.js`, `lib/notifications.js`, `lib/push.js` et `lib/p256.js` (Web Push sans contenu, signature ES256 en JavaScript pur), `lib/alertes.js`, `lib/discussions.js`, `lib/avis.js`, `lib/fidelite.js` ; tâches `sokoyetu-notifications` (chaque minute) et `sokoyetu-relances` (chaque heure). Carte : `FLEXPAY_CARTE_URL`, `paiement.sh carte`, page de test `/paiement/{id}/carte-test` en simulation.
+- Boutique : `src/boutique/notifications.js`, pages Notifications, Discussion, Mes avis, Ma cagnotte. Administration : pages Équipe, Livraisons, Messages, Avis, Annonces.
+- Essais : `tests/regles.test.js`, `tests/push.test.js` (signature vérifiée par OpenSSL), `tests/serveur.test.mjs`, `tests/push.mjs` (faux service de notification), `tests/demo.mjs` (tous les parcours), `tests/accessibilite.mjs` (nouvelles pages), `tests/flexpay-simule.mjs` (carte).
 
 ---
 

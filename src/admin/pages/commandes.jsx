@@ -6,7 +6,7 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { LogoOperateur, Note, Vide, Pastille, toast, confirmer, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { dollars, dateHeure, pluriel, telephone, lienWhatsApp, lienAppel, copier, classes, normaliser } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, commandes, produitsParId, pret, etapeCommande, gererErreur } from '../etat.js';
+import { cfg, commandes, produitsParId, pret, etapeCommande, gererErreur, role } from '../etat.js';
 import { TetePage, adresseBoutique } from '../composants/cadre.jsx';
 import { LigneCommandeCourte, Chargement } from './accueil.jsx';
 
@@ -89,8 +89,8 @@ export function Commande() {
   // Pas de message au client tant que la commande n'est pas payée : le paiement se fait seul, dans la boutique.
   const wa = R.estPayee(o) || o.payment.status === 'refunded' ? lienWhatsApp(o.customer && o.customer.phone, messageClient(o)) : '';
   const agir = async (action, extra) => {
-    if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: R.estPayee(o) ? 'Les articles retournent en stock. Le client a payé : remboursez-le sur son numéro Mobile Money, puis notez-le ici.' : 'Les articles retournent en stock. Si le client valide le paiement malgré tout, la commande se rouvrira avec un point à vérifier.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
-    if (action === 'doublon' && !(await confirmer({ titre: 'Le client a bien été remboursé ?', texte: `Confirmez seulement après lui avoir renvoyé ${doubles.length > 1 ? `${doubles.length} × ` : ''}${dollars(o.total)} sur son numéro ${o.payment.label}${o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}. La commande, elle, reste payée.`, ok: 'Oui, c’est remboursé', annuler: 'Retour' }))) return;
+    if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: R.estPayee(o) ? `Les articles retournent en stock. Le client a payé : remboursez-le ${R.estCarte(o.payment.method) ? 'sur sa carte, depuis votre espace FlexPay' : 'sur son numéro Mobile Money'}, puis notez-le ici.` : 'Les articles retournent en stock. Si le client valide le paiement malgré tout, la commande se rouvrira avec un point à vérifier.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
+    if (action === 'doublon' && !(await confirmer({ titre: 'Le client a bien été remboursé ?', texte: `Confirmez seulement après lui avoir renvoyé ${doubles.length > 1 ? `${doubles.length} × ` : ''}${dollars(o.total)} ${R.estCarte(o.payment.method) ? 'sur sa carte' : `sur son numéro ${o.payment.label}${o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}`}. La commande, elle, reste payée.`, ok: 'Oui, c’est remboursé', annuler: 'Retour' }))) return;
     if (action === 'paid' && !(await confirmer({ titre: 'Marquer comme payée à la main ?', texte: `Seulement si vous avez reçu ${dollars(o.total)} en dehors de l’application : vérifiez d’abord dans votre compte ${o.payment.label}. D’habitude, la commande se confirme toute seule dès que l’opérateur valide le paiement.`, ok: 'Oui, j’ai reçu l’argent', annuler: 'Retour' }))) return;
     setOccupe(action);
     try {
@@ -100,7 +100,8 @@ export function Commande() {
     } catch (e) { gererErreur(e); }
     setOccupe('');
   };
-  const bouton = (action, icone, children, secondaire) => <button class={classes('btn', secondaire ? 'btn-secondaire' : 'btn-primaire', occupe === action && 'charge')} disabled={!!occupe} onClick={() => agir(action)}><Icone n={icone} />{children}</button>;
+  // Remboursements : propriétaire seulement (le serveur le vérifie aussi).
+  const bouton = (action, icone, children, secondaire) => (R.etapePermise(role.value, action) ? <button class={classes('btn', secondaire ? 'btn-secondaire' : 'btn-primaire', occupe === action && 'charge')} disabled={!!occupe} onClick={() => agir(action)}><Icone n={icone} />{children}</button> : null);
 
   let suite;
   if (R.nonAboutie(o)) suite = <Note ton="info" icone="horloge">Le client n’a pas payé dans le délai : commande annulée automatiquement{o.cancelledAt ? ` le ${dateHeure(o.cancelledAt)}` : ''}, articles remis en stock. Rien à faire.</Note>;
@@ -129,7 +130,7 @@ export function Commande() {
           {doubles.length ? (
             <Note ton="danger" icone="portefeuille">
               <b>Paiement reçu {doubles.length > 1 ? `${doubles.length + 1} fois` : 'deux fois'}</b>
-              <p>Le client a validé {doubles.length > 1 ? 'plusieurs paiements' : 'un deuxième paiement'} pour cette commande. Renvoyez-lui {doubles.length > 1 ? `${doubles.length} × ` : ''}<b>{dollars(o.total)}</b> sur son numéro {o.payment.label}{o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}, puis confirmez ici.</p>
+              <p>Le client a validé {doubles.length > 1 ? 'plusieurs paiements' : 'un deuxième paiement'} pour cette commande. Renvoyez-lui {doubles.length > 1 ? `${doubles.length} × ` : ''}<b>{dollars(o.total)}</b> {R.estCarte(o.payment.method) ? 'sur sa carte (depuis votre espace FlexPay)' : <>sur son numéro {o.payment.label}{o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}</>}, puis confirmez ici.</p>
               <ul class="points">{doubles.map((d, i) => <li key={i}>Référence <span class="code">{d.reference || d.id}</span>{d.at ? ` · ${dateHeure(d.at)}` : ''}</li>)}</ul>
               <div class="rangee-l espace-haut">{bouton('doublon', 'coche', 'Double paiement remboursé', false)}</div>
             </Note>
@@ -161,11 +162,19 @@ export function Commande() {
             <dl class="montants espace-haut">
               <div><dt>Sous-total</dt><dd class="num">{dollars(o.subtotal)}</dd></div>
               {o.discount ? <div><dt>Code {o.discount.code}</dt><dd class="moins num">−{dollars(o.discount.amount)}</dd></div> : null}
+              {o.referral ? <div><dt>Cadeau de bienvenue · parrainage {o.referral.code}</dt><dd class="moins num">−{dollars(o.referral.amount)}</dd></div> : null}
+              {o.wallet && o.wallet.used ? <div><dt>Payé avec la cagnotte du client</dt><dd class="moins num">−{dollars(o.wallet.used)}</dd></div> : null}
               <div><dt>Livraison · {o.shipping && o.shipping.zoneName}{R.num(o.weight) ? ` · colis ${String(R.arrondi(o.weight)).replace('.', ',')} kg` : ''}</dt><dd class="num">{o.shippingFee ? dollars(o.shippingFee) : 'Gratuite'}</dd></div>
               {o.serviceFee ? <div><dt>Frais de service ({R.num(o.serviceFeePct)} %)</dt><dd class="num">{dollars(o.serviceFee)}</dd></div> : null}
               <div class="total"><dt class="lib">{R.estPayee(o) ? 'Total payé' : 'Total'}</dt><dd class="num">{dollars(o.total)}</dd></div>
               {m.couts ? <div><dt>Marge estimée (frais de service compris, hors livraison){m.connue ? '' : ' · coûts incomplets'}</dt><dd class="num" style={{ color: m.marge >= 0 ? 'var(--ok)' : 'var(--danger)', fontWeight: 750 }}>{dollars(m.marge)}</dd></div> : null}
             </dl>
+            {o.status !== 'cancelled' && ((o.loyalty && R.num(o.loyalty.amount)) || (o.referral && R.num(o.referral.reward))) ? (
+              <p class="discret petit rangee espace-haut"><Icone n="tirelire" taille={15} />{[
+                o.loyalty && R.num(o.loyalty.amount) ? `${dollars(o.loyalty.amount)} pour la cagnotte du client` : '',
+                o.referral && R.num(o.referral.reward) ? `${dollars(o.referral.reward)} pour son parrain` : ''
+              ].filter(Boolean).join(' et ')}{o.fulfillment === 'delivered' ? ' : versés à la livraison.' : ' : à verser à la livraison.'}</p>
+            ) : null}
           </section>
           <section class="carte">
             <h2 class="carte-titre"><Icone n="horloge" />Historique</h2>

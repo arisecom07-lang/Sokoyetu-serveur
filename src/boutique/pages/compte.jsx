@@ -13,6 +13,11 @@ import { EnteteBoutique, EntetePage, Pied, Marque, ouvrirLivraisonPaiement } fro
 import { installable, installer, estIOS } from '../installation.jsx';
 import { Montants as MontantsDevis } from './commander.jsx';
 import { useSeo } from './commun.jsx';
+import { ActiverNotifications } from './notifications.jsx';
+import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, oublierNotifications } from '../notifications.js';
+import { messagesNonLus, oublierDiscussion } from '../discussion.js';
+import { restantsANoter, chargerANoter, articleANoter } from '../avis.js';
+import { cagnotte, chargerCagnotte, cagnotteOuverte, parrainageOuvert } from '../fidelite.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
@@ -27,7 +32,19 @@ function texteLivraison(o) {
   if (R.estRetraitCmd(o) && !d.days) return 'Dès que possible : nous vous appelons quand elle est prête';
   return `${R.estRetraitCmd(o) ? 'Prête vers le' : 'Vers le'} ${jourLong(d.at)} (environ ${pluriel(d.days, 'jour')}${d.import ? ', article importé' : ''})`;
 }
-const montantsCommande = (o) => ({ sousTotal: o.subtotal, remise: o.discount, livraison: o.shippingFee, frais: o.serviceFee, fraisPct: o.serviceFeePct, total: o.total });
+const montantsCommande = (o) => ({ sousTotal: o.subtotal, remise: o.discount, bienvenue: o.referral, cagnotte: o.wallet ? o.wallet.used : 0, livraison: o.shippingFee, frais: o.serviceFee, fraisPct: o.serviceFeePct, total: o.total });
+
+/* Ce que la commande rapporte à la cagnotte du client : promis à la commande, versé à la livraison. */
+function GainCagnotte({ o }) {
+  const g = o.loyalty && R.num(o.loyalty.amount);
+  if (!g || o.status === 'cancelled' || !cagnotteOuverte.value) return null;
+  const livree = o.fulfillment === 'delivered';
+  return (
+    <a class="gain-cagnotte" href={lien('/compte/cagnotte')}>
+      <Icone n="tirelire" /><span>{livree ? <><b class="num">{dollars(g)}</b> ajoutés à votre cagnotte</> : <>Cette commande vous rapporte <b class="num">{dollars(g)}</b> de cagnotte, versés à la livraison</>}</span>
+    </a>
+  );
+}
 
 function Articles({ o }) {
   return (
@@ -45,6 +62,8 @@ function texteRecu(o) {
     `Payée le ${dateHeure(p.paidAt || o.createdAt)} · ${p.label}${p.reference ? ` · réf. ${p.reference}` : ''}`,
     ...(o.items || []).map((i) => `• ${i.title}${i.color || i.size ? ` (${[i.color, i.size].filter(Boolean).join(' / ')})` : ''} × ${i.qty} : ${dollars(i.price * i.qty)}`),
     o.discount ? `Code ${o.discount.code} : −${dollars(o.discount.amount)}` : '',
+    o.referral ? `Cadeau de bienvenue : −${dollars(o.referral.amount)}` : '',
+    o.wallet && o.wallet.used ? `Payé avec ma cagnotte : −${dollars(o.wallet.used)}` : '',
     `Livraison : ${o.shippingFee ? dollars(o.shippingFee) : 'gratuite'}`,
     o.serviceFee ? `Frais de service (${R.num(o.serviceFeePct)} %) : ${dollars(o.serviceFee)}` : '',
     `Total payé : ${dollars(o.total)}`,
@@ -82,6 +101,7 @@ function Recu({ o }) {
       <div class="recu-trait" aria-hidden="true" />
       <Articles o={o} />
       <Montants o={o} libelleTotal="Total payé" />
+      <GainCagnotte o={o} />
       {p.status !== 'refunded' ? (
         <div class="recu-cachet">
           <p><b>Payée et confirmée</b><small>{dateHeure(p.paidAt || o.createdAt)}</small></p>
@@ -127,6 +147,7 @@ export function Merci() {
             </div>
             <a class="btn btn-fantome btn-bloc" href={lien('/')}>Continuer mes achats</a>
           </div>
+          <div class="non-imprime"><ActiverNotifications discret titre="Suivez votre commande sur ce téléphone" /></div>
           {comptesOuverts.value && !client.value ? <InvitationCompte classe="non-imprime" titre="Retrouvez cette commande sur tous vos appareils" texte={`Créez votre compte avec le ${telephone(o.customer.phone) || 'même numéro'} : cette commande et les prochaines y seront rangées.`} retour={'/merci/' + o.id} tel={o.customer.phone} /> : null}
         </div>
       </main>
@@ -168,18 +189,41 @@ function ouvrirInstallationIOS() {
   });
 }
 
+/* Notifications du téléphone (gratuites) et annonces de la boutique, réglées depuis « Mon compte ». */
+function ReglagesNotifications() {
+  const e = pushEtat.value;
+  if (e === 'indisponible') return null;
+  const basculer = async () => {
+    try {
+      if (e === 'actif') { await desactiverPush(); toast('Notifications désactivées sur ce téléphone', { icone: 'cloche' }); }
+      else if (await activerPush()) toast('Notifications activées sur ce téléphone', { icone: 'cloche' });
+      else if (pushEtat.value === 'bloque') toast('Notifications bloquées : autorisez-les dans les réglages du navigateur', { icone: 'alerte', ton: 'danger', duree: 5000 });
+    } catch (err) { toast('Réglage impossible pour le moment. Réessayez plus tard.', { icone: 'alerte', ton: 'danger' }); }
+  };
+  const sous = { actif: 'Chaque étape de vos commandes', bloque: 'Bloquées dans les réglages du navigateur', ios: 'Sur iPhone : installez d’abord l’application' }[e] || 'Désactivées';
+  return (
+    <>
+      <Bascule actif={e === 'actif'} onClick={basculer} desactive={e === 'bloque' || e === 'ios'} libelle="Notifications sur ce téléphone" sous={sous} />
+      {e === 'actif' ? <Bascule actif={promos.value} onClick={() => changerPromos(!promos.value).catch(() => { })} libelle="Promotions et nouveautés" sous={promos.value ? 'Annonces de la boutique, de temps en temps' : 'Seulement vos commandes'} /> : null}
+    </>
+  );
+}
+
 async function confirmerDeconnexion() {
   if (!(await confirmer({ titre: 'Se déconnecter ?', texte: 'Votre panier, vos favoris et vos commandes restent dans votre compte : vous les retrouvez en vous reconnectant, sur ce téléphone ou un autre.', ok: 'Se déconnecter' }))) return;
   seDeconnecterCompte(); toast('Vous êtes déconnecté', { icone: 'sortie' }); naviguer('/');
 }
 async function confirmerSuppression() {
-  if (!(await confirmer({ titre: 'Supprimer votre compte ?', texte: 'Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.', ok: 'Supprimer mon compte', danger: true }))) return;
+  const g = cagnotte.value && cagnotte.value.solde > 0 ? cagnotte.value.solde : 0;
+  if (!(await confirmer({ titre: 'Supprimer votre compte ?', texte: `Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés${g ? `, ainsi que votre cagnotte (${dollars(g)})` : ''}. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.`, ok: 'Supprimer mon compte', danger: true }))) return;
   try { await supprimerCompte(); toast('Compte supprimé', { icone: 'poubelle' }); naviguer('/'); } catch (e) { toast(e.message, { icone: 'alerte', ton: 'danger' }); }
 }
 
 export function Compte() {
   const c = cfg.value; const pf = profil.value; const cl = client.value;
-  useEffect(() => { chargerCompte(); actualiserMesCommandes(); }, []);
+  useEffect(() => { chargerCompte(); actualiserMesCommandes(); chargerANoter().catch(() => { }); }, []);
+  // La cagnotte, une fois le catalogue (réglages de la boutique) et le compte connus.
+  useEffect(() => { if (cl && cagnotteOuverte.value) chargerCagnotte().catch(() => { }); }, [cl && cl.id, cagnotteOuverte.value]);
   useSeo(() => ({ titre: 'Mon compte', noindex: true }), []);
   const liste = [...commandes.value.values()];
   const enCours = liste.filter((o) => o.status !== 'cancelled' && o.fulfillment !== 'delivered');
@@ -213,18 +257,23 @@ export function Compte() {
         <div class="compte-grille">
           <div class="menu">
             {item({ href: lien('/compte/commandes'), icone: 'recu', titre: 'Mes commandes', sous: suivis.value.length ? pluriel(suivis.value.length, 'commande') : 'Reçus, suivi et historique' })}
+            {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
+            {item({ href: lien('/discussion'), icone: 'bulle', titre: 'Écrire à la boutique', sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : 'Une question ? Réponse ici, dans l’application' })}
+            {c.reviews.enabled ? item({ href: lien('/avis'), icone: 'etoile', titre: 'Mes avis', sous: restantsANoter.value ? pluriel(restantsANoter.value, 'article à noter', 'articles à noter') : 'Notez les articles reçus' }) : null}
+            {cagnotteOuverte.value ? item({ href: lien('/compte/cagnotte'), icone: 'tirelire', titre: parrainageOuvert.value ? 'Ma cagnotte et parrainage' : 'Ma cagnotte', sous: cl && cagnotte.value ? `${dollars(cagnotte.value.solde)} disponibles${cagnotte.value.aVenir ? ` · +${dollars(cagnotte.value.aVenir)} à venir` : ''}` : `${R.num(c.loyalty.pct)} % de chaque commande, à réutiliser` }) : null}
             {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: 'Retrouver une commande', sous: 'Avec le numéro de votre reçu' })}
             {item({ href: lien('/favoris'), icone: 'coeur', titre: 'Mes favoris', sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : 'Vos coups de cœur' })}
             {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: 'Livraison et paiement', sous: 'Zones, délais, Mobile Money' })}
-            {wa ? item({ href: wa, externe: true, icone: 'bulle', titre: 'Contacter la boutique', sous: `WhatsApp · ${telephone(c.whatsapp)}` }) : null}
+            {wa ? item({ href: wa, externe: true, icone: 'appel', titre: 'WhatsApp de la boutique', sous: telephone(c.whatsapp) }) : null}
           </div>
           <div class="menu">
             <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur ce téléphone' : 'Désactivé : thème clair'} />
+            <ReglagesNotifications />
             {installable.value ? item({ onClick: () => (estIOS ? ouvrirInstallationIOS() : installer()), icone: 'mobile', titre: 'Installer l’application', sous: 'Sur l’écran d’accueil, même avec une connexion faible' }) : null}
             {item({ href: lien('/infos/conditions'), icone: 'recu', titre: 'Conditions et confidentialité', sous: 'Vente, retours, données personnelles' })}
             {cl ? item({ onClick: confirmerDeconnexion, icone: 'sortie', titre: 'Se déconnecter', sous: 'Panier, favoris et commandes restent dans votre compte' }) : null}
             {cl ? item({ onClick: confirmerSuppression, icone: 'poubelle', titre: 'Supprimer mon compte', sous: 'Vos commandes restent chez la boutique' }) : null}
-            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
+            {item({ onClick: async () => { if (await confirmer({ titre: 'Effacer les données de ce téléphone ?', texte: cl ? 'Vous êtes déconnecté, et panier, favoris, coordonnées et liens de suivi sont supprimés de ce téléphone. Votre compte, lui, garde tout.' : 'Panier, favoris, coordonnées et liens de suivi seront supprimés de ce téléphone. Vos commandes restent enregistrées chez la boutique : retrouvez-les avec leur numéro.', ok: 'Effacer', danger: true })) { effacerAppareil(); oublierNotifications(); oublierDiscussion(); toast('Données de ce téléphone effacées', { icone: 'poubelle' }); naviguer('/'); } }, icone: 'poubelle', titre: 'Effacer mes données de ce téléphone', sous: 'Panier, favoris, coordonnées' })}
           </div>
         </div>
       </main>
@@ -339,6 +388,20 @@ export function Retrouver() {
 
 const STATUT_PAIEMENT = { paid: 'Payé', pending: 'En attente de votre validation', failed: 'Non abouti', expired: 'Non reçu dans le délai', refunded: 'Remboursé' };
 
+/* Commande reçue : ses articles à noter (ou déjà notés), vers « Mes avis ». */
+function AvisCommande({ o }) {
+  const l = (o.items || []).map((i) => articleANoter(i.productId)).filter((a, k, t) => a && a.commande === o.id && t.indexOf(a) === k);
+  if (!l.length) return null;
+  const reste = l.filter((a) => !a.avis).length;
+  return (
+    <a class="carte encours avis-commande" href={lien('/avis')}>
+      <span class="menu-icone"><Icone n="etoile" /></span>
+      <span class="menu-texte"><b>{reste ? 'Votre avis compte' : 'Merci pour vos avis !'}</b><small>{reste ? `${pluriel(reste, 'article')} à noter : un geste suffit` : 'Voir ou modifier mes avis'}</small></span>
+      <Icone n="droite" classe="chevron" />
+    </a>
+  );
+}
+
 export function Suivi() {
   const id = route.value.params.id;
   const [verif, setVerif] = useState(false);
@@ -346,7 +409,8 @@ export function Suivi() {
     // Lien de suivi partagé : /suivi/<id>#<jeton>
     const t = (location.hash || '').replace(/^#\/?/, '').split('#').pop();
     if (R.valider.jeton(t)) { suivreCommande(id, t); try { history.replaceState(history.state, '', location.pathname); } catch (e) { } }
-    actualiserMesCommandes().then(() => setVerif(true));
+    // Ouverte depuis une notification sur un autre appareil du compte : les commandes du compte d'abord.
+    Promise.resolve(chargerCompte()).then(actualiserMesCommandes).then(() => { setVerif(true); chargerANoter({ force: true }).catch(() => { }); });
   }, [id]);
   useSeo(() => ({ titre: 'Suivi de commande', noindex: true }), []);
   const o = commandes.value.get(id);
@@ -373,11 +437,12 @@ export function Suivi() {
           <div class="pile-l">
             {attente ? (
               <a class="carte encours attente-paiement" href={lien('/paiement/' + o.id)}>
-                <span class="menu-icone"><Icone n="mobile" /></span>
-                <span class="menu-texte"><b>{o.payment.status === 'failed' ? 'Paiement non abouti' : 'Paiement à valider'}</b><small>{o.payment.status === 'failed' ? 'Réessayez pour confirmer la commande' : `Validez la demande ${o.payment.label} sur votre téléphone`}</small></span>
+                <span class="menu-icone"><Icone n={R.estCarte(o.payment.method) ? 'carte' : 'mobile'} /></span>
+                <span class="menu-texte"><b>{o.payment.status === 'failed' ? 'Paiement non abouti' : 'Paiement à valider'}</b><small>{o.payment.status === 'failed' ? 'Réessayez pour confirmer la commande' : R.estCarte(o.payment.method) ? 'Terminez le paiement par carte' : `Validez la demande ${o.payment.label} sur votre téléphone`}</small></span>
                 <Icone n="droite" classe="chevron" />
               </a>
             ) : null}
+            {payee && estEnCours(o) ? <ActiverNotifications discret /> : null}
             <section class="carte">
               <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="camion" />Suivi</h2><Pastille ton={s.ton} point>{s.label}</Pastille></div>
               {s.etape < 0 ? (
@@ -395,7 +460,7 @@ export function Suivi() {
               )}
               {o.review && s.etape >= 0 ? <Note ton="alerte" icone="info" classe="espace-haut">Un point de votre commande est à vérifier : la boutique vous appelle.</Note> : null}
             </section>
-            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} />
+            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} />{payee ? <GainCagnotte o={o} /> : null}
               {o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <button class="btn btn-secondaire btn-bloc espace-haut" onClick={() => { const n = remettreAuPanier(o); toast(n ? 'Articles ajoutés à votre panier' : 'Ces articles ne sont plus en vente', { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />Commander à nouveau</button> : null}
             </section>
           </div>
@@ -413,6 +478,12 @@ export function Suivi() {
               <h2 class="carte-titre"><Icone n="repere" />{R.estRetraitCmd(o) ? 'Retrait' : 'Livraison'}</h2>
               <dl class="infos"><dt>Zone</dt><dd>{o.shipping.zoneName}</dd>{o.shipping.address ? <><dt>Adresse</dt><dd>{o.shipping.address}</dd></> : null}{o.shipping.landmark ? <><dt>Repère</dt><dd>{o.shipping.landmark}</dd></> : null}{livraison ? <><dt>Prévue</dt><dd>{livraison}</dd></> : null}<dt>Contact</dt><dd>{o.customer.name} · {telephone(o.customer.phone)}</dd></dl>
             </section>
+            {cfg.value.reviews.enabled && o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <AvisCommande o={o} /> : null}
+            <a class="carte encours question" href={lien('/discussion?c=' + encodeURIComponent(o.id))}>
+              <span class="menu-icone"><Icone n="bulle" /></span>
+              <span class="menu-texte"><b>Une question sur cette commande ?</b><small>Écrivez à la boutique : elle vous répond ici, dans l’application</small></span>
+              <Icone n="droite" classe="chevron" />
+            </a>
             <div class="pile">
               {ls ? <button class="btn btn-fantome btn-bloc" onClick={async () => { if (await copier(ls)) toast('Lien de suivi copié'); }}><Icone n="copier" />Copier le lien de suivi</button> : null}
               {ls ? <p class="discret tres-petit centre">Ce lien permet de suivre la commande depuis un autre téléphone. Partagez-le seulement avec vos proches.</p> : null}

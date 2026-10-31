@@ -9,7 +9,8 @@ import { Local } from '../../commun/js/stockage.js';
 import { Champ, Note, Vide, Pastille, Bascule, Segment, toast, confirmer, ouvrirFeuille, fermerFeuille, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
 import { dollars, pluriel, uid, classes, normaliser, copie, slug } from '../../commun/js/outils.js';
 import { lien, route, aller, garder } from '../routeur.js';
-import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, cadreIA, gererErreur } from '../etat.js';
+import { cfg, produits, rayons, pret, etatServeur, sauverProduit, sauver, retirer, ficheIA, cadreIA, gererErreur, attentes, chargerAttentes, avis, peut } from '../etat.js';
+import { noteFr } from '../../commun/js/etoiles.jsx';
 import { cadrerPhoto } from '../cadrage.js';
 import { TetePage, BarreEnregistrer, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement } from './accueil.jsx';
@@ -25,8 +26,11 @@ const libelleStock = (p) => {
 };
 const FILTRES = [
   ['tous', 'Tous', () => true], ['vente', 'En vente', R.estEnVente], ['brouillons', 'Brouillons', (p) => !R.estEnVente(p)],
-  ['faible', 'Stock faible', (p) => !R.estImport(p) && R.stockTotal(p) <= R.int(cfg.value.lowStock)], ['import', 'Import Chine', R.estImport]
+  ['faible', 'Stock faible', (p) => !R.estImport(p) && R.stockTotal(p) <= R.int(cfg.value.lowStock)], ['import', 'Import Chine', R.estImport],
+  ['attendus', 'Demandés', (p) => attente(p.id) > 0]
 ];
+/* Clients qui attendent le retour de cet article (« Prévenez-moi » dans la boutique). */
+const attente = (id) => (attentes.value[id] ? attentes.value[id].total : 0);
 
 export function Produits() {
   const f0 = route.value.query.get('f');
@@ -40,6 +44,7 @@ export function Produits() {
   const liste = ps.filter(fn).filter((p) => !mots.length || mots.every((m) => normaliser([p.title, p.sku, p.tags].join(' ')).includes(m)) || proches.has(p.id));
   const ia = etatServeur.value.ia;
   const page = useParPage(liste, 50, filtre + '|' + q);
+  useEffect(() => { chargerAttentes(); }, []);
   return (
     <>
       <TetePage titre="Produits" sous={`${pluriel(ps.length, 'produit')} · ${ps.filter(R.estEnVente).length} en vente`}
@@ -59,7 +64,7 @@ export function Produits() {
             return (
               <a key={p.id} class="ligne" href={lien('/produits/' + p.id)}>
                 <span class="ligne-vignette grande"><Photo m={R.imagePrincipale(p)} alt="" tailles="64px" /></span>
-                <span class="ligne-texte"><b>{p.title}</b><small class={faible ? 'texte-danger' : ''}>{libelleStock(p)}{p.demo ? ' · exemple' : ''}</small>
+                <span class="ligne-texte"><b>{p.title}</b><small class={faible ? 'texte-danger' : ''}>{libelleStock(p)}{p.demo ? ' · exemple' : ''}</small>{attente(p.id) ? <small class="attente">{pluriel(attente(p.id), 'client attend', 'clients attendent')} son retour</small> : null}
                   <span class="ligne-pastilles">{R.estEnVente(p) ? <Pastille ton="ok" point>En vente</Pastille> : <Pastille ton="neutre" point>Brouillon</Pastille>}{R.estImport(p) ? <Pastille ton="info" icone="avion">Import</Pastille> : null}{R.venteFlash(p) ? <Pastille ton="warn" icone="horloge">Flash −{R.venteFlash(p).pct} %</Pastille> : null}</span></span>
                 <span class="ligne-fin">{R.num(p.price) > 0 ? <b>{dollars(p.price)}</b> : <small class="discret">Sans prix</small>}{marge !== null ? <small>marge {marge} %</small> : null}</span>
               </a>
@@ -357,6 +362,7 @@ function FormulaireProduit() {
               <h2 class="carte-titre"><Icone n="colis" />{cles.length ? 'Stock et prix par variante' : 'Stock'}<span class="fin">{cles.length ? `${cles.reduce((a, k) => a + R.int(f.variants[k]), 0)} au total` : ''}</span></h2>
               {cles.length ? <TableauVariantes f={f} maj={maj} cles={cles} avecStock /> : <div class="formulaire"><Champ libelle="Quantité en stock">{(a) => <input class="saisie" {...a} inputmode="numeric" value={f.stock} onInput={(e) => maj({ stock: e.currentTarget.value.replace(/\D/g, '') })} />}</Champ></div>}
               <p class="champ-aide espace-haut">Le stock baisse automatiquement à chaque commande et revient si la commande est annulée.</p>
+              <AttenteClients id={id} />
               <div class="formulaire espace-haut"><Champ libelle="Référence (SKU)" facultatif>{(a) => <input class="saisie" {...a} value={f.sku} onInput={champ('sku')} maxlength="40" />}</Champ></div>
             </section>
           ) : cles.length ? (
@@ -397,6 +403,7 @@ function FormulaireProduit() {
               <h2 class="carte-titre"><Icone n="plusieurs" />Autres actions</h2>
               <div class="pile">
                 {R.estEnVente(source) ? <a class="btn btn-secondaire btn-bloc" href={adresseBoutique(`/p/${id}/${slug(source.title)}`)} target="_blank" rel="noopener"><Icone n="oeil" />Voir dans la boutique</a> : null}
+                <LienAvis id={id} />
                 <a class="btn btn-secondaire btn-bloc" href={lien(`/produits/${id}/copie`)}><Icone n="dupliquer" />Dupliquer</a>
                 <button class="btn btn-danger btn-bloc" onClick={supprimerProduit}><Icone n="poubelle" />Supprimer</button>
               </div>
@@ -409,7 +416,26 @@ function FormulaireProduit() {
   );
 }
 
+/* Avis des clients sur cet article (note moyenne des avis publiés) : mène à la page Avis, filtrée sur l'article. */
+function LienAvis({ id }) {
+  if (!peut('avis')) return null;
+  const l = avis.value.filter((a) => a.produit === id);
+  if (!l.length) return null;
+  const publies = l.filter((a) => a.etat === 'publie');
+  const note = publies.length ? publies.reduce((t, a) => t + a.note, 0) / publies.length : 0;
+  return <a class="btn btn-secondaire btn-bloc" href={lien('/avis?produit=' + encodeURIComponent(id))}><Icone n="etoile" />Avis des clients{publies.length ? ` · ${noteFr(Math.round(note * 10) / 10)} ★ (${publies.length})` : ` (${l.length})`}</a>;
+}
+
 /* La fiche n'est montée qu'une fois les données chargées (ouverture directe par un lien). */
+/* Clients qui attendent cet article (« Prévenez-moi ») : prévenus d'eux-mêmes dès que le stock revient. */
+function AttenteClients({ id }) {
+  useEffect(() => { chargerAttentes(); }, [id]);
+  const a = attentes.value[id];
+  if (!a || !a.total) return null;
+  const detail = Object.entries(a.variantes).filter(([k]) => k).map(([k, n]) => `${R.libelleVariante(k)} : ${n}`).join(', ');
+  return <Note ton="info" icone="cloche" classe="espace-haut">{pluriel(a.total, 'client attend', 'clients attendent')} le retour de cet article{detail ? ` (${detail})` : ''}. Ils seront prévenus d’eux-mêmes, par notification, dès que vous remettez du stock.</Note>;
+}
+
 export function FicheProduit() {
   if (!pret.value) return <Chargement />;
   return <FormulaireProduit key={route.value.cle} />;

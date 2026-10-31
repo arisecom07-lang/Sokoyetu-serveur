@@ -7,6 +7,9 @@ import { urlMedia } from '../commun/js/medias.jsx';
 import { empreinteCarte, fabriquerCarte, LARGEUR, HAUTEUR } from './carte-partage.js';
 
 export const compte = signal(Auth.charger() ? Auth.compte : null);
+/* Rôle dans l'équipe (propriétaire, vendeur, livreur) : le serveur contrôle chaque action, l'administration masque le reste. */
+export const role = computed(() => R.roleNettoye(compte.value && compte.value.role));
+export const peut = (droit) => R.peut(role.value, droit);
 export const pret = signal(false);          // données chargées
 export const erreurChargement = signal(''); // premier chargement impossible : message affiché avec « Réessayer »
 // Santé du serveur (sauvegardes, paiement, erreurs) : lue à l'ouverture et sur la page « Santé et journal ».
@@ -29,10 +32,12 @@ export const remises = computed(() => [...donnees.value.discounts].sort((a, b) =
 export const commandes = computed(() => [...donnees.value.orders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
 export const produitsParId = computed(() => new Map(donnees.value.products.map((p) => [p.id, p])));
 export const aTraiter = computed(() => donnees.value.orders.filter(R.aTraiter).length);
+/* Livreur : commandes payées à livrer, pas encore remises au client. */
+export const aLivrer = computed(() => donnees.value.orders.filter((o) => R.pourLivreur(o) && o.fulfillment !== 'delivered').length);
 
 /* Comptes clients (facultatifs) : panier, favoris et coordonnées gardés par le serveur. */
 export const comptes = signal([]);
-const versCompte = (r) => ({ id: r.id, phone: r.phone || '', name: r.name || '', created: Date.parse(String(r.created || '').replace(' ', 'T')) || 0, seen: R.num(r.seen), ...R.docCompte(r.doc) });
+const versCompte = (r) => ({ id: r.id, phone: r.phone || '', name: r.name || '', created: Date.parse(String(r.created || '').replace(' ', 'T')) || 0, seen: R.num(r.seen), relance: R.num(r.relance), ...R.docCompte(r.doc) });
 
 /* Clients : déduits des commandes (une fiche par numéro de téléphone), plus les comptes qui n'ont pas encore commandé. */
 export const clients = computed(() => {
@@ -59,6 +64,9 @@ export const clients = computed(() => {
 /* ---------- Chargement et temps réel ---------- */
 
 const COLLECTIONS = ['config', 'collections', 'banners', 'products', 'discounts', 'orders'];
+/* Collections lues selon le rôle : le livreur ne reçoit que les commandes à livrer, les codes promo restent au propriétaire. */
+const DROIT_COLLECTION = { collections: 'catalogue', banners: 'catalogue', products: 'produits', discounts: 'remises', orders: 'commandes' };
+const lisible = (c) => !DROIT_COLLECTION[c] || peut(DROIT_COLLECTION[c]) || (c === 'orders' && peut('livraisons'));
 function poser(col, ligne, retirer) {
   const d = donnees.value;
   if (col === 'config') { if (ligne.id === 'store') donnees.value = { ...d, config: retirer ? null : ligne }; return; }
@@ -75,13 +83,15 @@ export function quandNouvelleCommande(fn) { surNouvelleCommande = fn; }
  */
 export async function charger() {
   const echecs = [];
-  const res = await Promise.all(COLLECTIONS.map((c) => tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => {
-    if (e.status === 401 || e.status === 403) throw e;
-    if (e.status === 404) return []; // collection absente (serveur d'une ancienne version)
+  const res = await Promise.all(COLLECTIONS.map((c) => (!lisible(c) ? Promise.resolve([]) : tout(c, c === 'orders' ? { sort: '-created' } : {}).catch((e) => {
+    if (e.status === 401) throw e;
+    if (e.status === 404 || e.status === 403) return []; // collection absente (ancienne version du serveur) ou réservée à un autre rôle
     echecs.push(e); return null;
-  })));
+  }))));
   if (echecs.length && !pret.value) throw echecs[0];
-  chargerComptes();
+  if (peut('clients')) chargerComptes();
+  if (peut('messages')) chargerDiscussions();
+  if (peut('avis')) chargerAvis();
   batch(() => {
     const avant = donnees.value; const d = {};
     COLLECTIONS.forEach((c, i) => { d[c] = res[i] || (c === 'config' ? null : avant[c]); });
@@ -133,12 +143,28 @@ let suivi = false;
 export function suivreEnDirect() {
   if (suivi) return; suivi = true;
   // Un client met un article au panier ou en favori, crée son compte : l'administration le voit aussitôt.
-  TempsReel.abonner('clients/*', (m) => {
+  if (peut('clients')) TempsReel.abonner('clients/*', (m) => {
     if (!m || !m.record) return;
     const autres = comptes.value.filter((c) => c.id !== m.record.id);
     comptes.value = m.action === 'delete' ? autres : [...autres, versCompte(m.record)];
   });
-  COLLECTIONS.forEach((col) => TempsReel.abonner(col + '/*', (m) => {
+  // Un client écrit à la boutique : la liste des messages suit, et l'équipe est prévenue (toast, carillon).
+  if (peut('messages')) TempsReel.abonner('discussions/*', (m) => {
+    if (!m || !m.record) return;
+    const d = versDiscussion(m.record); const avant = discussions.value.find((x) => x.id === d.id);
+    const autres = discussions.value.filter((x) => x.id !== d.id);
+    discussions.value = m.action === 'delete' ? autres : [d, ...autres].sort((a, b) => b.maj - a.maj);
+    if (m.action !== 'delete' && d.auteur === 'client' && d.maj > ((avant && avant.maj) || 0)) surNouveauMessage(d);
+  });
+  // Un client donne son avis : la liste suit, et l'équipe le voit passer (toast).
+  if (peut('avis')) TempsReel.abonner('avis/*', (m) => {
+    if (!m || !m.record) return;
+    const a = versAvis(m.record);
+    const autres = avis.value.filter((x) => x.id !== a.id);
+    avis.value = m.action === 'delete' ? autres : [a, ...autres].sort((x, y) => y.cree - x.cree);
+    if (m.action === 'create') surNouvelAvis(a);
+  });
+  COLLECTIONS.filter(lisible).forEach((col) => TempsReel.abonner(col + '/*', (m) => {
     if (!m || !m.record) return;
     const ligne = versLigne(m.record);
     // Alerte quand une commande vient d'être payée (confirmée par l'opérateur), pas quand le client commence à payer.
@@ -225,6 +251,84 @@ export async function etapeCommande(id, action, note) {
   poser('orders', versLigne(r));
   return r;
 }
+/* ---------- Équipe (propriétaire) : comptes de l'administration et leurs rôles ---------- */
+
+export const lireEquipe = () => requete('sokoyetu/equipe').then((r) => r.membres || []);
+export const ajouterMembre = (d) => requete('sokoyetu/equipe', { method: 'POST', corps: d });
+export const modifierMembre = (id, d) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'POST', corps: d });
+export const retirerMembre = (id) => requete('sokoyetu/equipe/' + encodeURIComponent(id), { method: 'DELETE' });
+
+/* ---------- Messages des clients : une discussion par client (propriétaire et vendeurs, droit « messages ») ---------- */
+
+export const discussions = signal([]);
+/* Discussions où le client attend une réponse (pastille du menu, tableau de bord). */
+export const aRepondre = computed(() => discussions.value.filter((d) => d.a_repondre).length);
+const versDiscussion = (r) => ({
+  id: r.id, client: r.client || '', nom: r.nom || '', telephone: r.telephone || '', dernier: r.dernier || '', auteur: r.auteur || '',
+  maj: R.num(r.maj), non_lus: R.num(r.non_lus), a_repondre: !!r.a_repondre, lu_client: R.num(r.lu_client), lu_boutique: R.num(r.lu_boutique)
+});
+async function chargerDiscussions() {
+  try {
+    const j = await requete('collections/discussions/records?sort=-maj&perPage=500&skipTotal=1');
+    discussions.value = (j.items || []).map(versDiscussion);
+  } catch (e) { /* serveur sans discussions (ancienne version) */ }
+}
+let surNouveauMessage = () => { };
+export function quandNouveauMessage(fn) { surNouveauMessage = fn; }
+/* Résumé renvoyé par le serveur (réponse, lecture) : la liste suit sans attendre le temps réel. */
+function poserDiscussion(d) {
+  if (!d || !d.id) return;
+  discussions.value = [versDiscussion(d), ...discussions.value.filter((x) => x.id !== d.id)].sort((a, b) => b.maj - a.maj);
+}
+/* { discussion, messages, commandes } : messages après « apres » (identifiant du dernier message déjà affiché). */
+export const lireDiscussion = (id, apres) => requete(`sokoyetu/discussions/${encodeURIComponent(id)}${apres ? '?apres=' + apres : ''}`, )
+  .then((r) => { poserDiscussion(r.discussion); return r; });
+export const repondreDiscussion = (id, m) => requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'POST', corps: m })
+  .then((r) => { poserDiscussion(r.discussion); return r; });
+export const marquerDiscussion = (id, action) => requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'POST', corps: { action } })
+  .then((r) => { poserDiscussion(r.discussion); return r; });
+export async function supprimerDiscussion(id) {
+  await requete(`sokoyetu/discussions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  discussions.value = discussions.value.filter((x) => x.id !== id);
+}
+
+/* ---------- Avis des clients sur les articles (propriétaire et vendeurs, droit « avis ») ---------- */
+
+export const avis = signal([]);
+/* Avis qui attendent la vérification de la boutique (pastille du menu, tableau de bord). */
+export const avisAVerifier = computed(() => avis.value.filter((a) => a.etat === 'attente').length);
+const versAvis = (r) => ({
+  id: r.id, produit: r.produit || '', commande: r.commande || '', numero: r.numero || '', telephone: r.telephone || '', client: r.client || '', nom: r.nom || '',
+  note: R.num(r.note), texte: r.texte || '', variante: r.variante || '', etat: r.etat || 'publie', motif: r.motif || '',
+  reponse: r.reponse || '', reponse_par: r.reponse_par || '', reponse_le: R.num(r.reponse_le || r.reponseLe), cree: R.num(r.cree), maj: R.num(r.maj)
+});
+async function chargerAvis() {
+  try {
+    const j = await requete('collections/avis/records?sort=-cree&perPage=500&skipTotal=1');
+    avis.value = (j.items || []).map(versAvis);
+  } catch (e) { /* serveur sans avis (ancienne version) */ }
+}
+let surNouvelAvis = () => { };
+export function quandNouvelAvis(fn) { surNouvelAvis = fn; }
+/* { action: 'publier' } ; { action: 'masquer', motif } ; { reponse } ('' la retire). La liste suit sans attendre le temps réel. */
+export async function modererAvis(id, corps) {
+  const r = await requete(`sokoyetu/avis/${encodeURIComponent(id)}`, { method: 'POST', corps });
+  if (r && r.avis) avis.value = [versAvis(r.avis), ...avis.value.filter((x) => x.id !== id)].sort((x, y) => y.cree - x.cree);
+  return r && r.avis;
+}
+
+/* ---------- Clients qui attendent un article épuisé (« Prévenez-moi »), annonces aux clients (propriétaire) ---------- */
+
+/* { produit: { total, variantes: { 'Rouge|M': 2 } } } : relu à chaque ouverture des produits. */
+export const attentes = signal({});
+export const chargerAttentes = () => requete('sokoyetu/alertes/attente', { essais: 0 }).then((r) => { attentes.value = (r && r.produits) || {}; }).catch(() => { });
+export const lireAnnonces = () => requete('sokoyetu/annonces');
+export const envoyerAnnonce = (a) => requete('sokoyetu/annonces', { method: 'POST', corps: a });
+
+/* Cagnotte d'un client (téléphone) : solde, gains, filleuls ; offrir : geste de la boutique (propriétaire), une fois par jeton. */
+export const cagnotteClient = (tel) => requete(`sokoyetu/clients/${encodeURIComponent(tel)}/cagnotte`);
+export const offrirCagnotte = (tel, { montant, motif, jeton }) => requete(`sokoyetu/clients/${encodeURIComponent(tel)}/cagnotte`, { method: 'POST', corps: { montant, motif, jeton } });
+
 export async function effacerClient(tel) {
   const r = await requete('sokoyetu/clients/effacer', { method: 'POST', corps: { phone: tel } });
   await charger().catch(() => { }); // l'effacement est fait ; les fiches se mettent à jour en direct si la relecture échoue
