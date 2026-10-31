@@ -10,20 +10,60 @@ const MAX_OCTETS = 10 * 1048576; // photo copiée depuis un fournisseur : 10 Mo 
 const hoteDe = (url) => { const m = /^https?:\/\/([^/?#:]+)/i.exec(String(url || '').trim()); return m ? m[1].toLowerCase() : ''; };
 const surSite = (hote, sites) => sites.some((s) => hote === s || hote.slice(-(s.length + 1)) === '.' + s);
 
-/* Adresse d'une page produit acceptée ('' sinon) : https, sur un site fournisseur connu. */
+/*
+ * Adresse http(s) découpée : { protocole, hote, port }, ou null si elle porte un identifiant (« site.com@127.0.0.1 » mène
+ * en réalité à 127.0.0.1), des crochets (IPv6) ou des caractères inattendus dans le nom du site.
+ */
+function decouper(url) {
+  const m = /^(https?):\/\/([^/?#\\]*)(?:[/?#].*)?$/i.exec(String(url || '').trim());
+  if (!m || m[2].indexOf('@') >= 0) return null;
+  const a = /^([a-z0-9.-]+)(?::(\d{1,5}))?$/i.exec(m[2]);
+  return a ? { protocole: m[1].toLowerCase(), hote: a[1].toLowerCase(), port: a[2] ? Number(a[2]) : 0 } : null;
+}
+
+/* Adresse IPv4 publique, écrite sous sa forme ordinaire (127.1, 0x7f…, 0177… et autres formes douteuses : refusées). */
+function ipPublique(h) {
+  const p = h.split('.');
+  if (p.length !== 4 || p.some((x) => !/^(0|[1-9]\d{0,2})$/.test(x) || Number(x) > 255)) return false;
+  const [a, b, c] = p.map(Number);
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return false;        // réseau local, boucle, multidiffusion, réservé
+  if (a === 100 && b >= 64 && b <= 127) return false;                    // espace partagé des opérateurs
+  if (a === 169 && b === 254) return false;                              // lien local : métadonnées du nuage
+  if ((a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return false;
+  if ((a === 192 && b === 0 && c === 0) || (a === 198 && (b === 18 || b === 19))) return false;
+  return true;
+}
+
+/* Nom de site public : au moins un point, une extension en lettres, ni point final, ni nom du réseau local. */
+function hotePublic(h) {
+  if (!h || h.length > 253 || /^[.-]|\.\.|[.-]$/.test(h)) return false;
+  const parties = h.split('.');
+  if (parties.length < 2) return false;                                   // localhost, metadata, noms sans point
+  const fin = parties[parties.length - 1];
+  if (/^\d+$/.test(fin)) return ipPublique(h);
+  if (!/^[a-z]{2,63}$/.test(fin) && !/^xn--[a-z0-9-]{1,59}$/.test(fin)) return false;
+  return !/(^|\.)(localhost|local|localdomain|internal|intranet|lan|home|corp|arpa)$/.test(h);
+}
+
+/* Adresse d'une page produit acceptée ('' sinon) : https, sur un site fournisseur connu, sans port ni identifiant. */
 function adresseFournisseur(url) {
   const u = String(url || '').trim().replace(/^http:\/\//i, 'https://');
   if (!/^https:\/\/[^\s]+$/i.test(u) || u.length > 600) return '';
-  return surSite(hoteDe(u), SITES) ? u : '';
+  const d = decouper(u);
+  return d && !d.port && surSite(d.hote, SITES) ? u : '';
 }
 
-/* Adresse d'une photo à copier : http(s) publique, jamais une adresse du réseau local. */
+/*
+ * Adresse d'une photo à copier : http(s) sur un site public, jamais une adresse du réseau local ou du serveur.
+ * (Les renvois vers une autre adresse et les noms qui mènent au réseau local sont bloqués par le serveur lui-même :
+ * protection « IPAddressDeny » posée par securite.sh.)
+ */
 function adressePhoto(url) {
   const u = String(url || '').trim().replace(/^\/\//, 'https://');
   if (!/^https?:\/\/[^\s]+$/i.test(u) || u.length > 1000) return '';
-  const h = hoteDe(u);
-  if (!h || h === 'localhost' || /\.(local|internal|localhost)$/.test(h) || h.indexOf(':') >= 0 || /^\[/.test(h)) return '';
-  if (/^(0|10|127)\./.test(h) || /^169\.254\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^\d+$/.test(h)) return '';
+  const d = decouper(u);
+  if (!d || !hotePublic(d.hote)) return '';
+  if (d.port && d.port !== (d.protocole === 'https' ? 443 : 80)) return '';
   return u;
 }
 
@@ -131,4 +171,4 @@ function copierPhoto(app, url) {
   return { type: 'pb', id: rec.id, f: rec.getString('file') };
 }
 
-module.exports = { SITES, adresseFournisseur, adressePhoto, extraire, texteDe, photoEnGrand, lirePage, copierPhoto };
+module.exports = { SITES, decouper, hotePublic, adresseFournisseur, adressePhoto, extraire, texteDe, photoEnGrand, lirePage, copierPhoto };

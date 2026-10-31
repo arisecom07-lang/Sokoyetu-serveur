@@ -333,7 +333,9 @@ test('panier partagé : aperçu aux prix et au stock du jour (message, aperçu d
 
 test('équipe : rôles, droits et étapes permises', () => {
   assert.equal(R.roleNettoye(''), 'proprietaire', 'les comptes créés avant les rôles sont ceux du propriétaire');
-  assert.equal(R.roleNettoye('inconnu'), 'proprietaire');
+  assert.equal(R.roleNettoye('inconnu'), 'livreur', 'rôle inconnu : les droits les plus limités, jamais ceux du propriétaire');
+  for (const r of ['constructor', '__proto__', 'toString', null, undefined, 42]) assert.equal(R.peut(r, 'equipe'), !r, String(r));
+  assert.equal(R.estRole('vendeur'), true); assert.equal(R.estRole('constructor'), false); assert.equal(R.estRole(''), false);
   assert.equal(R.roleNettoye('livreur'), 'livreur');
   assert.equal(R.peut('', 'reglages'), true);
   assert.equal(R.peut('vendeur', 'produits'), true);

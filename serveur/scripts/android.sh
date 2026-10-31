@@ -12,5 +12,5 @@ for FP in "$@"; do
 done
 mkdir -p "$DIR/pb_public/.well-known"
 printf '[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"%s","sha256_cert_fingerprints":[%s]}}]\n' "$PKG" "$LIST" > "$DIR/pb_public/.well-known/assetlinks.json"
-chown -R sokoyetu:sokoyetu "$DIR/pb_public/.well-known"
+chown -R root:root "$DIR/pb_public/.well-known"; chmod 755 "$DIR/pb_public/.well-known"; chmod 644 "$DIR/pb_public/.well-known/assetlinks.json"
 echo "==> Fichier en place : https://$(cat "$DIR/.domaine" 2>/dev/null || echo sokoyakwetu.com)/.well-known/assetlinks.json"

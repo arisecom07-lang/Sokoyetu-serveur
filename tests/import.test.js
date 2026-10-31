@@ -14,6 +14,20 @@ test('adresses acceptées', () => {
   for (const u of ['http://127.0.0.1/a.jpg', 'http://localhost/a.jpg', 'http://192.168.1.4/a.jpg', 'http://10.0.0.1/a.jpg', 'http://[::1]/a.jpg', 'file:///etc/passwd', 'http://2130706433/a.jpg']) assert.equal(I.adressePhoto(u), '', u);
 });
 
+test('copie de photo : jamais vers le réseau du serveur, même par une adresse déguisée', () => {
+  for (const u of ['https://ae01.alicdn.com/kf/S1.jpg', 'https://img.kwcdn.com/product/a.webp', 'https://exemple.cd:443/a.png', 'http://8.8.8.8/a.jpg', 'https://xn--80ak6aa92e.com/a.jpg']) assert.equal(I.adressePhoto(u), u, u);
+  for (const u of [
+    'https://exemple.com@127.0.0.1/a.jpg', 'https://exemple.com:x@169.254.169.254/a.jpg', 'https://evil.com\\@127.0.0.1/a.jpg', // identifiant devant l'adresse réelle
+    'https://localhost./a.jpg', 'https://exemple.com./a.jpg', 'https://metadata/a.jpg', 'https://metadata.google.internal/a.jpg', 'https://nas.local/a.jpg',
+    'https://169.254.169.254/latest/meta-data', 'https://0.0.0.0/a.jpg', 'https://100.100.100.200/a.jpg', 'https://172.20.1.1/a.jpg', 'https://224.0.0.1/a.jpg',
+    'https://0x7f000001/a.jpg', 'https://0x7f.0.0.1/a.jpg', 'https://0177.0.0.1/a.jpg', 'https://127.1/a.jpg', 'https://1.2.3/a.jpg', 'https://256.1.1.1/a.jpg',
+    'https://exemple.com:8090/a.jpg', 'http://exemple.com:443/a.jpg', 'https://[::ffff:127.0.0.1]/a.jpg', 'https://ex_emple.com/a.jpg', 'gopher://exemple.com/a.jpg'
+  ]) assert.equal(I.adressePhoto(u), '', u);
+  // Page fournisseur : le site reconnu doit être le vrai site visité.
+  for (const u of ['https://1688.com@127.0.0.1/offer/1.html', 'https://evil.com\\.1688.com/offer/1.html', 'https://detail.1688.com:8443/offer/1.html', 'https://detail.1688.com./offer/1.html']) assert.equal(I.adresseFournisseur(u), '', u);
+  assert.deepEqual(I.decouper('https://Detail.1688.com:443/offer/1.html?x=@y'), { protocole: 'https', hote: 'detail.1688.com', port: 443 });
+});
+
 test('page 1688 : titre, photos en grand, prix en yuans', () => {
   const html = `<html><head><title>女士夏季连衣裙 中长款 - 阿里巴巴</title>
     <meta property="og:image" content="https://cbu01.alicdn.com/img/ibank/O1CN01a.jpg_220x220.jpg"></head>

@@ -29,6 +29,7 @@ Le fichier **`sokoyetu-serveur.zip`** contient tout :
 | `alerte.sh` | Vous prévient si le site tombe ou va mal (avec Healthchecks.io, gratuit) |
 | `android.sh` | Relie une future application Google Play au site |
 | `service.sh` | Service automatique (démarrage avec le serveur, redémarrage en cas d'arrêt) et vérification des sauvegardes chaque dimanche |
+| `securite.sh` | Protection du serveur : droits des fichiers, service isolé, pare-feu, fail2ban, mises à jour de sécurité automatiques (section 12) |
 | `pb_public/` | La boutique |
 | `pb_admin/` | L'administration |
 | `pb_hooks/` | Les règles du serveur : prix, total et stock recalculés à chaque commande, codes promo, coûts d'achat jamais montrés aux clients |
@@ -88,6 +89,8 @@ sudo /opt/sokoyetu/mise-a-jour.sh
 
 La base est sauvegardée avant (dans `/opt/sokoyetu/sauvegardes`, les 3 dernières sont gardées). Produits, commandes, photos et réglages sont conservés.
 
+**Version 3.3.0 (une seule fois)** : après cette mise à jour, protégez le serveur : `sudo /opt/sokoyetu/securite.sh` (section 12). Les mises à jour suivantes gardent cette protection.
+
 ### Passage de la version 1 à la version 2 (une seule fois)
 
 La version 2 sépare l'administration sur **admin.sokoyakwetu.com**. Pour un serveur déjà installé avec la version 1 :
@@ -136,6 +139,9 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 | Voir les dernières erreurs | `journalctl -u sokoyetu -n 50 --no-pager` |
 | Journal de l'installation | `cat /var/log/sokoyetu-installation.log` |
 | Accès au tableau technique (`/_/`) | `sudo cat /root/sokoyetu-acces.txt` |
+| Protéger le serveur (sans danger à relancer) | `sudo /opt/sokoyetu/securite.sh` |
+| Bilan de sécurité du serveur | `sudo /opt/sokoyetu/securite.sh etat` |
+| SSH par clé seulement (si une clé est installée) | `sudo /opt/sokoyetu/securite.sh ssh-cles` |
 
 ---
 
@@ -259,11 +265,41 @@ Rien à brancher : tout fonctionne dès la mise en ligne, sans frais (ni SMS, ni
 - **Avis des clients** : seuls les clients qui ont reçu l'article le notent, avec leur prénom et l'initiale de leur nom ; rappel gratuit 2 jours après la livraison. Page **Avis** : répondre publiquement, masquer un avis abusif avec un motif (jamais parce qu'il est négatif). Vérification avant publication en option : **Réglages → Général → Avis des clients**.
 - **Discussion** : le client pose une question sur un article ou une commande depuis la boutique ; vous répondez dans **Messages** (alerte et carillon à chaque message), il est prévenu par notification.
 - **Cagnotte et parrainage** (fermés au départ, avec les comptes clients de la section 6) : **Réglages → Général → Fidélité et parrainage**. Chaque commande livrée rapporte au client un pourcentage de ses articles (2 % proposé), qu'il utilise sur ses commandes suivantes jusqu'à la moitié des articles. Chaque client a un lien de parrainage : son proche reçoit un cadeau sur sa première commande (2 $ dès 10 $ d'achat, proposé), le parrain une récompense (3 $) quand elle est livrée. Le code de parrainage se tape aussi dans la case du code promo. Geste de la boutique : fiche du client → **Offrir**.
-- **Équipe** (propriétaire) : **Plus → Équipe**. Un **vendeur** gère commandes, produits, clients, messages et avis (ni réglages, ni réductions, ni remboursements) ; un **livreur** ne voit que ses livraisons (adresse, Appeler, Itinéraire, « Je pars livrer », « Livrée »). Un mot de passe provisoire s'affiche une seule fois : transmettez-le, la personne le change dans **Mon compte**.
+- **Équipe** (propriétaire) : **Plus → Équipe**. Un **vendeur** gère commandes, produits, clients, messages et avis (ni réglages, ni réductions, ni remboursements) ; un **livreur** ne voit que ses livraisons (adresse, Appeler, Itinéraire, « Je pars livrer », « Livrée »). Un mot de passe provisoire s'affiche une seule fois : transmettez-le, la personne le change dans **Mon compte** (10 caractères au moins). Seul le propriétaire change les rôles : un membre ne peut jamais se donner plus de droits.
 
 ---
 
-## 12. Pour un développeur
+## 12. Sécurité
+
+**Ce que la boutique fait toute seule**
+
+- **Prix, totaux et stock recalculés par le serveur** à chaque commande ; un paiement n'est reconnu qu'après vérification auprès de FlexPay (référence et montant), jamais sur la parole d'une notification. La carte bancaire se saisit chez FlexPay, jamais dans la boutique. Les clés (FlexPay, WhatsApp, IA) restent dans `/opt/sokoyetu/sokoyetu.env`, lisible par root seulement.
+- **Rôles de l'équipe contrôlés par le serveur** : chaque route et chaque collection vérifie le rôle ; seul le propriétaire le change (page Équipe).
+- **Mots de passe de l'administration** : 10 caractères au moins. Après **10 mots de passe refusés en 15 minutes** pour un même compte, d'où qu'ils viennent, ce compte est **verrouillé 15 minutes** (les sessions déjà ouvertes continuent) et l'alerte s'affiche dans **Plus → Santé et journal**. En plus, chaque adresse IP n'a que 5 essais en 15 secondes. Même verrou pour le tableau technique (`/_/`).
+- **Codes de connexion des clients** : 6 chiffres, valables 10 minutes, 5 essais au plus, même envoyés au même instant ; le serveur n'en garde qu'une empreinte.
+- **Pages protégées** : seuls les scripts de la boutique (et de l'outil de mesure d'audience, s'il est activé) peuvent s'exécuter, jamais un script glissé dans un texte ; la boutique ne s'affiche pas dans le cadre d'un autre site ; connexion HTTPS obligatoire.
+- **Copie de photos par adresse** (import) : jamais vers le réseau du serveur, même avec une adresse déguisée (`site.com@127.0.0.1`, `localhost.`, adresses chiffrées).
+
+**Ce que `securite.sh` met en place sur le serveur** (`sudo /opt/sokoyetu/securite.sh`, une fois ; sans danger à relancer)
+
+1. **Droits des fichiers** : le service de la boutique n'écrit que dans sa base (`pb_data`) ; le programme, le code et les scripts appartiennent à root. Même en cas de faille dans la boutique, personne ne peut les modifier pour prendre la main sur le serveur. Refait à chaque mise à jour.
+2. **Service isolé** : le reste du système est en lecture seule pour lui, et il ne peut jamais joindre le réseau interne ni le service de métadonnées de DigitalOcean. Si la boutique ne redémarrait pas ainsi, la protection serait retirée aussitôt (la boutique reste en ligne).
+3. **Pare-feu** : seulement SSH (freiné au-delà de 6 connexions en 30 secondes), HTTP et HTTPS.
+4. **fail2ban** : une adresse qui essaie 5 mots de passe SSH en 10 minutes est bannie une heure.
+5. **Mises à jour de sécurité d'Ubuntu chaque jour**, avec redémarrage à 3 h 30 (heure de Bukavu) seulement quand une mise à jour l'exige (une minute de coupure environ).
+
+`sudo /opt/sokoyetu/securite.sh etat` affiche le bilan sans rien changer.
+
+**Ce qui reste à vous**
+
+- **Connexion SSH par clé** plutôt que par mot de passe : ajoutez votre clé (DigitalOcean → Settings → Security → SSH Keys, ou `~/.ssh/authorized_keys`), puis `sudo /opt/sokoyetu/securite.sh ssh-cles`. Le script refuse s'il ne trouve aucune clé, pour ne jamais vous enfermer dehors.
+- **Sauvegardes hors du serveur** : activez les sauvegardes du Droplet chez DigitalOcean (onglet Backups), ou téléchargez de temps en temps une sauvegarde depuis le tableau technique.
+- **Mots de passe** : un mot de passe différent pour chaque membre de l'équipe ; retirez tout de suite le compte d'une personne qui quitte la boutique (Plus → Équipe).
+- **Mode test du paiement** : ne le laissez pas une fois la boutique ouverte au public (`sudo /opt/sokoyetu/paiement.sh` affiche le réglage) : en mode test, une commande peut être « payée » sans argent.
+
+---
+
+## 13. Pour un développeur
 
 ```bash
 npm install

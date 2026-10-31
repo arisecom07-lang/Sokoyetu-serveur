@@ -57,8 +57,8 @@ for f in "$SRC"/*.sh; do [ "$(basename "$f")" = installer.sh ] && continue; cp "
 cp "$SRC/LISEZMOI.md" "$DIR/LISEZMOI.md" 2>/dev/null || true
 [ -n "$PAQUET" ] && echo "$PAQUET" > "$DIR/.paquet"
 echo "$DOMAINE" > "$DIR/.domaine"
-chown -R sokoyetu:sokoyetu "$DIR"
-[ -f "$DIR/sokoyetu.env" ] && chown root:root "$DIR/sokoyetu.env" && chmod 600 "$DIR/sokoyetu.env"
+# Droits : la boutique n'écrit que dans sa base ; programme, code et scripts à root (voir securite.sh).
+bash "$DIR/securite.sh" droits || { echo "    Droits des fichiers à revoir : sudo $DIR/securite.sh droits"; chown -R sokoyetu:sokoyetu "$DIR/pb_data"; }
 
 PB() { sudo -u sokoyetu "$DIR/pocketbase" "$@" --dir="$DIR/pb_data" --hooksDir="$DIR/pb_hooks" --migrationsDir="$DIR/pb_migrations"; }
 systemctl stop sokoyetu 2>/dev/null || true
@@ -81,6 +81,8 @@ if systemctl is-active --quiet sokoyetu; then
   echo "    Boutique       : https://$DOMAINE"
   echo "    Administration : https://admin.$DOMAINE  (e-mail : $EMAIL)"
   echo "    Les adresses répondent dès que le nom de domaine pointe vers ce serveur (enregistrements A : @, www et admin)."
+  echo "==> Protection du serveur"
+  bash "$DIR/securite.sh" || echo "    (à relancer plus tard : sudo $DIR/securite.sh)"
 else
   journalctl -u sokoyetu -n 30 --no-pager; exit 1
 fi

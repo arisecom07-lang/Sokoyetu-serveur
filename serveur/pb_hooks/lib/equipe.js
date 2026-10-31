@@ -20,7 +20,7 @@ function membre(app, id) {
   try { return app.findRecordById('admins', String(id || '')); } catch (e) { throw new NotFoundError('Ce membre de l’équipe n’existe plus.'); }
 }
 function roleSaisi(r) {
-  if (!R.ROLES[r]) throw new BadRequestError('Choisissez un rôle : propriétaire, vendeur ou livreur.');
+  if (!R.estRole(r)) throw new BadRequestError('Choisissez un rôle : propriétaire, vendeur ou livreur.');
   return r;
 }
 

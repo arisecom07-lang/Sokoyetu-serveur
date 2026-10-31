@@ -914,8 +914,10 @@ const ROLES = {
   vendeur: { label: 'Vendeur', texte: 'Commandes, produits, clients, messages et avis. Ni réglages, ni équipe, ni réductions, ni remboursements.' },
   livreur: { label: 'Livreur', texte: 'Seulement les commandes à livrer : adresse, téléphone, « En route » et « Livrée ».' }
 };
-/* Rôle d'un compte : les comptes créés avant les rôles (rôle vide) sont ceux du propriétaire. */
-const roleNettoye = (r) => (ROLES[r] ? r : 'proprietaire');
+const estRole = (r) => typeof r === 'string' && Object.prototype.hasOwnProperty.call(ROLES, r);
+/* Rôle d'un compte : les comptes créés avant les rôles (rôle vide) sont ceux du propriétaire ; un rôle inconnu n'a que
+   les droits les plus limités (livreur), jamais ceux du propriétaire. */
+const roleNettoye = (r) => (estRole(r) ? r : !r ? 'proprietaire' : 'livreur');
 const DROITS = {
   proprietaire: ['*'],
   vendeur: ['tableau', 'commandes', 'produits', 'catalogue', 'clients', 'messages', 'avis', 'audience'],
@@ -1164,7 +1166,7 @@ function raisonParrainage(raison, dv, min) {
 
 module.exports = {
   OPERATEURS, estCarte, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
-  ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
+  ROLES, estRole, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
   config, zoneDe, estRetrait, moyensDePaiement, fraisService,
   cleVariante, couleursDe, taillesDe, aDesOptions, estImport, estEnVente, clesVariantes, stockDe, stockTotal, prixBarre, pourcentRemise, imagePrincipale, ajusterStock,
