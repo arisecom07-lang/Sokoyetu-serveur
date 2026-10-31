@@ -13,22 +13,29 @@
 
 /* ---------- Constantes ---------- */
 
-/* exemple : format de numéro montré dans le champ du paiement (préfixes courants de l'opérateur). */
+/*
+ * Moyens de paiement. exemple : format de numéro montré dans le champ du paiement (préfixes courants de l'opérateur).
+ * carte : paiement par carte Visa / Mastercard, saisie sur la page sécurisée du fournisseur (jamais dans la boutique).
+ */
 const OPERATEURS = {
   mpesa: { label: 'M-Pesa', sub: 'Vodacom', color: '#E11D2A', init: 'M', exemple: '081 234 5678' },
   airtel: { label: 'Airtel Money', sub: 'Airtel', color: '#D9001B', init: 'A', exemple: '099 123 4567' },
   orange: { label: 'Orange Money', sub: 'Orange', color: '#F07800', init: 'O', exemple: '084 123 4567' },
   afrimoney: { label: 'Afrimoney', sub: 'Africell', color: '#6B2C91', init: 'A', exemple: '090 123 4567' },
-  illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I', exemple: '099 123 4567' }
+  illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I', exemple: '099 123 4567' },
+  carte: { label: 'Carte bancaire', sub: 'Visa, Mastercard', color: '#1F3A93', init: 'C', exemple: '', carte: true }
 };
+const estCarte = (k) => !!(OPERATEURS[k] && OPERATEURS[k].carte);
+/* « M-Pesa », « par carte bancaire » : le moyen dans une phrase du journal de la commande. */
+const moyenDuPaiement = (p) => (estCarte(p.method) ? 'par carte bancaire' : p.label || '');
 
 /*
  * Fournisseurs de paiement automatique. Le serveur choisit le sien (fichier sokoyetu.env, script paiement.sh) ;
  * sans fournisseur, la boutique n'encaisse pas. « simulation » sert aux essais : aucun argent ne circule.
  */
 const FOURNISSEURS = {
-  simulation: { label: 'Mode test (simulation)', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'illico'] },
-  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney'] }
+  simulation: { label: 'Mode test (simulation)', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'illico', 'carte'] },
+  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'carte'] }
 };
 
 const ZONES_DEFAUT = [
@@ -52,12 +59,25 @@ const CONFIG_DEFAUT = {
   returns: 'Échange possible sous 7 jours sur les articles non portés, avec leur étiquette.',
   zones: ZONES_DEFAUT,
   payments: {
-    mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false }
+    mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false },
+    // Carte : à ouvrir quand le fournisseur a activé le paiement par carte sur le compte marchand.
+    carte: { enabled: false }
   },
   /* Paiement automatique : le client paie dans l'application, la commande n'est validée qu'après confirmation du fournisseur. */
   payment: { provider: '', holdMinutes: 30 },
   /* Frais de service de la boutique, ajoutés au montant du panier (articles, après réduction). */
   serviceFeePct: 2,
+  /* Relance des paniers : le client avec compte qui laisse son panier reçoit une notification gratuite, hours heures après. */
+  cartReminder: { enabled: true, hours: 24 },
+  /* Avis des clients : achats livrés seulement ; moderation : chaque avis attend la vérification de la boutique ;
+     reminder : notification gratuite quelques jours après la livraison pour demander l'avis du client. */
+  reviews: { enabled: true, moderation: false, reminder: true },
+  /* Cagnotte de fidélité (désactivée au départ) : chaque commande livrée rapporte pct % des articles payés au client, qui
+     l'utilise connecté à son compte sur ses commandes suivantes (jusqu'à la moitié des articles). */
+  loyalty: { enabled: false, pct: 2 },
+  /* Parrainage (avec la cagnotte) : le filleul reçoit welcome $ sur la première commande de son compte, dès min $ d'achat ;
+     le parrain gagne reward $ dans sa cagnotte quand cette commande est livrée. */
+  referral: { enabled: false, reward: 3, welcome: 2, min: 10 },
   legal: { company: '', address: '', email: '', rccm: '', idnat: '', nif: '', texts: {}, updatedAt: 0 },
   analytics: { provider: '', id: '' },
   setup: {}
@@ -166,6 +186,15 @@ function config(brut) {
   c.payment = estObjet(c.payment) ? c.payment : {};
   c.payment.provider = FOURNISSEURS[c.payment.provider] ? c.payment.provider : '';
   c.payment.holdMinutes = Math.min(120, Math.max(5, int(c.payment.holdMinutes) || 30));
+  const r = estObjet(c.cartReminder) ? c.cartReminder : {};
+  c.cartReminder = { enabled: r.enabled !== false, hours: Math.min(72, Math.max(2, int(r.hours) || 24)) };
+  const av = estObjet(c.reviews) ? c.reviews : {};
+  c.reviews = { enabled: av.enabled !== false, moderation: av.moderation === true, reminder: av.reminder !== false };
+  const fi = estObjet(c.loyalty) ? c.loyalty : {};
+  c.loyalty = { enabled: fi.enabled === true, pct: Math.min(10, Math.max(0, arrondi(fi.pct))) };
+  const pa = estObjet(c.referral) ? c.referral : {};
+  const borne = (v) => Math.min(100, Math.max(0, arrondi(v)));
+  c.referral = { enabled: c.loyalty.enabled && pa.enabled === true, reward: borne(pa.reward), welcome: borne(pa.welcome), min: Math.min(1000, Math.max(0, arrondi(pa.min))) };
   return c;
 }
 const zoneDe = (cfg, id) => (cfg.zones || []).find((z) => z.id === id) || null;
@@ -302,9 +331,12 @@ function verifierRemise(remise, code, sousTotal, maintenant) {
 
 /*
  * opts = { cfg, produit: (id) => doc|null, lignes: [{ productId, color, size, qty, title? }], zoneId,
- *          code: 'BIENVENUE10', remise: doc|null, maintenant }
- * Renvoie { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct, total, zone }.
- * frais : frais de service de la boutique (cfg.serviceFeePct % du panier, après réduction).
+ *          code: 'BIENVENUE10', remise: doc|null, parrainage: { code, montant, min }|null, cagnotte: solde, maintenant }
+ * Renvoie { lignes, problemes, sousTotal, remise, bienvenue, cagnotte, livraison, frais, fraisPct, total, gain, zone }.
+ * bienvenue : cadeau du filleul (parrainage vérifié par le serveur), sans code promo et dès parrainage.min d'achat.
+ * cagnotte : part des articles payée avec la cagnotte du client (opts.cagnotte : son solde), PART_CAGNOTTE % au plus.
+ * frais : frais de service de la boutique (cfg.serviceFeePct % des articles payés, après réductions et cagnotte).
+ * gain : ce que la commande rapportera à la cagnotte du client, à la livraison (cfg.loyalty.pct % des articles payés).
  * Chaque problème = { code, message, ligne? } ; aucun problème = la commande peut être payée telle quelle.
  */
 function devis(opts) {
@@ -366,15 +398,23 @@ function devis(opts) {
     if (r.ok) remise = { code: r.code, type: r.type, value: r.value, amount: r.amount };
     else problemes.push({ code: 'remise', message: r.reason });
   }
+  // Cadeau de bienvenue du parrainage : jamais avec un code promo.
+  const pa = opts.parrainage;
+  const bienvenue = pa && pa.code && !remise && num(pa.montant) > 0 && sousTotal > 0 && sousTotal >= num(pa.min)
+    ? { code: String(pa.code), amount: arrondi(Math.min(num(pa.montant), sousTotal)) } : null;
   const zone = zoneDe(cfg, opts.zoneId);
   if (!zone) problemes.push({ code: 'zone', message: 'Choisissez une zone de livraison.' });
   poids = Math.round(poids * 1000) / 1000;
   let livraison = zone ? arrondi(num(zone.fee) + (estRetrait(zone) ? 0 : num(zone.perKg) * poids)) : 0;
-  const net = Math.max(0, sousTotal - (remise ? remise.amount : 0));
-  if (num(cfg.freeShippingOver) > 0 && net >= num(cfg.freeShippingOver)) livraison = 0;
+  const articles = arrondi(Math.max(0, sousTotal - (remise ? remise.amount : 0) - (bienvenue ? bienvenue.amount : 0)));
+  // La cagnotte paie (elle ne réduit pas le prix) : la livraison offerte se compte avant elle.
+  if (num(cfg.freeShippingOver) > 0 && articles >= num(cfg.freeShippingOver)) livraison = 0;
+  const cagnotte = num(opts.cagnotte) > 0 ? arrondi(Math.min(arrondi(opts.cagnotte), Math.floor(articles * PART_CAGNOTTE) / 100)) : 0;
+  const net = arrondi(articles - cagnotte);
   const frais = fraisService(cfg, net);
   const total = arrondi(net + livraison + frais);
-  return { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, zone, poids };
+  const gain = gainCommande(cfg, net);
+  return { lignes, problemes, sousTotal, remise, bienvenue, cagnotte, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, gain, zone, poids };
 }
 
 /* ---------- Commande ---------- */
@@ -422,10 +462,14 @@ function preparerCommande(opts) {
   if (!cfg.payment || !FOURNISSEURS[cfg.payment.provider]) stop('Le paiement en ligne n’est pas encore ouvert. Revenez bientôt.', 'method');
   const moyen = moyensDePaiement(cfg).find((m) => m.k === pay.method);
   if (!moyen) stop('Ce mode de paiement n’est pas disponible. Choisissez-en un autre.', 'method');
-  const payeur = valider.mobileMoney(pay.phone || client.phone);
-  if (!payeur) stop(`Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, 'payphone');
+  // Carte : aucun numéro à débiter, le client saisit sa carte sur la page sécurisée du fournisseur.
+  const payeur = moyen.carte ? '' : valider.mobileMoney(pay.phone || client.phone);
+  if (!moyen.carte && !payeur) stop(`Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, 'payphone');
 
-  const dv = devis({ cfg, produit: opts.produit, lignes: d.items, zoneId: zone.id, code: d.discountCode, remise: opts.remise, maintenant: now });
+  // Fidélité (lib/fidelite.js) : opts.parrainage, cadeau vérifié pour ce compte ; opts.cagnotte, solde du client connecté.
+  const pa = opts.parrainage || null;
+  const dv = devis({ cfg, produit: opts.produit, lignes: d.items, zoneId: zone.id, code: d.discountCode, remise: opts.remise, parrainage: pa,
+    cagnotte: d.cagnotte === true ? num(opts.cagnotte) : 0, maintenant: now });
   const bloquants = dv.problemes.filter((p) => p.code !== 'zone');
   if (bloquants.length) stop(bloquants.map((p) => p.message).join(' '), bloquants.some((p) => p.code === 'remise') && bloquants.length === 1 ? 'remise' : 'panier');
   const annonce = d.total === undefined || d.total === null || d.total === '' ? null : arrondi(d.total);
@@ -440,6 +484,11 @@ function preparerCommande(opts) {
     note: nettoyer(d.note, 300),
     items: dv.lignes.map((l) => { const o = Object.assign({}, l); delete o.available; return o; }),
     subtotal: dv.sousTotal, discount: dv.remise ? { code: dv.remise.code, amount: dv.remise.amount } : null,
+    // Parrainage : by et byPhone (le parrain, récompensé de reward à la livraison) ne sont jamais montrés au client.
+    referral: dv.bienvenue ? { code: dv.bienvenue.code, amount: dv.bienvenue.amount, reward: arrondi(pa.recompense), by: String(pa.parrain || ''), byPhone: chiffres(pa.parrainTel) } : null,
+    wallet: dv.cagnotte ? { used: dv.cagnotte } : null,
+    // Gain promis à la commande, crédité à la livraison au téléphone du compte (opts.titulaire), sinon à celui de la commande.
+    loyalty: dv.gain ? { pct: num(cfg.loyalty.pct), amount: dv.gain, phone: chiffres(opts.titulaire || phone) } : null,
     shippingFee: dv.livraison, weight: dv.poids, serviceFee: dv.frais, serviceFeePct: dv.fraisPct, total: dv.total,
     payment: { method: moyen.k, label: moyen.label, phone: payeur, provider: fournisseur, test: fournisseur === 'simulation', status: 'pending', attempts: 0, startedAt: now, providerId: '', reference: '', error: '' },
     expiresAt: now + cfg.payment.holdMinutes * 60000,
@@ -508,16 +557,23 @@ function relancePossible(o, maintenant) {
   if (int(o.payment && o.payment.attempts) >= MAX_TENTATIVES) return 'Trop de tentatives de paiement pour cette commande. Repassez votre commande.';
   return '';
 }
-/* Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, methode, label, telephone } */
+/*
+ * Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, methode, label, telephone, url }
+ * url : page sécurisée du fournisseur où le client saisit sa carte (paiement par carte).
+ */
 function paiementEnvoye(o, opts) {
   const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
   const relance = int(c.payment.attempts) > 0;
   if (opts.methode) { c.payment.method = opts.methode; c.payment.label = opts.label || c.payment.label; }
   if (opts.telephone) c.payment.phone = opts.telephone;
+  const carte = estCarte(c.payment.method);
+  if (carte) c.payment.phone = '';
   if (c.payment.providerId) c.payment.previous = (Array.isArray(c.payment.previous) ? c.payment.previous : []).concat([c.payment.providerId]).slice(-MAX_TENTATIVES);
   c.payment.status = 'pending'; c.payment.providerId = String(opts.providerId || ''); c.payment.attempts = int(c.payment.attempts) + 1;
-  c.payment.startedAt = now; c.payment.error = ''; c.payment.checkedAt = 0;
-  c.timeline.push({ at: now, text: `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
+  c.payment.startedAt = now; c.payment.error = ''; c.payment.checkedAt = 0; c.payment.url = carte ? String(opts.url || '').slice(0, 500) : '';
+  delete c.payment.simulation;
+  c.timeline.push({ at: now, text: carte ? `${relance ? 'Nouveau paiement' : 'Paiement'} par carte bancaire ouvert sur la page sécurisée`
+    : `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
   return c;
 }
 /* Double paiement signalé et pas encore remboursé (deux demandes de la même commande validées par le client). */
@@ -539,8 +595,9 @@ function paiementConfirme(o, opts) {
     const ref = String(opts.reference || id).slice(0, 80);
     c.payment.duplicates = doubles.concat([{ id, reference: ref, at: now }]).slice(-MAX_TENTATIVES);
     delete c.payment.duplicatesRefundedAt;
-    c.issues = (Array.isArray(c.issues) ? c.issues : []).concat([`${TEXTE_DOUBLON} (référence ${ref}) : remboursez ${dollars(c.total)} au client sur son numéro ${c.payment.label || 'Mobile Money'}, puis notez-le.`]);
-    c.timeline.push({ at: now, text: `Deuxième paiement ${c.payment.label || ''} reçu (référence ${ref}) : à rembourser au client` });
+    const ou = estCarte(c.payment.method) ? 'sur sa carte, depuis votre espace marchand' : `sur son numéro ${c.payment.label || 'Mobile Money'}`;
+    c.issues = (Array.isArray(c.issues) ? c.issues : []).concat([`${TEXTE_DOUBLON} (référence ${ref}) : remboursez ${dollars(c.total)} au client ${ou}, puis notez-le.`]);
+    c.timeline.push({ at: now, text: `Deuxième paiement ${moyenDuPaiement(c.payment)} reçu (référence ${ref}) : à rembourser au client` });
     return { commande: c, stock: '', entrees: [], double: true };
   }
   c.payment.paidId = id;
@@ -550,18 +607,18 @@ function paiementConfirme(o, opts) {
     if (!c.stockApplied) { entrees = Array.isArray(c.reserved) ? c.reserved : []; c.stockApplied = true; stock = 'reserver'; }
     c.issues = (c.issues || []).concat(['Paiement confirmé après l’annulation automatique : vérifiez que les articles sont toujours disponibles.']);
   }
-  c.payment.status = 'paid'; c.payment.paidAt = now; c.payment.error = '';
+  c.payment.status = 'paid'; c.payment.paidAt = now; c.payment.error = ''; delete c.payment.url;
   if (opts.reference) c.payment.reference = String(opts.reference).slice(0, 80);
   // Le délai de livraison court à partir du paiement.
   if (c.delivery && c.delivery.days !== undefined) c.delivery = Object.assign({}, c.delivery, { at: now + int(c.delivery.days) * JOUR });
-  c.timeline.push({ at: now, text: `Paiement ${c.payment.label} confirmé${c.payment.test ? ' (mode test)' : ''}` });
+  c.timeline.push({ at: now, text: `Paiement ${moyenDuPaiement(c.payment)} confirmé${c.payment.test ? ' (mode test)' : ''}` });
   return { commande: c, stock, entrees };
 }
 /* Le fournisseur refuse le paiement (solde insuffisant, code annulé…) : le client peut réessayer tant que la commande n'a pas expiré. */
 function paiementEchoue(o, opts) {
   const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
   if (estPayee(c) || c.status !== 'open') return c;
-  c.payment.status = 'failed'; c.payment.error = nettoyer(opts.raison, 160) || 'Paiement refusé ou annulé.'; c.payment.failedAt = now;
+  c.payment.status = 'failed'; c.payment.error = nettoyer(opts.raison, 160) || 'Paiement refusé ou annulé.'; c.payment.failedAt = now; delete c.payment.url;
   c.timeline.push({ at: now, text: `Paiement non abouti : ${c.payment.error}` });
   return c;
 }
@@ -658,15 +715,18 @@ function incoherences(o) {
   const items = o.items || [];
   const st = arrondi(items.reduce((a, i) => a + num(i.price) * int(i.qty), 0));
   if (Math.abs(st - num(o.subtotal)) > 0.01) out.push(`Le sous-total (${dollars(o.subtotal)}) ne correspond pas aux articles (${dollars(st)}).`);
-  const calc = arrondi(st - num(o.discount && o.discount.amount) + num(o.shippingFee) + num(o.serviceFee));
+  const calc = arrondi(st - reductions(o) + num(o.shippingFee) + num(o.serviceFee));
   if (Math.abs(calc - num(o.total)) > 0.01) out.push(`Le total (${dollars(o.total)}) ne correspond pas au calcul (${dollars(calc)}).`);
   return out.filter((v, i, a) => a.indexOf(v) === i);
 }
 
+/* Ce que la boutique n'encaisse pas sur les articles : code promo, cadeau de bienvenue, part payée avec la cagnotte. */
+const reductions = (o) => arrondi(num(o.discount && o.discount.amount) + num(o.referral && o.referral.amount) + num(o.wallet && o.wallet.used));
+
 function margeCommande(o) {
   const couts = (o.items || []).reduce((a, i) => a + num(i.cost) * int(i.qty), 0);
   /* Les frais de service reviennent à la boutique : ils s'ajoutent à la marge. */
-  return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - num(o.discount && o.discount.amount) + num(o.serviceFee) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
+  return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - reductions(o) + num(o.serviceFee) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
 }
 
 /* ---------- Comptes clients (facultatifs) : connexion par code (WhatsApp ou SMS), panier et favoris sur tous les appareils ---------- */
@@ -784,8 +844,264 @@ function apercuPartage(opts) {
   return { lignes, disponibles, n: disponibles.reduce((a, l) => a + l.qty, 0), sousTotal, frais, total: arrondi(sousTotal + frais) };
 }
 
+/* ---------- Équipe : rôles des comptes de l'administration (le serveur contrôle, l'administration masque le reste) ---------- */
+
+const ROLES = {
+  proprietaire: { label: 'Propriétaire', texte: 'Tout : réglages, équipe, réductions, remboursements et chiffres.' },
+  vendeur: { label: 'Vendeur', texte: 'Commandes, produits, clients, messages et avis. Ni réglages, ni équipe, ni réductions, ni remboursements.' },
+  livreur: { label: 'Livreur', texte: 'Seulement les commandes à livrer : adresse, téléphone, « En route » et « Livrée ».' }
+};
+/* Rôle d'un compte : les comptes créés avant les rôles (rôle vide) sont ceux du propriétaire. */
+const roleNettoye = (r) => (ROLES[r] ? r : 'proprietaire');
+const DROITS = {
+  proprietaire: ['*'],
+  vendeur: ['tableau', 'commandes', 'produits', 'catalogue', 'clients', 'messages', 'avis', 'audience'],
+  livreur: ['livraisons']
+};
+function peut(role, droit) {
+  const l = DROITS[roleNettoye(role)];
+  return l.indexOf('*') >= 0 || l.indexOf(droit) >= 0;
+}
+/* Étapes de commande permises : le livreur ne fait que « En route » et « Livrée » ; les remboursements restent au propriétaire. */
+function etapePermise(role, action) {
+  const r = roleNettoye(role);
+  if (r === 'proprietaire') return true;
+  if (r === 'livreur') return action === 'shipped' || action === 'delivered';
+  return action !== 'refund' && action !== 'doublon';
+}
+/* Commandes montrées au livreur : payées, ouvertes, à livrer (pas les retraits en boutique). */
+const pourLivreur = (o) => !!o && o.status === 'open' && estPayee(o) && !estRetraitCmd(o);
+
+/* ---------- Notifications du client : centre de notifications de la boutique et notifications du téléphone (gratuites) ---------- */
+
+/*
+ * Ce que le client apprend quand sa commande change : [{ type, details }]. avant : document enregistré (vide pour une
+ * nouvelle commande). Une commande n'est annoncée qu'une fois payée ; celle dont le paiement n'est jamais arrivé l'est
+ * à son annulation (« expiree »).
+ */
+function evenementsCommande(avant, apres) {
+  const a = avant || {}, b = apres || {};
+  if (!b.number) return [];
+  const details = { numero: b.number, zone: (b.shipping && b.shipping.zoneName) || '', moyen: (b.payment && b.payment.label) || '' };
+  // Livrée : la cagnotte du client vient de recevoir le gain de la commande (lib/fidelite.js).
+  if (b.fulfillment === 'delivered' && b.loyalty && b.loyalty.phone && num(b.loyalty.amount) > 0) details.gain = arrondi(b.loyalty.amount);
+  const ev = (type) => ({ type, details });
+  const l = [];
+  const ouverte = b.status !== 'cancelled';
+  if (ouverte && estPayee(b) && !estPayee(a) && (!a.payment || a.payment.status !== 'refunded')) l.push(ev('payee'));
+  if (ouverte && estPayee(b) && a.fulfillment !== b.fulfillment) {
+    if (b.fulfillment === 'preparing') l.push(ev('preparation'));
+    if (b.fulfillment === 'shipped') l.push(ev(estRetraitCmd(b) ? 'prete' : 'expediee'));
+    if (b.fulfillment === 'delivered') l.push(ev(estRetraitCmd(b) ? 'retiree' : 'livree'));
+  }
+  if (a.status && a.status !== 'cancelled' && b.status === 'cancelled') l.push(ev(nonAboutie(b) ? 'expiree' : 'annulee'));
+  if (a.payment && a.payment.status !== 'refunded' && b.payment && b.payment.status === 'refunded') l.push(ev('remboursee'));
+  return l;
+}
+
+/* Textes des notifications : [titre, texte], {clé} remplacée par le détail de la notification. */
+const TEXTES_NOTIFICATIONS = {
+  fr: {
+    payee: ['Paiement reçu', 'Commande #{numero} confirmée. Nous préparons vos articles.'],
+    preparation: ['Commande en préparation', 'Commande #{numero} : vos articles sont en cours de préparation.'],
+    expediee: ['Commande en route', 'Commande #{numero} : le livreur est en route ({zone}).'],
+    prete: ['Commande prête', 'Commande #{numero} : vos articles vous attendent en boutique.'],
+    livree: ['Commande livrée', (d) => `Commande #${d.numero} remise. Merci pour votre confiance !${num(d.gain) > 0 ? ` ${dollars(d.gain)} ajoutés à votre cagnotte.` : ''}`],
+    retiree: ['Commande retirée', (d) => `Commande #${d.numero} remise en boutique. Merci pour votre confiance !${num(d.gain) > 0 ? ` ${dollars(d.gain)} ajoutés à votre cagnotte.` : ''}`],
+    annulee: ['Commande annulée', 'Commande #{numero} annulée par la boutique.'],
+    expiree: ['Paiement non reçu', 'Commande #{numero} annulée : le paiement n’est pas arrivé à temps.'],
+    remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).'],
+    stock: ['De retour en stock', '« {titre} » ({option}) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !'],
+    promo: ['{titre}', '{texte}'],
+    message: ['Réponse de la boutique', '{texte}'],
+    avis: ['Votre avis compte', (d) => (int(d.autres)
+      ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous plaisent ? Donnez votre avis en un geste : il aide les autres clients.`
+      : `« ${d.titre} » vous plaît ? Donnez votre avis en un geste : il aide les autres clients.`)],
+    avis_reponse: ['La boutique vous a répondu', 'Votre avis sur « {titre} » : {texte}'],
+    parrainage: ['Merci pour votre parrainage !', (d) => `${d.filleul || 'Votre filleul'} a reçu sa première commande : ${dollars(d.montant)} ajoutés à votre cagnotte.`],
+    cagnotte: ['Cadeau de la boutique', (d) => `${dollars(d.montant)} ajoutés à votre cagnotte${d.motif ? ` (${d.motif})` : ''}. Merci de votre fidélité !`],
+    panier: ['Votre panier vous attend', (d) => (int(d.autres)
+      ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.`
+      : `« ${d.titre} » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.`)]
+  }
+};
+/* Une notification ({ type, details }) en { titre, texte } dans la langue demandée (le français à défaut) ; null si type inconnu. */
+function texteNotification(n, langue) {
+  const t = ((TEXTES_NOTIFICATIONS[langue] || {})[n && n.type]) || (TEXTES_NOTIFICATIONS.fr[n && n.type]);
+  if (!t) return null;
+  const d = (n && n.details) || {};
+  const remplir = (x) => (typeof x === 'function' ? x(d) : x.replace(/\{(\w+)\}/g, (_, k) => (d[k] === undefined || d[k] === null ? '' : String(d[k]))).replace(/ \(\)/g, ''));
+  return { titre: remplir(t[0]), texte: remplir(t[1]) };
+}
+
+/* ---------- Relance des paniers laissés (clients avec compte) ---------- */
+
+const RELANCE_PANIER_JOURS = 7;      // une relance par semaine au plus ; un panier laissé depuis plus longtemps n'est plus relancé
+/*
+ * Le moment est-il venu de rappeler son panier à ce client ? { titre, autres, depuis } (premier article encore disponible,
+ * nombre d'autres, date du dernier ajout au panier), sinon null.
+ * doc : compte (docCompte) ; relance : date de la dernière relance ; commandeDepuis(t) : le client a commandé depuis t ;
+ * produit(id) : fiche du catalogue. Seuls les articles encore en vente et disponibles comptent.
+ */
+function relancePanier({ doc, cfg, relance, commandeDepuis, produit, maintenant }) {
+  const c = cfg && cfg.cartReminder;
+  if (!c || !c.enabled) return null;
+  const d = docCompte(doc); const now = maintenant || Date.now();
+  if (!d.panier.length) return null;
+  const depuis = Math.max.apply(null, d.panier.map((l) => int(d.dates['panier:' + l.productId])));
+  if (!depuis || now - depuis < int(c.hours) * 3600e3 || now - depuis > RELANCE_PANIER_JOURS * JOUR) return null;
+  if (int(relance) >= depuis || now - int(relance) < RELANCE_PANIER_JOURS * JOUR) return null;
+  if (commandeDepuis && commandeDepuis(depuis)) return null;
+  const dispo = d.panier.map((l) => ({ l, p: produit(l.productId) }))
+    .filter((x) => x.p && estEnVente(x.p) && (estImport(x.p) || stockDe(x.p, x.l.color, x.l.size) > 0));
+  if (!dispo.length) return null;
+  return { titre: dispo[0].p.title || 'Article', autres: dispo.length - 1, depuis };
+}
+
+/* ---------- « Prévenez-moi » au retour en stock, et annonces de la boutique ---------- */
+
+const MAX_ALERTES = 50;              // articles suivis au plus par client
+const ANNONCES_PAR_JOUR = 3;         // au-delà, les clients finissent par couper les notifications
+/* « Rouge|M » → « Rouge / M » (option d'un article, '' pour l'article entier). */
+const libelleVariante = (cle) => String(cle || '').split('|').filter(Boolean).join(' / ');
+/* Option suivie : '' (l'article entier, quelle que soit l'option) ou une de ses variantes ; null si elle n'existe pas. */
+function varianteAlerte(p, cle) {
+  const k = String(cle == null ? '' : cle);
+  if (!k || k === '|') return '';
+  return aDesOptions(p) && clesVariantes(p).indexOf(k) >= 0 ? k : null;
+}
+/* L'article (ou cette option) peut de nouveau être commandé : en vente, et en stock ou vendu sur commande. */
+function alerteDisponible(p, variante) {
+  if (!p || !estEnVente(p)) return false;
+  if (estImport(p)) return true;
+  return (variante && aDesOptions(p) ? int((p.variants || {})[variante]) : stockTotal(p)) > 0;
+}
+/* Lien d'une annonce : une page de la boutique (accueil, nouveautés, en stock, import, rayon, article), jamais une adresse extérieure. */
+const LIEN_ANNONCE = /^\/(?:nouveautes|en-stock|import-chine|categories|(?:p|c)\/[A-Za-z0-9_-]{1,40}(?:\/[a-z0-9-]{0,60})?)?$/;
+/* Annonce saisie par la boutique : { titre, texte, url }, ou ErreurCommande. */
+function annonceNettoyee(b) {
+  const x = estObjet(b) ? b : {};
+  const titre = nettoyer(x.titre, 60).replace(/\s+/g, ' ');
+  const texte = nettoyer(x.texte, 180).replace(/\s+/g, ' ');
+  const url = String(x.url == null ? '/' : x.url).trim() || '/';
+  if (titre.length < 3) throw new ErreurCommande('Donnez un titre à l’annonce (3 caractères au moins).', 'titre');
+  if (texte.length < 5) throw new ErreurCommande('Écrivez le message de l’annonce.', 'texte');
+  if (!LIEN_ANNONCE.test(url)) throw new ErreurCommande('Lien invalide : choisissez une page de la boutique.', 'url');
+  return { titre, texte, url };
+}
+
+/* ---------- Discussion avec la boutique (service client dans l'application, gratuit) ---------- */
+
+const MAX_MESSAGE = 1000;            // caractères par message
+const MESSAGES_PAR_JOUR = 60;        // messages d'un client en 24 heures (au-delà : abus)
+/* Message saisi : { texte, produit, commande } (article ou commande dont il parle, facultatifs), ou ErreurCommande. */
+function messageNettoye(b) {
+  const x = estObjet(b) ? b : {};
+  const texte = nettoyer(x.texte, MAX_MESSAGE + 200).replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_MESSAGE);
+  if (!texte) throw new ErreurCommande('Écrivez votre message.', 'texte');
+  return { texte, produit: valider.identifiant(x.produit), commande: valider.identifiant(x.commande) };
+}
+/* Début d'un message sur une ligne (liste des discussions, notification). */
+function apercuMessage(texte, max) {
+  const n = max || 140; const t = String(texte == null ? '' : texte).replace(/\s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
+}
+
+/* ---------- Avis et notes des clients (achats livrés seulement) ---------- */
+
+const MAX_AVIS = 600;                // caractères d'un avis, ou de la réponse de la boutique
+const AVIS_PAR_PAGE = 10;
+const RAPPEL_AVIS_JOURS = [2, 14];   // rappel gratuit au client entre 2 et 14 jours après la livraison
+/* Raisons de masquer un avis (montrées au client qui l'a écrit) : jamais parce qu'il est négatif. */
+const MOTIFS_AVIS = {
+  injurieux: 'Propos injurieux ou déplacés',
+  personnel: 'Données personnelles (téléphone, adresse…)',
+  hors_sujet: 'Sans rapport avec l’article',
+  faux: 'Avis douteux (pas l’avis d’un client)',
+  autre: 'Ne respecte pas les règles des avis'
+};
+const texteLong = (s) => nettoyer(s, MAX_AVIS + 200).replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_AVIS);
+/* Avis saisi : { note (1 à 5 étoiles), texte (facultatif) }, ou ErreurCommande. */
+function avisNettoye(b) {
+  const x = estObjet(b) ? b : {};
+  const note = Number(x.note);
+  if (!(note >= 1 && note <= 5 && Math.round(note) === note)) throw new ErreurCommande('Choisissez une note, de 1 à 5 étoiles.', 'note');
+  return { note, texte: texteLong(x.texte) };
+}
+/* Réponse publique de la boutique à un avis ('' : réponse retirée). */
+const reponseAvisNettoyee = (s) => texteLong(s);
+/* Nom montré sous un avis : « Aline F. » (prénom et initiale du nom), jamais le nom complet ni le téléphone. */
+function nomPublic(nom) {
+  const mots = nettoyer(nom, 80).replace(/\s+/g, ' ').split(' ').filter((m) => /[A-Za-zÀ-ÖØ-öø-ÿ]/.test(m));
+  if (!mots.length) return 'Client';
+  const premier = mots[0] === mots[0].toUpperCase() ? mots[0].charAt(0) + mots[0].slice(1).toLowerCase() : mots[0].charAt(0).toUpperCase() + mots[0].slice(1);
+  return mots.length > 1 ? `${premier} ${mots[mots.length - 1].charAt(0).toUpperCase()}.` : premier;
+}
+/* Moyenne et nombre d'avis depuis la répartition { 5: n, 4: n, … } : { note (à 0,1 près), nombre, repartition }. */
+function resumeAvis(compte) {
+  const rep = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }; let somme = 0, n = 0;
+  [1, 2, 3, 4, 5].forEach((v) => { const k = Math.max(0, int(compte && compte[v])); rep[v] = k; somme += v * k; n += k; });
+  return { note: n ? Math.round((somme / n) * 10) / 10 : 0, nombre: n, repartition: rep };
+}
+/* État d'un avis enregistré : publié tout de suite, sauf quand la boutique vérifie les avis, ou qu'un avis masqué est réécrit. */
+const etatAvis = (cfg, avant) => ((cfg.reviews && cfg.reviews.moderation) || (avant && avant.etat === 'masque') ? 'attente' : 'publie');
+/* Option achetée, montrée sous un avis : « Bordeaux, taille M », « Taille M » ou « Bordeaux ». */
+function optionAchetee(couleur, taille) {
+  const c = nettoyer(couleur, 40); const t = nettoyer(taille, 30);
+  return [c, t ? (c ? 'taille ' : 'Taille ') + t : ''].filter(Boolean).join(', ');
+}
+/* Articles d'une commande livrée que le client peut noter : un par article, avec l'option achetée. */
+function articlesANoter(o) {
+  if (!o || o.fulfillment !== 'delivered') return [];
+  const vus = {}; const l = [];
+  (o.items || []).forEach((i) => {
+    if (!i || !valider.identifiant(i.productId) || vus[i.productId]) return;
+    vus[i.productId] = true;
+    l.push({ produit: i.productId, titre: String(i.title || 'Article').slice(0, 120), variante: optionAchetee(i.color, i.size) });
+  });
+  return l;
+}
+/* Rappel « Votre avis compte » d'une commande livrée : { titre, autres } (articles pas encore notés), sinon null. */
+function rappelAvis({ cfg, o, notes, maintenant }) {
+  const r = cfg && cfg.reviews;
+  if (!r || !r.enabled || !r.reminder || !o || o.fulfillment !== 'delivered') return null;
+  const age = (maintenant || Date.now()) - int(o.deliveredAt);
+  if (!int(o.deliveredAt) || age < RAPPEL_AVIS_JOURS[0] * JOUR || age > RAPPEL_AVIS_JOURS[1] * JOUR) return null;
+  const reste = articlesANoter(o).filter((a) => !(notes && notes(a.produit)));
+  return reste.length ? { titre: reste[0].titre, autres: reste.length - 1 } : null;
+}
+
+/* ---------- Fidélité : cagnotte et parrainage (serveur : lib/fidelite.js) ---------- */
+
+const PART_CAGNOTTE = 50;            // la cagnotte paie au plus la moitié des articles d'une commande
+const PARRAIN_JOURS = 30;            // un lien de parrainage ouvert reste valable 30 jours sur le téléphone
+const MOUVEMENTS_CAGNOTTE = 50;      // lignes de l'historique montrées au client
+
+/* Gain d'une commande pour la cagnotte du client : loyalty.pct % des articles payés (0 si la cagnotte est fermée). */
+const gainCommande = (cfg, articlesPayes) => (cfg && cfg.loyalty && cfg.loyalty.enabled ? arrondi(Math.max(0, num(articlesPayes)) * num(cfg.loyalty.pct) / 100) : 0);
+/* Code de parrainage d'un client : 6 caractères faciles à dicter (sans 0/O ni 1/I/L), '' si invalide. */
+function codeParrainValide(s) {
+  const v = String(s == null ? '' : s).trim().toUpperCase().replace(/[\s-]/g, '');
+  return /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{6}$/.test(v) ? v : '';
+}
+/* Pourquoi le cadeau de bienvenue ne s'applique pas : raison donnée par le serveur, sinon tirée du devis ('' : il s'applique). */
+const RAISONS_PARRAINAGE = {
+  compte: 'Connectez-vous à votre compte pour recevoir votre cadeau de bienvenue.',
+  'deja-client': 'Le cadeau de bienvenue est réservé à la première commande d’un nouveau client.',
+  'soi-meme': 'Votre lien de parrainage est fait pour vos proches : il ne s’applique pas à vos commandes.',
+  code: 'Ce lien de parrainage n’est plus valable.'
+};
+function raisonParrainage(raison, dv, min) {
+  if (raison) return RAISONS_PARRAINAGE[raison] || RAISONS_PARRAINAGE.code;
+  if (dv && dv.bienvenue) return '';
+  if (dv && dv.remise) return 'Le cadeau de bienvenue ne se cumule pas avec un code promo.';
+  if (dv && num(min) > 0 && dv.sousTotal < num(min)) return `Le cadeau de bienvenue s’applique dès ${dollars(min)} d’achat.`;
+  return '';
+}
+
 module.exports = {
-  OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
+  OPERATEURS, estCarte, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
+  ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
   config, zoneDe, estRetrait, moyensDePaiement, fraisService,
   cleVariante, couleursDe, taillesDe, aDesOptions, estImport, estEnVente, clesVariantes, stockDe, stockTotal, prixBarre, pourcentRemise, imagePrincipale, ajusterStock,
@@ -796,5 +1112,11 @@ module.exports = {
   relancePossible, paiementEnvoye, paiementConfirme, paiementEchoue, paiementExpire, doublonARembourser, TEXTE_DOUBLON,
   etapeCommande, reservationsAnciennes, incoherences, margeCommande,
   MAX_FAVORIS, CODE_CHIFFRES, codeConnexion, telephoneInternational, panierCompte, favorisCompte, profilCompte, docCompte, daterCompte, fusionCompte,
-  MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage
+  MAX_LIGNES_PARTAGE, lienPanier, panierDepuisLien, apercuPartage,
+  evenementsCommande, TEXTES_NOTIFICATIONS, texteNotification,
+  MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee,
+  RELANCE_PANIER_JOURS, relancePanier,
+  MAX_MESSAGE, MESSAGES_PAR_JOUR, messageNettoye, apercuMessage,
+  MAX_AVIS, AVIS_PAR_PAGE, RAPPEL_AVIS_JOURS, MOTIFS_AVIS, avisNettoye, reponseAvisNettoyee, nomPublic, resumeAvis, etatAvis, optionAchetee, articlesANoter, rappelAvis,
+  PART_CAGNOTTE, PARRAIN_JOURS, MOUVEMENTS_CAGNOTTE, gainCommande, codeParrainValide, RAISONS_PARRAINAGE, raisonParrainage, reductions
 };

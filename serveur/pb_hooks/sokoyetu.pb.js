@@ -73,10 +73,15 @@ routerAdd('POST', '/api/sokoyetu/devis', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
   const b = S.corps(e);
   const P = S.lecteurProduits(e.app);
+  const cfg = S.configuration(e.app);
   const code = R.valider.codePromo(b.discountCode);
-  const d = R.devis({ cfg: S.configuration(e.app), produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null, maintenant: Date.now() });
+  // Cagnotte du client connecté ({ cagnotte: true } pour l'utiliser) et cadeau de bienvenue du parrainage ({ parrain: code }).
+  const fi = require(`${__hooks}/lib/fidelite.js`).pourCommande(e.app, require(`${__hooks}/lib/comptes.js`).compteDe(e), b, cfg);
+  const d = R.devis({ cfg, produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null,
+    parrainage: fi.parrainage, cagnotte: b.cagnotte === true ? fi.cagnotte : 0, maintenant: Date.now() });
   d.lignes.forEach((l) => { delete l.cost; });
-  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' });
+  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, bienvenue: d.bienvenue, cagnotte: d.cagnotte, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, gain: d.gain, poids: d.poids, zoneId: d.zone ? d.zone.id : '',
+    fidelite: { solde: fi.cagnotte, raison: fi.raison } });
 }, LIMITE.commande);
 
 /*
@@ -102,11 +107,17 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     try { deja = tx.findFirstRecordByData('orders', 'token', jeton); } catch (err) { deja = null; }
     if (deja) return;
     const P = S.lecteurProduits(tx);
+    const cfg = S.configuration(tx);
     const code = R.valider.codePromo(b.discountCode);
+    // Client connecté à son compte : la commande s'y rattache (sinon, commande sans compte).
+    const compte = require(`${__hooks}/lib/comptes.js`).compteDe(e);
+    // Solde de la cagnotte relu ici, dans la transaction : deux commandes simultanées ne la dépensent jamais deux fois.
+    const fi = require(`${__hooks}/lib/fidelite.js`).pourCommande(tx, compte, b, cfg);
     let prep;
     try {
       prep = R.preparerCommande({
-        cfg: S.configuration(tx), produit: (x) => P.doc(x), remise: code ? S.remiseParCode(tx, code) : null,
+        cfg, produit: (x) => P.doc(x), remise: code ? S.remiseParCode(tx, code) : null,
+        parrainage: fi.parrainage, cagnotte: fi.cagnotte, titulaire: fi.titulaire,
         saisie: b, maintenant: Date.now(), numero: S.numeroUnique(tx)
       });
     } catch (err) {
@@ -116,9 +127,9 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     S.appliquerStock(tx, prep.reserve, -1);
     const rec = new Record(tx.findCollectionByNameOrId('orders'));
     rec.set('token', jeton);
-    // Client connecté à son compte : la commande s'y rattache (sinon, commande sans compte).
-    const compte = require(`${__hooks}/lib/comptes.js`).compteDe(e);
     if (compte) rec.set('client', compte.id);
+    // Appareil qui commande (empreinte de son jeton) : il reçoit les notifications de la commande, même sans compte.
+    rec.set('appareil', require(`${__hooks}/lib/notifications.js`).empreinte(b.appareil));
     S.enregistrerCommande(tx, rec, prep.commande);
     id = rec.id;
   });
@@ -129,7 +140,7 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
   }
   if (deja) return e.json(200, C.reponseClient(deja.id, C.suivre(e.app, deja)));
   if (erreur) return e.json(400, erreur);
-  const doc = C.demander(e.app, e.app.findRecordById('orders', id), { callbackUrl: C.adresseNotification(e) });
+  const doc = C.demander(e.app, e.app.findRecordById('orders', id), Object.assign({ callbackUrl: C.adresseNotification(e) }, C.adressesCarte(e, id)));
   return e.json(200, C.reponseClient(id, doc));
 }, LIMITE.commande);
 
@@ -140,7 +151,7 @@ routerAdd('GET', '/api/sokoyetu/paiement/{id}', (e) => {
   return e.json(200, C.reponseClient(rec.id, C.suivre(e.app, rec)));
 });
 
-// Nouvelle demande de paiement (refusée, rien reçu sur le téléphone, autre opérateur ou autre numéro), même commande.
+// Nouvelle demande de paiement (refusée, rien reçu sur le téléphone, autre opérateur ou autre numéro, carte), même commande.
 // Une seule nouvelle demande à la fois par commande (double appui, deux onglets) : sinon deux demandes valides en même temps.
 routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
@@ -152,15 +163,36 @@ routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
     const d = C.suivre(e.app, rec);
     const raison = R.relancePossible(d);
     if (raison) return e.json(400, { message: raison });
-    if (d.payment.status === 'pending' && Date.now() - Number(d.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
+    // Carte en cours : le client revient de la page sécurisée (annulé, refusé) et peut repartir tout de suite.
+    if (d.payment.status === 'pending' && !R.estCarte(d.payment.method) && Date.now() - Number(d.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
     const b = S.corps(e);
     const moyen = R.moyensDePaiement(S.configuration(e.app)).find((m) => m.k === (b.method || d.payment.method));
     if (!moyen) return e.json(400, { message: 'Ce mode de paiement n’est pas disponible.', champ: 'method' });
-    const tel = R.valider.mobileMoney(b.phone || d.payment.phone);
-    if (!tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
-    const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel });
+    const tel = moyen.carte ? '' : R.valider.mobileMoney(b.phone || d.payment.phone);
+    if (!moyen.carte && !tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
+    const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), Object.assign({ callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel }, C.adressesCarte(e, rec.id)));
     return e.json(200, C.reponseClient(rec.id, doc));
   } finally { st.remove(cle); }
+}, LIMITE.petite);
+
+// Mode test : la page de paiement par carte de la boutique remplace celle du fournisseur ; { issue: ok | refus | annule }.
+// Fermée dès qu'un vrai fournisseur encaisse.
+routerAdd('POST', '/api/sokoyetu/paiement/{id}/carte-test', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
+  const C = require(`${__hooks}/lib/commandes.js`); const P = require(`${__hooks}/lib/paiement.js`);
+  const rec = C.commandeDuClient(e);
+  const d = S.lire(rec); const issue = String(S.corps(e).issue || '');
+  if (P.fournisseur() !== 'simulation' || !d.payment || d.payment.provider !== 'simulation' || !R.estCarte(d.payment.method)) return e.json(404, { message: 'Page de test indisponible : le paiement par carte passe par la page sécurisée du fournisseur.' });
+  if (['ok', 'refus', 'annule'].indexOf(issue) < 0) return e.json(400, { message: 'Issue inconnue.' });
+  if (d.status === 'open' && d.payment.status === 'pending') {
+    e.app.runInTransaction((tx) => {
+      const r = tx.findRecordById('orders', rec.id); const x = S.lire(r);
+      if (x.payment.status !== 'pending' || x.payment.providerId !== d.payment.providerId) return;
+      x.payment.simulation = { id: x.payment.providerId, issue };
+      S.enregistrerCommande(tx, r, x);
+    });
+  }
+  return e.json(200, C.reponseClient(rec.id, C.suivre(e.app, e.app.findRecordById('orders', rec.id), { intervalle: 1 })));
 }, LIMITE.petite);
 
 // Le fournisseur annonce le résultat d'un paiement. Toujours revérifié auprès de lui ; toujours répondu 200.
@@ -225,12 +257,118 @@ routerAdd('POST', '/api/sokoyetu/compte', (e) => {
   return e.json(200, { compte: C.enregistrer(e.app, rec, S.corps(e), false) });
 }, LIMITE.compte);
 
+// Toutes les heures : les clients avec compte qui ont laissé leur panier reçoivent un rappel gratuit (voir comptes.relancerPaniers).
+cronAdd('sokoyetu-relances', '23 * * * *', () => {
+  try { require(`${__hooks}/lib/comptes.js`).relancerPaniers($app); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Relance des paniers impossible', { module: 'comptes', erreur: String(err) }); }
+  // « Votre avis compte » : quelques jours après la livraison (voir lib/avis.js).
+  try { require(`${__hooks}/lib/avis.js`).rappeler($app); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Rappel des avis impossible', { module: 'avis', erreur: String(err) }); }
+});
+// Les mêmes rappels tout de suite (tableau technique, essais) : { relances, avis } clients prévenus.
+routerAdd('POST', '/api/sokoyetu/relances', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'reglages');
+  return e.json(200, { relances: require(`${__hooks}/lib/comptes.js`).relancerPaniers(e.app), avis: require(`${__hooks}/lib/avis.js`).rappeler(e.app) });
+});
+
 // Le client supprime son compte (ses commandes restent, détachées du compte).
 routerAdd('POST', '/api/sokoyetu/compte/supprimer', (e) => {
   const C = require(`${__hooks}/lib/comptes.js`);
   C.supprimer(e.app, C.exigerCompte(e));
   return e.json(200, { ok: true });
 }, LIMITE.petite);
+
+/* ---------- Boutique : notifications gratuites du client (voir lib/notifications.js et lib/push.js) ---------- */
+
+// Centre de notifications : celles du compte connecté et de cet appareil ({ appareil, langue }), les plus récentes d'abord,
+// et les articles dont il attend le retour en stock.
+routerAdd('POST', '/api/sokoyetu/notifications', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e); const dest = N.destinataire(e, b);
+  return e.json(200, Object.assign(N.liste(e.app, dest, b.langue), { alertes: require(`${__hooks}/lib/alertes.js`).liste(e.app, dest) }));
+}, LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/notifications/lues', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, N.marquerLues(e.app, N.destinataire(e, b), b.ids));
+}, LIMITE.petite);
+
+// Notifications du téléphone : clé publique du serveur, abonnement du navigateur, désabonnement.
+routerAdd('GET', '/api/sokoyetu/push/cle', (e) => e.json(200, { cle: require(`${__hooks}/lib/push.js`).clePublique(e.app) }));
+routerAdd('POST', '/api/sokoyetu/push/abonner', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, N.abonner(e.app, N.destinataire(e, b), b));
+}, LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/push/desabonner', (e) => e.json(200, require(`${__hooks}/lib/notifications.js`).desabonner(e.app, require(`${__hooks}/lib/serveur.js`).corps(e))), LIMITE.petite);
+// Appelées par le service worker du téléphone : ce qu'il doit afficher, et son abonnement renouvelé par le navigateur.
+routerAdd('POST', '/api/sokoyetu/push/attente', (e) => e.json(200, require(`${__hooks}/lib/notifications.js`).attente(e.app, require(`${__hooks}/lib/serveur.js`).corps(e))), LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/push/renouveler', (e) => e.json(200, require(`${__hooks}/lib/notifications.js`).renouveler(e.app, require(`${__hooks}/lib/serveur.js`).corps(e))), LIMITE.petite);
+
+// Chaque minute : chaque téléphone abonné qui a du nouveau reçoit un signal (gratuit).
+cronAdd('sokoyetu-notifications', '* * * * *', () => {
+  try { require(`${__hooks}/lib/notifications.js`).pousser($app); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Tournée des notifications impossible', { module: 'push', erreur: String(err) }); }
+});
+
+/* ---------- Boutique : « Prévenez-moi » au retour en stock (voir lib/alertes.js) ---------- */
+
+// { appareil, produit, variante } : variante '' pour l'article entier, « Rouge|M » pour une option épuisée.
+routerAdd('POST', '/api/sokoyetu/alertes', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).ajouter(e.app, N.destinataire(e, b), b));
+}, LIMITE.petite);
+routerAdd('POST', '/api/sokoyetu/alertes/retirer', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const N = require(`${__hooks}/lib/notifications.js`);
+  const b = S.corps(e);
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).retirer(e.app, N.destinataire(e, b), b));
+}, LIMITE.petite);
+
+/* ---------- Boutique : discussion avec la boutique, le service client dans l'application (voir lib/discussions.js) ---------- */
+
+// La discussion de ce client (son compte, sinon cet appareil) : { appareil, apres } ; les réponses de la boutique sont alors lues.
+routerAdd('POST', '/api/sokoyetu/discussion', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
+  const b = S.corps(e);
+  return e.json(200, D.lire(e.app, D.qui(e, b), b));
+}, LIMITE.petite);
+// Le client écrit : { appareil, texte, produit, commande, t (jeton de suivi de la commande), nom, apres }.
+routerAdd('POST', '/api/sokoyetu/discussion/envoyer', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
+  const b = S.corps(e);
+  return e.json(200, D.envoyer(e.app, D.qui(e, b), b));
+}, LIMITE.petite);
+
+/* ---------- Boutique : avis et notes des clients sur les articles (voir lib/avis.js) ---------- */
+
+// Avis publiés d'un article : ?produit=…&page=0&note=5 (une seule note) ; résumé (moyenne, nombre, répartition).
+routerAdd('GET', '/api/sokoyetu/avis', (e) => {
+  const q = e.requestInfo().query || {};
+  return e.json(200, require(`${__hooks}/lib/avis.js`).publics(e.app, q['produit'], q['page'], q['note']));
+});
+// Articles reçus que ce client peut noter : { appareil, suivis: [{ id, t }] } (commandes suivies sur ce téléphone).
+routerAdd('POST', '/api/sokoyetu/avis/a-donner', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const A = require(`${__hooks}/lib/avis.js`);
+  const b = S.corps(e);
+  return e.json(200, A.aDonner(e.app, A.qui(e, b), b));
+}, LIMITE.petite);
+// Le client donne ou modifie son avis : { appareil, commande, t, produit, note, texte }.
+routerAdd('POST', '/api/sokoyetu/avis/donner', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const A = require(`${__hooks}/lib/avis.js`);
+  const b = S.corps(e);
+  return e.json(200, A.donner(e.app, A.qui(e, b), b));
+}, LIMITE.petite);
+
+/* ---------- Boutique : cagnotte de fidélité et parrainage (voir lib/fidelite.js) ---------- */
+
+// La cagnotte du client connecté : solde, gains à venir, historique, et son code de parrainage.
+routerAdd('GET', '/api/sokoyetu/cagnotte', (e) => {
+  const C = require(`${__hooks}/lib/comptes.js`);
+  return e.json(200, require(`${__hooks}/lib/fidelite.js`).vue(e.app, C.exigerCompte(e)));
+});
+// Lien de parrainage ouvert (?code=K7M2QX) : prénom du parrain et cadeau de bienvenue du filleul.
+routerAdd('GET', '/api/sokoyetu/parrainage', (e) => e.json(200, require(`${__hooks}/lib/fidelite.js`).lien(e.app, (e.requestInfo().query || {})['code'])));
 
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
 
@@ -245,6 +383,9 @@ routerAdd('POST', '/api/sokoyetu/visite', (e) => {
 cronAdd('sokoyetu-audience', '17 3 * * *', () => {
   require(`${__hooks}/lib/audience.js`).purger($app);
   require(`${__hooks}/lib/comptes.js`).purger($app);
+  require(`${__hooks}/lib/notifications.js`).purger($app);
+  require(`${__hooks}/lib/alertes.js`).purger($app);
+  require(`${__hooks}/lib/discussions.js`).purger($app);
   require(`${__hooks}/lib/serveur.js`).purgerCompteurs($app);
 });
 
@@ -268,14 +409,17 @@ cronAdd('sokoyetu-veille', '*/5 * * * *', () => {
 /* ---------- Administration ---------- */
 
 // Étapes d'une commande : paiement confirmé, préparation, expédition, livraison, annulation (stock restitué)…
+// Le livreur ne fait que « En route » et « Livrée », sur les commandes payées à livrer ; les remboursements restent au propriétaire.
 routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
-  S.exigerGerant(e);
+  const role = S.exigerGerant(e);
   const b = S.corps(e);
+  if (!R.etapePermise(role, String(b.action || ''))) return e.json(403, { message: 'Votre rôle dans l’équipe ne permet pas cette action.' });
   let sortie = null, erreur = null;
   e.app.runInTransaction((tx) => {
     let rec;
     try { rec = tx.findRecordById('orders', e.request.pathValue('id')); } catch (err) { erreur = { status: 404, message: 'Commande introuvable.' }; return; }
+    if (role === 'livreur' && !R.pourLivreur(S.lire(rec))) { erreur = { status: 404, message: 'Commande introuvable.' }; return; }
     const P = S.lecteurProduits(tx);
     let r;
     try { r = R.etapeCommande(S.lire(rec), String(b.action || ''), { maintenant: Date.now(), note: b.note, produit: (id) => P.doc(id) }); }
@@ -283,7 +427,7 @@ routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
     if (r.stock === 'reserver') S.appliquerStock(tx, r.entrees, -1);
     if (r.stock === 'restituer') S.appliquerStock(tx, r.entrees, 1);
     S.enregistrerCommande(tx, rec, r.commande);
-    sortie = { id: rec.id, doc: r.commande };
+    sortie = { id: rec.id, doc: role === 'livreur' ? S.commandeLivreur(r.commande) : r.commande };
   });
   if (erreur) return e.json(erreur.status, { message: erreur.message });
   return e.json(200, sortie);
@@ -292,12 +436,14 @@ routerAdd('POST', '/api/sokoyetu/commandes/{id}', (e) => {
 // Droit à l'effacement : nom, téléphone, adresse et références de paiement d'un client retirés de ses commandes.
 routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'effacer');
   const tel = R.chiffres(S.corps(e).phone);
   if (tel.length < 6) return e.json(400, { message: 'Numéro de téléphone manquant.' });
-  let n = 0;
+  let n = 0; const appareils = [];
   e.app.runInTransaction((tx) => {
     tx.findRecordsByFilter('orders', 'phone = {:p}', '', 10000, 0, { p: tel }).forEach((rec) => {
+      if (rec.getString('appareil')) appareils.push(rec.getString('appareil'));
+      rec.set('appareil', '');
       const d = S.lire(rec);
       d.phone = ''; d.customer = { name: 'Client effacé', phone: '' };
       d.shipping = Object.assign({}, d.shipping || {}, { address: '', landmark: '' });
@@ -308,6 +454,13 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
       S.enregistrerCommande(tx, rec, d); n++;
     });
   });
+  // Notifications, abonnements, alertes et discussions du compte, des appareils de ces commandes et de ce téléphone : effacés aussi (avant le compte).
+  const clients = e.app.findRecordsByFilter('clients', 'phone = {:a} || phone = {:b}', '', 10, 0, { a: tel, b: '+' + tel }).map((c) => c.id);
+  require(`${__hooks}/lib/notifications.js`).effacer(e.app, clients, appareils);
+  require(`${__hooks}/lib/alertes.js`).effacer(e.app, clients, appareils);
+  require(`${__hooks}/lib/discussions.js`).effacer(e.app, clients, appareils, tel);
+  require(`${__hooks}/lib/avis.js`).effacer(e.app, clients, tel);
+  e.app.runInTransaction((tx) => require(`${__hooks}/lib/fidelite.js`).effacer(tx, tel));
   const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   return e.json(200, { effacees: n, comptes });
 }, LIMITE.petite);
@@ -315,7 +468,7 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
 // Assistant IA : rédige une fiche produit à partir d'une photo.
 routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   const IA = require(`${__hooks}/lib/ia.js`);
   try { return e.json(200, IA.fiche(S.corps(e))); }
   catch (err) {
@@ -327,7 +480,7 @@ routerAdd('POST', '/api/sokoyetu/ia/produit', (e) => {
 // Photo ajoutée à une fiche : l'assistant repère l'article, l'administration recadre et éclaire la photo.
 routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   const IA = require(`${__hooks}/lib/ia.js`);
   try { return e.json(200, IA.cadre(S.corps(e))); }
   catch (err) {
@@ -339,7 +492,7 @@ routerAdd('POST', '/api/sokoyetu/ia/cadre', (e) => {
 // Import depuis un fournisseur (1688, Alibaba…) : titre, photos et prix d'usine ; avec ia=true, l'assistant rédige la fiche en français.
 routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   const I = require(`${__hooks}/lib/import.js`); const IA = require(`${__hooks}/lib/ia.js`);
   const b = S.corps(e);
   try {
@@ -358,7 +511,7 @@ routerAdd('POST', '/api/sokoyetu/import/lien', (e) => {
 // Copie une photo (adresse publique) dans la médiathèque : import en masse, photos d'un fournisseur.
 routerAdd('POST', '/api/sokoyetu/import/photo', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'produits');
   try { return e.json(200, require(`${__hooks}/lib/import.js`).copierPhoto(e.app, S.corps(e).url)); }
   catch (err) {
     if (err && err.code) return e.json(err.status || 502, { code: err.code, message: err.code === 'not_image' ? 'Ce lien ne mène pas à une photo (JPEG, PNG ou WebP).' : err.code === 'bad_url' ? 'Adresse de photo invalide.' : err.code === 'too_big' ? 'Photo trop lourde : 10 Mo au plus.' : 'Photo introuvable à cette adresse.' });
@@ -369,12 +522,12 @@ routerAdd('POST', '/api/sokoyetu/import/photo', (e) => {
 // Fréquentation : en ligne maintenant, visiteurs par jour, chiffres par article (?jours=1 à 90, &graphe=7 : colonnes du graphique).
 routerAdd('GET', '/api/sokoyetu/audience', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'audience');
   return e.json(200, require(`${__hooks}/lib/audience.js`).resume(e.app, (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']));
 });
 routerAdd('GET', '/api/sokoyetu/audience/{id}', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'audience');
   const r = require(`${__hooks}/lib/audience.js`).article(e.app, e.request.pathValue('id'), (e.requestInfo().query || {})['jours'], (e.requestInfo().query || {})['graphe']);
   return r ? e.json(200, r) : e.json(404, { message: 'Article introuvable.' });
 });
@@ -387,10 +540,97 @@ routerAdd('GET', '/api/sokoyetu/etat', (e) => {
   return e.json(200, { version: require(`${__hooks}/lib/version.js`).version, ia: IA.active(), iaQuota: IA.quota(), paiement: require(`${__hooks}/lib/paiement.js`).etat(), codes: require(`${__hooks}/lib/envoi.js`).etat() });
 });
 
+/* ---------- Administration : l'équipe (propriétaire seulement, voir lib/equipe.js) ---------- */
+
+routerAdd('GET', '/api/sokoyetu/equipe', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'equipe');
+  return e.json(200, { membres: require(`${__hooks}/lib/equipe.js`).liste(e.app) });
+});
+// Nouveau membre : son mot de passe provisoire n'est montré qu'une fois, dans cette réponse.
+routerAdd('POST', '/api/sokoyetu/equipe', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'equipe');
+  return e.json(200, require(`${__hooks}/lib/equipe.js`).ajouter(e.app, S.corps(e)));
+}, LIMITE.petite);
+// Rôle ou nom changé, nouveau mot de passe provisoire (« reinitialiser »).
+routerAdd('POST', '/api/sokoyetu/equipe/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'equipe');
+  return e.json(200, require(`${__hooks}/lib/equipe.js`).modifier(e.app, e.request.pathValue('id'), S.corps(e), e.auth ? e.auth.id : ''));
+}, LIMITE.petite);
+routerAdd('DELETE', '/api/sokoyetu/equipe/{id}', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'equipe');
+  return e.json(200, require(`${__hooks}/lib/equipe.js`).retirer(e.app, e.request.pathValue('id'), e.auth ? e.auth.id : ''));
+});
+
+/* ---------- Administration : avis des clients (propriétaire et vendeurs, voir lib/avis.js) ---------- */
+// La liste se lit dans la collection « avis » (temps réel) ; ici, { action: 'publier' | 'masquer', motif } ou { reponse }.
+routerAdd('POST', '/api/sokoyetu/avis/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'avis');
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, require(`${__hooks}/lib/avis.js`).moderer(e.app, e.request.pathValue('id'), S.corps(e), auteur));
+}, LIMITE.petite);
+
+/* ---------- Administration : cagnotte d'un client (voir lib/fidelite.js) ---------- */
+// Solde, gains, cagnotte utilisée et filleuls du client de ce téléphone.
+routerAdd('GET', '/api/sokoyetu/clients/{tel}/cagnotte', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'clients');
+  return e.json(200, require(`${__hooks}/lib/fidelite.js`).pourClient(e.app, e.request.pathValue('tel')));
+});
+// Geste de la boutique (propriétaire) : { montant, motif, jeton } ajoutés à sa cagnotte ; le client en est prévenu.
+routerAdd('POST', '/api/sokoyetu/clients/{tel}/cagnotte', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'cagnotte');
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, require(`${__hooks}/lib/fidelite.js`).offrir(e.app, e.request.pathValue('tel'), S.corps(e), auteur));
+}, LIMITE.petite);
+
+/* ---------- Administration : messages des clients (propriétaire et vendeurs, voir lib/discussions.js) ---------- */
+// La liste des discussions se lit dans la collection « discussions » (temps réel) ; ici, une discussion et ses messages.
+
+// Messages (?apres=<id> : seulement les nouveaux) et commandes de ce client.
+routerAdd('GET', '/api/sokoyetu/discussions/{id}', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'messages');
+  return e.json(200, require(`${__hooks}/lib/discussions.js`).vue(e.app, e.request.pathValue('id'), (e.requestInfo().query || {})['apres']));
+});
+// Réponse de l'équipe { texte, produit, commande, apres } (le client est prévenu), ou { action: 'lue' | 'traitee' }.
+routerAdd('POST', '/api/sokoyetu/discussions/{id}', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const D = require(`${__hooks}/lib/discussions.js`);
+  S.exigerGerant(e, 'messages');
+  const b = S.corps(e); const id = e.request.pathValue('id');
+  if (b.action) return e.json(200, D.marquer(e.app, id, String(b.action)));
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, D.repondre(e.app, id, auteur, b));
+}, LIMITE.petite);
+routerAdd('DELETE', '/api/sokoyetu/discussions/{id}', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'messages');
+  return e.json(200, require(`${__hooks}/lib/discussions.js`).supprimer(e.app, e.request.pathValue('id')));
+});
+
+/* ---------- Administration : clients en attente d'un article, annonces aux clients (voir lib/alertes.js) ---------- */
+
+// Combien de clients attendent le retour de chaque article épuisé (et de chaque option).
+routerAdd('GET', '/api/sokoyetu/alertes/attente', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'produits');
+  return e.json(200, { produits: require(`${__hooks}/lib/alertes.js`).attente(e.app) });
+});
+// Promotions et nouveautés annoncées aux téléphones qui les acceptent (propriétaire) : { titre, texte, url }.
+routerAdd('GET', '/api/sokoyetu/annonces', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'annonces');
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).annonces(e.app));
+});
+routerAdd('POST', '/api/sokoyetu/annonces', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'annonces');
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, require(`${__hooks}/lib/alertes.js`).annoncer(e.app, auteur, S.corps(e)));
+}, LIMITE.petite);
+
 // Journal des erreurs (serveur et navigateurs) des derniers jours : ?jours=7&limite=100.
 routerAdd('GET', '/api/sokoyetu/journal', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  S.exigerGerant(e);
+  S.exigerGerant(e, 'journal');
   const q = e.requestInfo().query || {};
   return e.json(200, { erreurs: require(`${__hooks}/lib/journal.js`).lire(e.app, q['jours'], q['limite']) });
 });
@@ -415,6 +655,17 @@ onRecordUpdateRequest(majProduit, 'products');
 onRecordAfterCreateSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
 onRecordAfterUpdateSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
 onRecordAfterDeleteSuccess((e) => { require(`${__hooks}/lib/pages.js`).catalogueChange(); return e.next(); }, 'products', 'collections', 'banners', 'config');
+
+// Article de nouveau en stock (fiche modifiée, commande annulée qui rend son stock) : les clients qui l'attendaient sont prévenus.
+onRecordAfterUpdateSuccess((e) => {
+  try { require(`${__hooks}/lib/alertes.js`).apresProduit(e.app, e.record); }
+  catch (err) { require(`${__hooks}/lib/serveur.js`).trace('error', 'Alertes de retour en stock non traitées', { module: 'alertes', produit: e.record.id, erreur: String(err) }); }
+  return e.next();
+}, 'products');
+onRecordAfterDeleteSuccess((e) => {
+  try { require(`${__hooks}/lib/alertes.js`).retirerProduit(e.app, e.record.id); } catch (err) { }
+  return e.next();
+}, 'products');
 
 function majRemise(e) {
   const S = require(`${__hooks}/lib/serveur.js`);
@@ -443,13 +694,16 @@ onRecordUpdateRequest((e) => {
 
 onRecordEnrich((e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  if (!S.estGerant(e.requestInfo)) { e.record.set('doc', S.commandePublique(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
+  const role = S.roleDe(e.requestInfo);
+  if (!role) { e.record.set('doc', S.commandePublique(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
+  else if (role === 'livreur') { e.record.set('doc', S.commandeLivreur(S.lire(e.record))); e.record.hide('token', 'pay_ref'); }
   return e.next();
 }, 'orders');
 
 onRecordEnrich((e) => {
   const S = require(`${__hooks}/lib/serveur.js`);
-  if (!S.estGerant(e.requestInfo)) e.record.set('doc', S.produitPublic(S.lire(e.record)));
+  const role = S.roleDe(e.requestInfo);
+  if (!role || !S.R.peut(role, 'produits')) e.record.set('doc', S.produitPublic(S.lire(e.record)));
   return e.next();
 }, 'products');
 

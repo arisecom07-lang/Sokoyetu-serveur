@@ -39,12 +39,26 @@ function remiseParCode(app, code) {
   try { return lire(app.findFirstRecordByData('discounts', 'code', c)); } catch (e) { return null; }
 }
 
-function estGerant(info) {
-  try { return !!info && (info.hasSuperuserAuth() || (!!info.auth && info.auth.collection().name === 'admins')); } catch (e) { return false; }
+/*
+ * Rôle du compte de l'administration qui fait la demande (regles.ROLES), '' pour un visiteur ou un client.
+ * Le tableau technique (superutilisateur) a tous les droits ; un compte sans rôle est celui du propriétaire.
+ */
+function roleDe(info) {
+  try {
+    if (!info) return '';
+    if (info.hasSuperuserAuth()) return 'proprietaire';
+    if (!info.auth || info.auth.collection().name !== 'admins') return '';
+    return R.roleNettoye(info.auth.getString('role'));
+  } catch (e) { return ''; }
 }
+const estGerant = (info) => !!roleDe(info);
 
-function exigerGerant(e) {
-  if (!estGerant(e.requestInfo())) throw new ForbiddenError('Réservé à l’administration de la boutique.');
+/* Refuse la demande si elle ne vient pas de l'administration, ou si le rôle n'a pas ce droit (regles.DROITS). Renvoie le rôle. */
+function exigerGerant(e, droit) {
+  const role = roleDe(e.requestInfo());
+  if (!role) throw new ForbiddenError('Réservé à l’administration de la boutique.');
+  if (droit && !R.peut(role, droit)) throw new ForbiddenError('Votre rôle dans l’équipe ne permet pas cette action.');
+  return role;
 }
 
 function corps(e) {
@@ -71,11 +85,21 @@ function commandePublique(doc) {
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
   // Références internes des demandes de paiement : jamais montrées au client.
-  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; delete d.payment.simulation; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
+  // Parrainage : qui a parrainé le client et ce qu'il y gagne restent à la boutique.
+  if (d.referral) { delete d.referral.by; delete d.referral.byPhone; delete d.referral.reward; }
+  if (d.loyalty) delete d.loyalty.phone;
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
 }
+/* Vue « livreur » : celle du client, plus la note interne (consignes de livraison) ; jamais les coûts ni les marges. */
+function commandeLivreur(doc) {
+  const d = commandePublique(doc);
+  d.adminNote = nettoyerNote(doc.adminNote);
+  return d;
+}
+const nettoyerNote = (n) => String(n || '').slice(0, 1000);
 
 function produitPublic(doc) {
   const d = R.copie(doc);
@@ -94,11 +118,19 @@ function champsCommande(rec, doc) {
   rec.set('pay_status', (doc.payment && doc.payment.status) || '');
   rec.set('pay_ref', (doc.payment && doc.payment.providerId) || '');
   rec.set('expires', Number(doc.expiresAt) || 0);
+  rec.set('etape', doc.fulfillment || 'unfulfilled');
 }
 function enregistrerCommande(app, rec, doc) {
+  const avant = rec.isNew() ? {} : lire(rec);
   rec.set('doc', doc);
   champsCommande(rec, doc);
   app.save(rec);
+  // À la livraison, la cagnotte du client (et celle de son parrain) reçoit son gain, dans la même transaction.
+  try { require(`${__hooks}/lib/fidelite.js`).apresCommande(app, rec, avant, doc); }
+  catch (e) { trace('error', 'Cagnotte non créditée', { module: 'fidelite', commande: doc.number, erreur: String(e) }); }
+  // Le client est prévenu de chaque étape (centre de notifications, téléphone), dans la même transaction.
+  try { require(`${__hooks}/lib/notifications.js`).apresCommande(app, rec, avant, doc); }
+  catch (e) { trace('error', 'Notification de commande impossible', { module: 'notifications', commande: doc.number, erreur: String(e) }); }
 }
 
 /* Numéro de commande jamais déjà attribué (6 caractères tirés au sort, sans 0/O ni 1/I). */
@@ -144,4 +176,4 @@ function purgerCompteurs(app) {
   try { app.db().newQuery('DELETE FROM sokoyetu_compteurs WHERE maj < {:t}').bind({ t: Date.now() - 400 * 864e5 }).execute(); } catch (e) { }
 }
 
-module.exports = { R, lire, configuration, lecteurProduits, remiseParCode, estGerant, exigerGerant, corps, appliquerStock, commandePublique, produitPublic, versRecord, champsCommande, enregistrerCommande, numeroUnique, trace, jourLocal, compteurJour, ajouterCompteur, purgerCompteurs };
+module.exports = { R, lire, configuration, lecteurProduits, remiseParCode, roleDe, estGerant, exigerGerant, corps, appliquerStock, commandePublique, commandeLivreur, produitPublic, versRecord, champsCommande, enregistrerCommande, numeroUnique, trace, jourLocal, compteurJour, ajouterCompteur, purgerCompteurs };

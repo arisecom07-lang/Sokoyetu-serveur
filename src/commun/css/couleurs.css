@@ -94,7 +94,7 @@
 :root:not([data-theme="dark"]) body { background-image: radial-gradient(1200px 380px at 50% -120px, color-mix(in srgb, var(--or) 9%, transparent), transparent 70%); background-repeat: no-repeat; }
 
 /* ---- Historique des commandes (admin et boutique) : chaque mois prend la teinte terre cuite ---- */
-:root:not([data-theme="dark"]) .historique-mois-tete > span, :root:not([data-theme="dark"]) .historique-tete > span { color: var(--c1); }
+:root:not([data-theme="dark"]) .historique-mois-tete > span, :root:not([data-theme="dark"]) .historique-tete > span, :root:not([data-theme="dark"]) .livraisons-tete > span { color: var(--c1); }
 
 /* ---- Compte client : les trois avantages prennent chacun leur teinte ---- */
 :root:not([data-theme="dark"]) .avantages-compte li:nth-child(3n+1) { --c: var(--c1); --c-doux: var(--c1-doux); }

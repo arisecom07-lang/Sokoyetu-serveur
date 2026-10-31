@@ -9,5 +9,8 @@ Disallow: /paiement/
 Disallow: /merci/
 Disallow: /suivi/
 Disallow: /compte
+Disallow: /notifications
+Disallow: /discussion
+Disallow: /avis
 
 Sitemap: https://sokoyakwetu.com/sitemap.xml

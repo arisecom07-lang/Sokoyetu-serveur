@@ -32,18 +32,22 @@ await controler('Boutique · fenêtre de partage', BASE + '/p/ex-p03/sac-bandoul
 await controler('Boutique · infos', BASE + '/infos/conditions', '.page');
 // Paiement, reçu et suivi : deux commandes de test (paiement accepté, paiement refusé), suivies sur ce téléphone.
 const json = (corps) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
-async function commande(payeur) {
+async function commande(payeur, method = 'mpesa') {
   const items = [{ productId: 'ex-p15', qty: 1 }];
   const dv = await (await fetch(BASE + '/api/sokoyetu/devis', json({ items, zoneId: 'retrait' }))).json();
   const t = 'axe' + Date.now() + Math.random().toString(16).slice(2, 12) + 'abcdefghij';
-  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: '0991231234' }, shipping: { zoneId: 'retrait' }, items, payment: { method: 'mpesa', phone: payeur }, total: dv.total }))).json();
+  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: '0991231234' }, shipping: { zoneId: 'retrait' }, items, payment: { method, phone: payeur }, total: dv.total }))).json();
   return { id: r.id, t };
 }
 const jetonAdmin = (await (await fetch(BASE + '/api/collections/admins/auth-with-password', json({ identity: 'admin@sokoyetu.test', password: 'Sokoyetu-2026' }))).json()).token;
+// Paiement par carte, cagnotte de fidélité et parrainage ouverts le temps du contrôle (réglages remis à la fin).
+const reglages = (doc) => fetch(BASE + '/api/collections/config/records/store', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc }) });
+const config = (await (await fetch(BASE + '/api/collections/config/records/store', { headers: { Authorization: jetonAdmin } })).json()).doc;
+await reglages({ ...config, payments: { ...config.payments, carte: { enabled: true } }, loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } });
 const article = await (await fetch(BASE + '/api/collections/products/records/ex-p15', { headers: { Authorization: jetonAdmin } })).json();
 await fetch(BASE + '/api/collections/products/records/ex-p15', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc: { ...article.doc, stock: 10 } }) });
-const payee = await commande('0991231234'); const refusee = await commande('0991230000');
-await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee]);
+const payee = await commande('0991231234'); const refusee = await commande('0991230000'); const parCarte = await commande('', 'carte');
+await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee, parCarte]);
 await controler('Boutique · commande : avec ou sans compte', BASE + '/commander', '.page-choix-compte');
 await controler('Boutique · créer un compte', BASE + '/compte/connexion?pour=commande&retour=/commander', '.page-connexion');
 await controler('Boutique · code de connexion', BASE + '/compte/connexion?retour=/compte', '.page-connexion', async () => {
@@ -54,10 +58,41 @@ await controler('Boutique · commande, paiement', BASE + '/commander', '.page-co
   await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
   await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement');
 });
+await controler('Boutique · commande, paiement par carte', BASE + '/commander', '.page-commande', async () => {
+  await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement'); await p.click('.choix:has-text("Carte bancaire")'); await p.waitForSelector('.carte-paiement .note');
+});
 await controler('Boutique · paiement refusé', BASE + '/paiement/' + refusee.id, '.paiement-attente.en-echec');
+await controler('Boutique · paiement par carte à terminer', BASE + '/paiement/' + parCarte.id, '.paiement-attente:has-text("Terminez le paiement par carte")');
+await controler('Boutique · page de test de la carte', BASE + '/paiement/' + parCarte.id + '/carte-test', '.carte-test-visuel');
+await controler('Boutique · carte refusée', BASE + '/paiement/' + parCarte.id + '/carte-test', '.carte-test-visuel', async () => {
+  await p.click('button:has-text("Simuler une carte refusée")'); await p.waitForSelector('.paiement-attente.en-echec');
+});
 await controler('Boutique · reçu', BASE + '/merci/' + payee.id, '.recu');
 await controler('Boutique · suivi', BASE + '/suivi/' + payee.id, '.page-suivi');
 await controler('Boutique · retrouver une commande', BASE + '/compte/retrouver', '.page-retrouver');
+await controler('Boutique · discussion avec la boutique', BASE + '/discussion?p=ex-p08', '.page-discussion .composeur-sujet', async () => {
+  await p.fill('.composeur textarea', 'Bonjour, existe-t-elle en XL ?'); await p.click('.composeur-envoyer'); await p.waitForSelector('.bulle-moi:not(.en-envoi)');
+});
+// Avis : la commande payée est remise ; « Mes avis » propose l'article, l'avis paraît ensuite sur sa fiche.
+for (const action of ['shipped', 'delivered']) await fetch(BASE + '/api/sokoyetu/commandes/' + payee.id, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ action }) });
+await controler('Boutique · mes avis', BASE + '/avis', '.liste-a-noter .etoile-rapide');
+await controler('Boutique · donner son avis', BASE + '/avis', '.liste-a-noter .etoile-rapide', async () => { await p.click('.etoile-rapide >> nth=3'); await p.waitForSelector('.formulaire-avis'); });
+await p.fill('.formulaire-avis textarea', 'Bon son, facile à brancher.'); await p.click('.formulaire-avis button[type=submit]'); await p.waitForSelector('#donnes-titre');
+await controler('Boutique · avis sur l’article', BASE + '/p/ex-p15/enceinte-de-bureau-bluetooth', '#avis .avis');
+// Cagnotte : le client de la commande livrée se connecte (code affiché à l'écran, mode test) et retrouve son gain.
+await p.goto(BASE + '/compte/connexion?retour=/compte/cagnotte'); await p.waitForSelector('.page-connexion input[type=tel]');
+await p.fill('input[type=tel]', '0991231234'); await p.click('button[type=submit]'); await p.waitForSelector('.saisie-otp');
+await p.fill('.saisie-otp', (await p.locator('.page-connexion .note .code').innerText()).trim());
+await p.waitForSelector('.page-connexion input[autocomplete="name"], .page-cagnotte');
+if (await p.locator('.page-connexion input[autocomplete="name"]').count()) { await p.fill('.page-connexion input[autocomplete="name"]', 'Essai Accès'); await p.click('.page-connexion button[type=submit]'); }
+await p.waitForSelector('.page-connexion', { state: 'detached' });
+await controler('Boutique · ma cagnotte', BASE + '/compte/cagnotte', '.cagnotte-mouvements');
+const codeParrain = (await p.locator('.parrainage-code .code').innerText()).trim();
+await controler('Boutique · commande avec la cagnotte', BASE + '/commander', '.page-commande', async () => {
+  await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
+  await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-fidelite .case'); await p.click('.carte-fidelite .case'); await p.waitForSelector('.montants dt:text("Ma cagnotte")');
+});
+await controler('Boutique · lien de parrainage', BASE + '/?parrain=' + codeParrain, '.feuille .cadeau-bienvenue');
 await controler('Admin · connexion', ADMIN + '/', '.connexion-carte');
 await p.fill('input[type=email]', 'admin@sokoyetu.test'); await p.fill('input[autocomplete="current-password"]', 'Sokoyetu-2026'); await p.click('button[type=submit]'); await p.waitForSelector('.kpis');
 await controler('Admin · tableau de bord', ADMIN + '/#/', '.kpis');
@@ -68,7 +103,18 @@ await controler('Admin · fiche produit', ADMIN + '/#/produits/ex-p08', '.grille
 await controler('Admin · réglages paiements', ADMIN + '/#/reglages/paiements', '.operateur-tete');
 await controler('Admin · compte', ADMIN + '/#/compte', '.menu');
 await controler('Admin · clients', ADMIN + '/#/clients', '.page, .liste');
+await controler('Admin · fiche client et cagnotte', ADMIN + '/#/clients/0991231234', '.liste-simple');
+await controler('Admin · offrir à la cagnotte', ADMIN + '/#/clients/0991231234', '.liste-simple', async () => { await p.click('button:has-text("Offrir")'); await p.waitForSelector('.feuille input[inputmode="decimal"]'); });
+await p.keyboard.press('Escape'); await p.waitForSelector('.feuille', { state: 'detached' });
+await controler('Admin · réglages fidélité et parrainage', ADMIN + '/#/reglages/general', 'h2:has-text("Fidélité et parrainage")');
+await controler('Admin · messages des clients', ADMIN + '/#/messages', '.ligne-discussion', async () => { await p.click('.ligne-discussion >> nth=0'); await p.waitForSelector('.messagerie-fil .bulle'); });
 await controler('Admin · audience', ADMIN + '/#/audience', '.kpis');
+await controler('Admin · avis des clients', ADMIN + '/#/avis', '.avis-admin', async () => { await p.click('.avis-admin button:has-text("Répondre")'); await p.waitForSelector('.avis-admin textarea'); });
+await controler('Admin · masquer un avis', ADMIN + '/#/avis', '.avis-admin', async () => {
+  if (await p.locator('.avis-admin button:has-text("Annuler")').count()) await p.click('.avis-admin button:has-text("Annuler")');
+  await p.click('.avis-admin button:has-text("Masquer")'); await p.waitForSelector('.feuille [role="radiogroup"]');
+});
+await reglages(config);
 await b.close();
 console.log(total ? `\n${total} problème(s) d’accessibilité.` : '\nAucune violation d’accessibilité détectée.');
 process.exit(total ? 1 : 0);

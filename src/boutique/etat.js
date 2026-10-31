@@ -34,6 +34,8 @@ export const rayons = computed(() => catalogue.value.collections.filter((c) => c
 export const rayonsParId = computed(() => new Map(catalogue.value.collections.map((c) => [c.id, c])));
 export const bannieres = computed(() => catalogue.value.banners.filter((b) => b.active !== false).sort(parOrdre));
 export const moyensPaiement = computed(() => R.moyensDePaiement(cfg.value));
+/* La boutique accepte la carte Visa / Mastercard (en plus du Mobile Money). */
+export const carteAcceptee = computed(() => moyensPaiement.value.some((m) => m.carte));
 /* Comptes clients : proposés seulement quand le serveur peut envoyer les codes (WhatsApp d'abord, SMS en secours). */
 export const comptesOuverts = computed(() => !!(catalogue.value.config && catalogue.value.config.accounts && catalogue.value.config.accounts.open));
 export const canauxCodes = computed(() => (catalogue.value.config && catalogue.value.config.accounts && catalogue.value.config.accounts.channels) || ['sms']);
@@ -83,6 +85,9 @@ function appliquer(col, m) {
   // Le paiement et les comptes ouverts viennent du serveur (catalogue), pas du document des réglages : ils sont gardés.
   if (cle === 'config') { if (m.record.id === 'store') catalogue.value = { ...c, config: m.action === 'delete' ? null : { ...ligne, payment: c.config && c.config.payment, accounts: c.config && c.config.accounts } }; }
   else {
+    // La note des avis vient du catalogue (le serveur la calcule), pas de l'article : elle est gardée.
+    const ancien = col === 'products' ? c.products.find((x) => x.id === ligne.id) : null;
+    if (ancien && ancien.avis && !ligne.avis) ligne.avis = ancien.avis;
     const autres = c[cle].filter((x) => x.id !== ligne.id);
     const garder = m.action !== 'delete' && !(col === 'products' && m.record.active === false);
     catalogue.value = { ...c, [cle]: garder ? [...autres, ligne] : autres };

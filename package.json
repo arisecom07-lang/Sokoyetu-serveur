@@ -1,6 +1,6 @@
 {
   "name": "sokoyetu",
-  "version": "2.4.0",
+  "version": "3.0.0",
   "description": "Sokoyetu : boutique en ligne et administration (PocketBase)",
   "scripts": {
     "build": "node outils/construire.mjs",

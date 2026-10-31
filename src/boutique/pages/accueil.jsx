@@ -6,9 +6,9 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { Vide } from '../../commun/js/interface.jsx';
 import { pluriel } from '../../commun/js/outils.js';
 import { lien } from '../routeur.js';
-import { cfg, produits, rayons, catalogueDisponible } from '../etat.js';
+import { cfg, produits, rayons, catalogueDisponible, carteAcceptee } from '../etat.js';
 import { Banniere } from '../composants/banniere.jsx';
-import { EnteteBoutique, Pied, ETAPES_IMPORT, ouvrirCommentCaMarche } from '../composants/cadre.jsx';
+import { EnteteBoutique, Pied, etapesImport, ouvrirCommentCaMarche } from '../composants/cadre.jsx';
 import { CarteProduit, GrilleProduits, SqueletteGrille, trier, lienRayon, photoRayon } from '../composants/produits.jsx';
 import { CarteInstallation } from '../installation.jsx';
 import { useSeo } from './commun.jsx';
@@ -35,7 +35,7 @@ export function Accueil() {
   const [flux, setFlux] = useState('pour-vous');
   useSeo((c) => ({
     titre: '', description: `${c.name}, la boutique en ligne de Bukavu et Goma : mode, accessoires, montres, sacs, électronique. Articles en stock ou importés de Chine en ~${c.importDays} jours, paiement Mobile Money.`,
-    ld: { '@context': 'https://schema.org', '@type': 'OnlineStore', name: c.name, description: c.tagline, url: location.origin + '/', currenciesAccepted: 'USD', paymentAccepted: 'Mobile Money',
+    ld: { '@context': 'https://schema.org', '@type': 'OnlineStore', name: c.name, description: c.tagline, url: location.origin + '/', currenciesAccepted: 'USD', paymentAccepted: carteAcceptee.value ? 'Mobile Money, Visa, Mastercard' : 'Mobile Money',
       areaServed: c.zones.filter((z) => !z.pickup).map((z) => z.name), address: { '@type': 'PostalAddress', addressLocality: c.city, addressCountry: 'CD' } }
   }), [c.name, c.tagline]);
 
@@ -53,7 +53,7 @@ export function Accueil() {
 
         <section class="conteneur section confiance" aria-label="Comment ça marche">
           <ol class="etapes-accueil" aria-label="Les quatre étapes, de la commande à la livraison">
-            {ETAPES_IMPORT.map(([ic, , , t, s], i) => <li key={i}><span class="ei-icone" aria-hidden="true"><Icone n={ic} /></span><span class="ea-texte"><b>{t}</b><small>{s}</small></span></li>)}
+            {etapesImport().map(([ic, , , t, s], i) => <li key={i}><span class="ei-icone" aria-hidden="true"><Icone n={ic} /></span><span class="ea-texte"><b>{t}</b><small>{s}</small></span></li>)}
           </ol>
           <button class="lien-tout confiance-plus" onClick={ouvrirCommentCaMarche}>Comment ça marche<Icone n="droite" /></button>
         </section>

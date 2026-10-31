@@ -7,6 +7,7 @@ import { dollars, slug, date, JOUR, pluriel } from '../../commun/js/outils.js';
 import { toast, LogoOperateur } from '../../commun/js/interface.jsx';
 import { lien } from '../routeur.js';
 import { cfg, favoris, basculerFavori, produits, rayonsParId, catalogueErreur, chargerCatalogue } from '../etat.js';
+import { NoteCarte } from './avis.jsx';
 
 export const lienProduit = (p) => lien(`/p/${encodeURIComponent(p.id)}/${slug(p.title)}`);
 export const lienRayon = (c) => lien(`/c/${encodeURIComponent(c.id)}/${slug(c.name)}`);
@@ -75,6 +76,7 @@ export function CarteProduit({ p, prioritaire, rang = 0 }) {
           <h3 class="cp-titre">{p.title}</h3>
           <div class="cp-prix">{pa.des ? <small class="prix-des">dès</small> : null}<span class={'prix' + (remise ? ' prix-promo' : '')}>{dollars(pa.prix)}</span>{remise ? <span class="prix-barre">{dollars(pa.barre)}</span> : null}</div>
           {pa.flash && !fini ? <p class="cp-flash"><Icone n="horloge" />Fin dans <CompteARebours fin={pa.flash.fin} court /></p> : null}
+          <NoteCarte p={p} />
           <p class="cp-delai"><Icone n={d.icone} />{d.court}</p>
         </div>
       </a>

@@ -167,6 +167,33 @@ test('paiement automatique : demande, refus, nouvelle tentative, confirmation', 
   assert.match(R.relancePossible(r.commande), /déjà payée/);
 });
 
+test('paiement par carte : proposé une fois ouvert, sans numéro à débiter, page sécurisée, passage au Mobile Money', () => {
+  const t0 = Date.now();
+  assert.equal(R.moyensDePaiement(cfg).some((m) => m.carte), false, 'fermée par défaut');
+  const cfgCarte = R.config({ payments: { mpesa: { enabled: true }, airtel: { enabled: false }, orange: { enabled: false }, carte: { enabled: true } }, freeShippingOver: 50, payment: { provider: 'flexpay' } });
+  assert.deepEqual(R.moyensDePaiement(cfgCarte).map((m) => m.k), ['mpesa', 'carte']);
+  assert.equal(R.estCarte('carte'), true); assert.equal(R.estCarte('mpesa'), false);
+  // Aucun numéro Mobile Money exigé, même avec un numéro de contact étranger.
+  let o = R.preparerCommande({ cfg: cfgCarte, produit, saisie: saisie({ customer: { name: 'Grâce Mapendo', phone: '+250788123456' }, payment: { method: 'carte', phone: '' } }), numero: 'CARTE1', maintenant: t0 }).commande;
+  assert.equal(o.payment.method, 'carte'); assert.equal(o.payment.phone, ''); assert.equal(o.payment.label, 'Carte bancaire');
+  o = R.paiementEnvoye(o, { maintenant: t0, providerId: 'FP-1', url: 'https://cardpayment.flexpay.cd/vpos/pay/FP-1' });
+  assert.equal(o.payment.url, 'https://cardpayment.flexpay.cd/vpos/pay/FP-1');
+  assert.match(o.timeline[o.timeline.length - 1].text, /carte bancaire ouvert sur la page sécurisée/);
+  o = R.paiementEchoue(o, { maintenant: t0 + 1000, raison: 'Carte refusée ou paiement annulé.' });
+  assert.equal(o.payment.url, undefined, 'la page d’un paiement refusé ne sert plus');
+  // Le client passe au Mobile Money : son numéro est repris, la page de la carte oubliée.
+  o = R.paiementEnvoye(o, { maintenant: t0 + 2000, providerId: 'FP-2', methode: 'mpesa', label: 'M-Pesa', telephone: '0812345678', url: 'https://ignoree' });
+  assert.equal(o.payment.phone, '0812345678'); assert.equal(o.payment.url, '');
+  // Et revient à la carte : aucun numéro gardé.
+  o = R.paiementEnvoye(o, { maintenant: t0 + 3000, providerId: 'FP-3', methode: 'carte', label: 'Carte bancaire', url: 'https://cardpayment.flexpay.cd/vpos/pay/FP-3' });
+  assert.equal(o.payment.phone, ''); assert.deepEqual(o.payment.previous, ['FP-1', 'FP-2']);
+  const r = R.paiementConfirme(o, { maintenant: t0 + 4000, reference: 'VPOS-123' });
+  assert.equal(r.commande.payment.status, 'paid'); assert.equal(r.commande.payment.url, undefined);
+  // Payée deux fois par carte : remboursement sur la carte.
+  const d = R.paiementConfirme(r.commande, { maintenant: t0 + 5000, id: 'FP-2', reference: 'VPOS-124' });
+  assert.equal(d.double, true); assert.match(d.commande.issues.join(' '), /sur sa carte/);
+});
+
 test('paiement non reçu à temps : annulation automatique, stock rendu ; paiement tardif : commande rouverte', () => {
   const t0 = Date.now();
   let o = R.paiementEnvoye(R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'BBBBBB', maintenant: t0 }).commande, { maintenant: t0, providerId: 'SIM-3' });
@@ -300,4 +327,205 @@ test('panier partagé : aperçu aux prix et au stock du jour (message, aperçu d
   // Robe 2 × $20 (stock restant) + montre 2 × $15.50 = $71 ; frais de service 2 % ; livraison non comprise.
   assert.deepEqual([a.sousTotal, a.frais, a.total], [71, 1.42, 72.42]);
   assert.deepEqual(R.apercuPartage({ cfg, produit, lignes: [] }), { lignes: [], disponibles: [], n: 0, sousTotal: 0, frais: 0, total: 0 });
+});
+
+test('équipe : rôles, droits et étapes permises', () => {
+  assert.equal(R.roleNettoye(''), 'proprietaire', 'les comptes créés avant les rôles sont ceux du propriétaire');
+  assert.equal(R.roleNettoye('inconnu'), 'proprietaire');
+  assert.equal(R.roleNettoye('livreur'), 'livreur');
+  assert.equal(R.peut('', 'reglages'), true);
+  assert.equal(R.peut('vendeur', 'produits'), true);
+  assert.equal(R.peut('vendeur', 'reglages'), false);
+  assert.equal(R.peut('vendeur', 'equipe'), false);
+  assert.equal(R.peut('vendeur', 'remises'), false);
+  assert.equal(R.peut('livreur', 'livraisons'), true);
+  assert.equal(R.peut('livreur', 'commandes'), false);
+  assert.equal(R.etapePermise('proprietaire', 'refund'), true);
+  assert.equal(R.etapePermise('vendeur', 'shipped'), true);
+  assert.equal(R.etapePermise('vendeur', 'refund'), false);
+  assert.equal(R.etapePermise('livreur', 'delivered'), true);
+  assert.equal(R.etapePermise('livreur', 'cancel'), false);
+  assert.equal(R.etapePermise('livreur', 'paid'), false);
+  const { commande } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'EEEEEE' });
+  assert.equal(R.pourLivreur(commande), false, 'pas encore payée');
+  const payee = R.paiementConfirme(commande, { reference: 'X' }).commande;
+  assert.equal(R.pourLivreur(payee), true);
+  assert.equal(R.pourLivreur(R.etapeCommande(payee, 'cancel').commande), false, 'annulée');
+  assert.equal(R.pourLivreur({ ...payee, shipping: { ...payee.shipping, pickup: true } }), false, 'retrait en boutique');
+});
+
+test('notifications : chaque étape d’une commande payée prévient le client, une seule fois', () => {
+  const t0 = Date.UTC(2026, 9, 30, 9);
+  const { commande } = R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'NOTIF2', maintenant: t0 });
+  assert.deepEqual(R.evenementsCommande({}, commande), [], 'commande non payée : rien');
+  const payee = R.paiementConfirme(commande, { reference: 'X' }).commande;
+  assert.deepEqual(R.evenementsCommande(commande, payee).map((e) => e.type), ['payee']);
+  assert.deepEqual(R.evenementsCommande(payee, payee), [], 'rien de nouveau : rien');
+  const prep = R.etapeCommande(payee, 'preparing').commande;
+  const route = R.etapeCommande(prep, 'shipped').commande;
+  assert.deepEqual([R.evenementsCommande(payee, prep), R.evenementsCommande(prep, route)].map((l) => l.map((e) => e.type)), [['preparation'], ['expediee']]);
+  assert.deepEqual(R.evenementsCommande(route, R.etapeCommande(route, 'note', { note: 'x' }).commande), [], 'note interne : rien');
+  const annulee = R.etapeCommande(route, 'cancel').commande;
+  assert.deepEqual(R.evenementsCommande(route, annulee).map((e) => e.type), ['annulee']);
+  assert.deepEqual(R.evenementsCommande(annulee, R.etapeCommande(annulee, 'refund').commande).map((e) => e.type), ['remboursee']);
+  const retrait = { ...payee, shipping: { ...payee.shipping, pickup: true } };
+  assert.deepEqual(R.evenementsCommande(retrait, R.etapeCommande(retrait, 'shipped').commande).map((e) => e.type), ['prete']);
+  const expiree = R.paiementExpire(commande, { maintenant: t0 + 3600e3 }).commande;
+  assert.deepEqual(R.evenementsCommande(commande, expiree).map((e) => e.type), ['expiree']);
+  const ev = R.evenementsCommande(prep, route)[0];
+  assert.deepEqual(R.texteNotification(ev, 'fr'), { titre: 'Commande en route', texte: 'Commande #NOTIF2 : le livreur est en route (Bukavu).' });
+  assert.equal(R.texteNotification({ type: 'expediee', details: { numero: 'A' } }, 'xx').texte, 'Commande #A : le livreur est en route.', 'langue inconnue : français, détail absent retiré');
+  assert.equal(R.texteNotification({ type: 'inconnu' }, 'fr'), null);
+});
+
+test('« Prévenez-moi » et annonces : option suivie, retour en stock, textes et liens permis', () => {
+  const robe = { title: 'Robe wax', price: 20, options: { colors: [{ name: 'Rouge' }, { name: 'Bleu' }], sizes: ['M', 'L'] }, variants: { 'Rouge|M': 0, 'Rouge|L': 2, 'Bleu|M': 0, 'Bleu|L': 0 } };
+  assert.equal(R.varianteAlerte(robe, ''), '', 'article entier');
+  assert.equal(R.varianteAlerte(robe, '|'), '', 'article sans option');
+  assert.equal(R.varianteAlerte(robe, 'Rouge|M'), 'Rouge|M');
+  assert.equal(R.varianteAlerte(robe, 'Vert|M'), null, 'option inconnue');
+  assert.equal(R.alerteDisponible(robe, 'Rouge|M'), false);
+  assert.equal(R.alerteDisponible(robe, 'Rouge|L'), true);
+  assert.equal(R.alerteDisponible(robe, ''), true, 'une option en stock suffit pour l’article entier');
+  assert.equal(R.alerteDisponible({ ...robe, variants: {} }, ''), false);
+  assert.equal(R.alerteDisponible({ ...robe, status: 'draft' }, 'Rouge|L'), false, 'brouillon : pas encore');
+  assert.equal(R.alerteDisponible({ title: 'Montre', stock: 0, source: 'import' }, ''), true, 'vendu sur commande : disponible');
+  assert.equal(R.alerteDisponible({ title: 'Sac', stock: 3 }, ''), true);
+  assert.equal(R.libelleVariante('Rouge|M'), 'Rouge / M');
+  assert.equal(R.libelleVariante('|42'), '42');
+  assert.deepEqual(R.texteNotification({ type: 'stock', details: { titre: 'Robe wax', option: 'Rouge / M' } }, 'fr'),
+    { titre: 'De retour en stock', texte: '« Robe wax » (Rouge / M) est de nouveau disponible. Les quantités sont limitées : ne tardez pas !' });
+  assert.equal(R.texteNotification({ type: 'stock', details: { titre: 'Sac', option: '' } }, 'fr').texte.indexOf('« Sac » est de nouveau'), 0, 'sans option : pas de parenthèses vides');
+  assert.deepEqual(R.texteNotification({ type: 'promo', details: { titre: 'Arrivage', texte: '40 modèles dès $8.' } }, 'fr'), { titre: 'Arrivage', texte: '40 modèles dès $8.' });
+  assert.deepEqual(R.annonceNettoyee({ titre: '  Arrivage   wax ', texte: 'Nouveaux\nmodèles', url: '/c/abc123/pagnes' }), { titre: 'Arrivage wax', texte: 'Nouveaux modèles', url: '/c/abc123/pagnes' });
+  assert.equal(R.annonceNettoyee({ titre: 'Promo', texte: 'Tout à −20 %' }).url, '/');
+  for (const url of ['/', '/nouveautes', '/en-stock', '/import-chine', '/p/ex-p08/robe-wax', '/p/abc']) assert.equal(R.annonceNettoyee({ titre: 'Promo', texte: 'Tout à −20 %', url }).url, url);
+  for (const url of ['https://exemple.com', '//exemple.com', '/p/../admin', 'javascript:alert(1)', '/compte?x=1']) assert.throws(() => R.annonceNettoyee({ titre: 'Promo', texte: 'Tout à −20 %', url }), /Lien invalide/);
+  assert.throws(() => R.annonceNettoyee({ titre: 'P', texte: 'Tout à −20 %' }), /titre/);
+  assert.throws(() => R.annonceNettoyee({ titre: 'Promo', texte: '' }), /message/);
+  assert.equal(R.annonceNettoyee({ titre: 'x'.repeat(90), texte: 'y'.repeat(300) }).titre.length, 60);
+});
+
+test('relance des paniers : une fois par panier, seulement les articles encore disponibles, jamais après une commande', () => {
+  const t0 = Date.UTC(2026, 9, 30, 8);
+  const cfg = R.config({});
+  assert.deepEqual(cfg.cartReminder, { enabled: true, hours: 24 });
+  assert.deepEqual(R.config({ cartReminder: { enabled: false, hours: 500 } }).cartReminder, { enabled: false, hours: 72 });
+  const cat = { sac: { title: 'Sac cabas', stock: 2 }, robe: { title: 'Robe', stock: 0 }, montre: { title: 'Montre', source: 'import' }, brouillon: { title: 'Brouillon', stock: 3, status: 'draft' } };
+  const produit = (id) => cat[id] || null;
+  const doc = (ids, heures) => ({ panier: ids.map((productId) => ({ productId, qty: 1 })), dates: Object.fromEntries(ids.map((id) => ['panier:' + id, t0 - heures * 3600e3])) });
+  const relance = (d, extra = {}) => R.relancePanier({ doc: d, cfg, produit, maintenant: t0, relance: 0, commandeDepuis: () => false, ...extra });
+  assert.equal(relance(doc(['sac'], 5)), null, 'trop tôt');
+  assert.deepEqual(relance(doc(['sac', 'robe', 'montre', 'brouillon'], 30)), { titre: 'Sac cabas', autres: 1, depuis: t0 - 30 * 3600e3 }, 'épuisé et brouillon écartés');
+  assert.equal(relance(doc(['robe'], 30)), null, 'plus rien de disponible');
+  assert.equal(relance(doc(['sac'], 24 * 8)), null, 'panier laissé depuis plus d’une semaine');
+  assert.equal(relance(doc(['sac'], 30), { relance: t0 - 3600e3 }), null, 'déjà relancé pour ce panier');
+  assert.equal(relance(doc(['sac'], 30), { relance: t0 - 40 * 3600e3 }), null, 'une relance par semaine au plus');
+  assert.ok(relance(doc(['sac'], 30), { relance: t0 - 8 * R.JOUR }), 'la semaine passée, on peut rappeler un nouveau panier');
+  assert.equal(relance(doc(['sac'], 30), { commandeDepuis: (t) => t === t0 - 30 * 3600e3 }), null, 'a commandé depuis');
+  assert.equal(R.relancePanier({ doc: doc(['sac'], 30), cfg: R.config({ cartReminder: { enabled: false } }), produit, maintenant: t0 }), null, 'désactivée');
+  assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 0 } }, 'fr').texte, '« Sac cabas » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.');
+  assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 1 } }, 'fr').texte, '« Sac cabas » et un autre article vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.');
+  assert.equal(R.texteNotification({ type: 'panier', details: { titre: 'Sac cabas', autres: 3 } }, 'fr').texte, '« Sac cabas » et 3 autres articles vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.');
+});
+
+test('discussion : message nettoyé, article ou commande joints par identifiant, aperçu sur une ligne', () => {
+  assert.deepEqual(R.messageNettoye({ texte: '  Bonjour,\t la robe   existe en XL ? \n\n\n\n Merci \u0007', produit: 'ex-p01', commande: 'abc123def456ghi' }),
+    { texte: 'Bonjour, la robe existe en XL ?\n\nMerci', produit: 'ex-p01', commande: 'abc123def456ghi' });
+  assert.deepEqual(R.messageNettoye({ texte: 'Oui', produit: '../admin', commande: { id: 'x' } }), { texte: 'Oui', produit: '', commande: '' });
+  assert.equal(R.messageNettoye({ texte: 'é'.repeat(5000) }).texte.length, R.MAX_MESSAGE);
+  assert.throws(() => R.messageNettoye({ texte: ' \n \t ' }), /Écrivez votre message/);
+  assert.throws(() => R.messageNettoye(null), /Écrivez votre message/);
+  assert.equal(R.apercuMessage('Bonjour,\n\nla robe existe en XL ?'), 'Bonjour, la robe existe en XL ?');
+  assert.equal(R.apercuMessage('mot '.repeat(60), 20), 'mot mot mot mot mot…');
+  assert.equal(R.texteNotification({ type: 'message', details: { texte: 'Oui, en XL aussi.' } }, 'fr').titre, 'Réponse de la boutique');
+  assert.equal(R.texteNotification({ type: 'message', details: { texte: 'Oui, en XL aussi.' } }, 'fr').texte, 'Oui, en XL aussi.');
+  assert.ok(R.peut('vendeur', 'messages') && R.peut('proprietaire', 'messages') && !R.peut('livreur', 'messages'));
+});
+
+test('avis : note de 1 à 5, nom public, résumé, articles à noter et rappel après la livraison', () => {
+  assert.deepEqual(R.config({}).reviews, { enabled: true, moderation: false, reminder: true });
+  assert.deepEqual(R.config({ reviews: { enabled: 0, moderation: 'oui', reminder: false } }).reviews, { enabled: true, moderation: false, reminder: false });
+  assert.deepEqual(R.avisNettoye({ note: 4, texte: '  Très   bien,\tbonne qualité \n\n\n\n Merci \u0007' }), { note: 4, texte: 'Très bien, bonne qualité\n\nMerci' });
+  assert.deepEqual(R.avisNettoye({ note: '5' }), { note: 5, texte: '' });
+  for (const note of [0, 6, 3.5, 'x', null]) assert.throws(() => R.avisNettoye({ note }), /Choisissez une note/);
+  assert.equal(R.avisNettoye({ note: 2, texte: 'é'.repeat(5000) }).texte.length, R.MAX_AVIS);
+  assert.equal(R.nomPublic('aline zawadi furaha'), 'Aline F.');
+  assert.equal(R.nomPublic('GRÂCE MAPENDO'), 'Grâce M.');
+  assert.equal(R.nomPublic('Patient'), 'Patient');
+  assert.equal(R.nomPublic('  0991234567 '), 'Client', 'jamais de numéro à la place du nom');
+  assert.deepEqual(R.resumeAvis({ 5: 3, 4: 1, 1: 1 }), { note: 4, nombre: 5, repartition: { 5: 3, 4: 1, 3: 0, 2: 0, 1: 1 } });
+  assert.deepEqual(R.resumeAvis({}), { note: 0, nombre: 0, repartition: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } });
+  assert.equal(R.resumeAvis({ 5: 2, 4: 1 }).note, 4.7);
+  // Publié tout de suite ; vérifié d'abord quand la boutique l'a choisi, ou quand un avis masqué est réécrit.
+  assert.equal(R.etatAvis(R.config({}), null), 'publie');
+  assert.equal(R.etatAvis(R.config({ reviews: { moderation: true } }), null), 'attente');
+  assert.equal(R.etatAvis(R.config({}), { etat: 'masque' }), 'attente');
+  assert.equal(R.etatAvis(R.config({}), { etat: 'publie' }), 'publie');
+  assert.equal(R.optionAchetee('Bordeaux', 'M'), 'Bordeaux, taille M');
+  assert.equal(R.optionAchetee('', 'XL'), 'Taille XL');
+  // Seuls les articles d'une commande livrée, une fois chacun.
+  const t0 = Date.UTC(2026, 9, 30, 8);
+  const o = { fulfillment: 'delivered', deliveredAt: t0 - 3 * R.JOUR, items: [{ productId: 'robe', title: 'Robe', color: 'Noir', size: 'M' }, { productId: 'robe', title: 'Robe', color: 'Noir', size: 'L' }, { productId: 'sac', title: 'Sac' }, { productId: '../x', title: 'Pirate' }] };
+  assert.deepEqual(R.articlesANoter(o), [{ produit: 'robe', titre: 'Robe', variante: 'Noir, taille M' }, { produit: 'sac', titre: 'Sac', variante: '' }]);
+  assert.deepEqual(R.articlesANoter({ ...o, fulfillment: 'shipped' }), []);
+  const cfgAvis = R.config({});
+  assert.deepEqual(R.rappelAvis({ cfg: cfgAvis, o, notes: () => false, maintenant: t0 }), { titre: 'Robe', autres: 1 });
+  assert.deepEqual(R.rappelAvis({ cfg: cfgAvis, o, notes: (id) => id === 'robe', maintenant: t0 }), { titre: 'Sac', autres: 0 });
+  assert.equal(R.rappelAvis({ cfg: cfgAvis, o, notes: () => true, maintenant: t0 }), null, 'tout est noté');
+  assert.equal(R.rappelAvis({ cfg: cfgAvis, o: { ...o, deliveredAt: t0 - R.JOUR }, maintenant: t0 }), null, 'trop tôt');
+  assert.equal(R.rappelAvis({ cfg: cfgAvis, o: { ...o, deliveredAt: t0 - 20 * R.JOUR }, maintenant: t0 }), null, 'trop tard');
+  assert.equal(R.rappelAvis({ cfg: R.config({ reviews: { reminder: false } }), o, maintenant: t0 }), null, 'rappel désactivé');
+  assert.equal(R.texteNotification({ type: 'avis', details: { titre: 'Robe', autres: 0 } }, 'fr').texte, '« Robe » vous plaît ? Donnez votre avis en un geste : il aide les autres clients.');
+  assert.equal(R.texteNotification({ type: 'avis', details: { titre: 'Robe', autres: 2 } }, 'fr').texte, '« Robe » et 2 autres articles vous plaisent ? Donnez votre avis en un geste : il aide les autres clients.');
+  assert.equal(R.texteNotification({ type: 'avis_reponse', details: { titre: 'Robe', texte: 'Merci !' } }, 'fr').texte, 'Votre avis sur « Robe » : Merci !');
+  assert.ok(R.peut('vendeur', 'avis') && R.peut('proprietaire', 'avis') && !R.peut('livreur', 'avis'));
+});
+
+test('fidélité : cadeau de bienvenue sans code promo, cagnotte jusqu’à la moitié des articles, gain promis à la livraison', () => {
+  assert.deepEqual([R.config({}).loyalty, R.config({}).referral], [{ enabled: false, pct: 2 }, { enabled: false, reward: 3, welcome: 2, min: 10 }]);
+  assert.deepEqual(R.config({ loyalty: { enabled: true, pct: 40 }, referral: { enabled: true, reward: -5, welcome: '4', min: 5000 } }).referral, { enabled: true, reward: 0, welcome: 4, min: 1000 });
+  assert.equal(R.config({ loyalty: { enabled: true, pct: 40 } }).loyalty.pct, 10);
+  assert.equal(R.config({ referral: { enabled: true } }).referral.enabled, false, 'le parrainage passe par la cagnotte');
+  assert.equal(R.codeParrainValide(' k7m-2qx '), 'K7M2QX');
+  for (const x of ['K7M2Q', 'K7M2QXX', 'K7M2Q0', 'IL1O00', '../x', null]) assert.equal(R.codeParrainValide(x), '');
+
+  const fid = R.config({ payments: { mpesa: { enabled: true } }, payment: { provider: 'simulation' }, loyalty: { enabled: true, pct: 5 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } });
+  const lignes = [{ productId: 'robe', color: 'Noir', size: 'M', qty: 1 }];
+  const pa = { code: 'K7M2QX', montant: 2, min: 10, recompense: 3, parrain: 'parrain1', parrainTel: '0811112222' };
+  // Robe 20 $ − 2 $ offerts = 18 $ ; cagnotte de 30 $ : 9 $ au plus (la moitié) ; frais 2 % de 9 $ ; gain 5 % de 9 $.
+  const d = R.devis({ cfg: fid, produit, lignes, zoneId: 'bukavu', parrainage: pa, cagnotte: 30 });
+  assert.deepEqual([d.sousTotal, d.bienvenue, d.cagnotte, d.livraison, d.frais, d.total, d.gain], [20, { code: 'K7M2QX', amount: 2 }, 9, 2, 0.18, 11.18, 0.45]);
+  assert.equal(R.devis({ cfg: fid, produit, lignes, zoneId: 'bukavu', cagnotte: 1.5 }).cagnotte, 1.5, 'un petit solde est utilisé entier');
+  const promo = R.devis({ cfg: fid, produit, lignes, zoneId: 'bukavu', parrainage: pa, code: 'BIENVENUE10', remise: remise10 });
+  assert.deepEqual([promo.bienvenue, promo.remise.amount], [null, 2]);
+  assert.equal(R.raisonParrainage('', promo, 10), 'Le cadeau de bienvenue ne se cumule pas avec un code promo.');
+  const petit = R.devis({ cfg: fid, produit, lignes: [{ productId: 'sac', qty: 0.5 }], zoneId: 'bukavu', parrainage: { ...pa, min: 15 } });
+  assert.equal(petit.bienvenue, null);
+  assert.equal(R.raisonParrainage('', petit, 15), 'Le cadeau de bienvenue s’applique dès $15.00 d’achat.');
+  assert.equal(R.raisonParrainage('', d, 10), '');
+  assert.equal(R.raisonParrainage('deja-client', d, 10), 'Le cadeau de bienvenue est réservé à la première commande d’un nouveau client.');
+  assert.equal(R.devis({ cfg: R.config({ ...fid, loyalty: { enabled: false } }), produit, lignes, zoneId: 'bukavu' }).gain, 0, 'cagnotte fermée : aucun gain');
+  // La livraison offerte se compte avant la cagnotte (elle paie, elle ne réduit pas le prix).
+  const seuil = R.config({ ...fid, freeShippingOver: 15 });
+  assert.equal(R.devis({ cfg: seuil, produit, lignes, zoneId: 'bukavu', cagnotte: 10 }).livraison, 0);
+
+  // Commande : cadeau, cagnotte et gain enregistrés ; le gain va au téléphone du compte (titulaire), sinon à celui de la commande.
+  const s = saisie({ items: lignes, cagnotte: true, total: 11.18 });
+  const { commande } = R.preparerCommande({ cfg: fid, produit, saisie: s, parrainage: pa, cagnotte: 30, titulaire: '0822223333', numero: 'K7P2QA' });
+  assert.deepEqual([commande.referral, commande.wallet, commande.loyalty, commande.total], [{ code: 'K7M2QX', amount: 2, reward: 3, by: 'parrain1', byPhone: '0811112222' }, { used: 9 }, { pct: 5, amount: 0.45, phone: '0822223333' }, 11.18]);
+  assert.deepEqual(R.incoherences(commande), []);
+  assert.equal(R.margeCommande(commande).marge, 1.18, "20 $ − 2 $ offerts − 9 $ de cagnotte + 0,18 $ de frais − 8 $ de coût");
+  const sansCagnotte = R.preparerCommande({ cfg: fid, produit, saisie: { ...s, cagnotte: false, total: 22.4 }, cagnotte: 30, numero: 'K7P2QB' }).commande;
+  assert.deepEqual([sansCagnotte.wallet, sansCagnotte.referral, sansCagnotte.loyalty], [null, null, { pct: 5, amount: 1, phone: '0991234567' }]);
+  assert.throws(() => R.preparerCommande({ cfg: fid, produit, saisie: s, parrainage: pa, cagnotte: 4, numero: 'K7P2QC' }), /maintenant de \$16\.28/, 'solde changé entre-temps : le client revoit le total');
+
+  // Livrée : la notification annonce le gain ; le parrain reçoit la sienne.
+  const livree = { ...commande, status: 'open', payment: { status: 'paid' }, fulfillment: 'delivered' };
+  const ev = R.evenementsCommande({ ...livree, fulfillment: 'shipped' }, livree);
+  assert.deepEqual(ev.map((e) => [e.type, e.details.gain]), [['livree', 0.45]]);
+  assert.equal(R.texteNotification(ev[0], 'fr').texte, 'Commande #K7P2QA remise. Merci pour votre confiance ! $0.45 ajoutés à votre cagnotte.');
+  assert.equal(R.texteNotification({ type: 'livree', details: { numero: 'K7P2QA' } }, 'fr').texte, 'Commande #K7P2QA remise. Merci pour votre confiance !');
+  assert.equal(R.texteNotification({ type: 'parrainage', details: { filleul: 'Patrick B.', montant: 3 } }, 'fr').texte, 'Patrick B. a reçu sa première commande : $3.00 ajoutés à votre cagnotte.');
+  assert.ok(R.peut('proprietaire', 'cagnotte') && !R.peut('vendeur', 'cagnotte'));
 });

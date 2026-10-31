@@ -6,7 +6,8 @@ import { Cabas } from '../../commun/js/logo.jsx';
 import { ouvrirFeuille } from '../../commun/js/interface.jsx';
 import { dollars, lienWhatsApp, classes } from '../../commun/js/outils.js';
 import { lien, route, retour, naviguer } from '../routeur.js';
-import { cfg, nbArticles, favoris, moyensPaiement } from '../etat.js';
+import { cfg, nbArticles, favoris, moyensPaiement, carteAcceptee } from '../etat.js';
+import { nonLues } from '../notifications.js';
 import { PuceOperateur } from './produits.jsx';
 import { PAGES_LEGALES } from '../../commun/js/legal.js';
 
@@ -50,7 +51,17 @@ function RechercheOrdi() {
   );
 }
 
-/* En-tête principal : marque, navigation (ordinateur), recherche, favoris, compte, panier. */
+/* Cloche du centre de notifications, avec le nombre de notifications non lues. */
+export function BoutonNotifications() {
+  const n = nonLues.value;
+  return (
+    <a href={lien('/notifications')} class="btn-icone" aria-label={n ? `Notifications, ${n} non lue${n > 1 ? 's' : ''}` : 'Notifications'}>
+      <Icone n="cloche" />{n ? <span class="pastille-compte" key={n}>{n > 9 ? '9+' : n}</span> : null}
+    </a>
+  );
+}
+
+/* En-tête principal : marque, navigation (ordinateur), recherche, notifications, favoris, compte, panier. */
 export function EnteteBoutique({ classe, accueil }) {
   const defile = useDefilement();
   const nom = route.value.nom;
@@ -64,8 +75,9 @@ export function EnteteBoutique({ classe, accueil }) {
           {lienNav('/', 'Accueil', nom === 'accueil')}{lienNav('/categories', 'Rayons', nom === 'rayons' || nom === 'rayon')}{lienNav('/nouveautes', 'Nouveautés', nom === 'nouveautes')}
         </nav>
         <div class="entete-actions">
-          <div class="seulement-ordi"><RechercheOrdi /></div>
-          <a href={lien('/recherche')} class="btn-icone seulement-mobile" aria-label="Rechercher"><Icone n="recherche" /></a>
+          <div class="recherche-large"><RechercheOrdi /></div>
+          <a href={lien('/recherche')} class="btn-icone recherche-icone" aria-label="Rechercher"><Icone n="recherche" /></a>
+          <BoutonNotifications />
           <a href={lien('/favoris')} class="btn-icone" aria-label={nf ? `Favoris, ${nf}` : 'Favoris'}><Icone n="coeur" />{nf ? <span class="pastille-compte">{nf}</span> : null}</a>
           <a href={lien('/compte')} class="btn-icone seulement-ordi" aria-label="Mon compte"><Icone n="personne" /></a>
           <span class="seulement-ordi"><BoutonPanier /></span>
@@ -94,7 +106,7 @@ export function EntetePage({ titre, sous, repli = '/', actions, cacherTitreOrdi,
 }
 
 const ONGLETS = [['/', 'accueil', 'Accueil', 'accueil'], ['/categories', 'rayons', 'Rayons', 'rayons'], ['/nouveautes', 'nouveautes', 'Nouveautés', 'etincelle'], ['/panier', 'panier', 'Panier', 'sac'], ['/compte', 'compte', 'Compte', 'personne']];
-const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte' };
+const DANS_ONGLET = { rayon: 'rayons', favoris: 'compte', commandes: 'compte', suivi: 'compte', infos: 'compte', retrouver: 'compte', connexion: 'compte', notifications: 'compte', discussion: 'compte', avis: 'compte' };
 
 export function NavBas() {
   const nom = route.value.nom; const actif = DANS_ONGLET[nom] || nom; const n = nbArticles.value;
@@ -132,6 +144,7 @@ export function Pied() {
           <button type="button" onClick={ouvrirLivraisonPaiement}>Livraison et paiement</button>
           <button type="button" onClick={ouvrirCommentCaMarche}>Comment ça marche</button>
           <a href={lien('/compte/commandes')}>Suivre ma commande</a>
+          <a href={lien('/discussion')}>Écrire à la boutique</a>
           {wa ? <a href={wa} target="_blank" rel="noopener">Nous écrire sur WhatsApp</a> : null}
         </nav>
         <nav aria-label="Informations légales">
@@ -141,7 +154,7 @@ export function Pied() {
       </div>
       <div class="conteneur pied-bas">
         <span>© {new Date().getFullYear()} {(c.legal && c.legal.company) || c.name} · {c.city}, RDC</span>
-        <span>Prix en dollars US · paiement Mobile Money</span>
+        <span>Prix en dollars US · paiement Mobile Money{carteAcceptee.value ? ' ou carte' : ''}</span>
       </div>
     </footer>
   );
@@ -174,8 +187,9 @@ export function ouvrirLivraisonPaiement() {
             <p class="attenue">Commandés pour vous chez nos fournisseurs, transportés puis dédouanés par nos soins : livrés en {R.int(c.importDays)} jours environ, sans frais cachés.</p>
           </section>
           <section class="pile">
-            <h3 class="sous-titre">Paiement Mobile Money, dans l’application</h3>
+            <h3 class="sous-titre">{carteAcceptee.value ? 'Paiement Mobile Money ou par carte, dans l’application' : 'Paiement Mobile Money, dans l’application'}</h3>
             <p class="attenue">Vous choisissez votre opérateur : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. La commande est confirmée dès que l’opérateur valide le paiement, et vous recevez aussitôt votre reçu avec votre numéro de commande. Pas de paiement à la livraison.</p>
+            {carteAcceptee.value ? <p class="attenue">Par carte Visa ou Mastercard, vous la saisissez sur la page sécurisée de notre partenaire de paiement : la boutique ne voit jamais son numéro.</p> : null}
             {R.num(c.serviceFeePct) > 0 ? <p class="attenue">Des frais de service de {R.num(c.serviceFeePct)} % du panier s’ajoutent au paiement ; ils sont affichés avant de payer.</p> : null}
             {!ms.length ? <p class="attenue">Le paiement en ligne ouvre très bientôt.</p> : null}
             {ms.length ? <div class="operateurs">{ms.map((m) => <PuceOperateur key={m.k} m={m} />)}</div> : null}
@@ -189,9 +203,11 @@ export function ouvrirLivraisonPaiement() {
 }
 
 // [icône, titre, explication, titre court, détail court] : les deux derniers pour les petites tuiles de l'accueil.
-export const ETAPES_IMPORT = [
+export const etapesImport = () => [
   ['etiquette', 'Vous choisissez', 'Articles en stock à Bukavu ou importés de Chine sur commande.', 'Commande', 'Stock ou import'],
-  ['portefeuille', 'Vous payez par Mobile Money', 'M-Pesa, Airtel Money, Orange Money : vous validez le paiement sur votre téléphone et recevez votre reçu.', 'Paiement', 'Mobile Money'],
+  carteAcceptee.value
+    ? ['portefeuille', 'Vous payez en ligne', 'Mobile Money (M-Pesa, Airtel Money, Orange Money), validé sur votre téléphone, ou carte Visa / Mastercard : vous recevez aussitôt votre reçu.', 'Paiement', 'Mobile Money ou carte']
+    : ['portefeuille', 'Vous payez par Mobile Money', 'M-Pesa, Airtel Money, Orange Money : vous validez le paiement sur votre téléphone et recevez votre reçu.', 'Paiement', 'Mobile Money'],
   ['douane', 'Nous importons et dédouanons', 'Transport par conteneur et formalités de douane pris en charge.', 'Import', 'Douane incluse'],
   ['camion', 'Vous êtes livré', 'À Bukavu et à Goma, avec un suivi de commande à chaque étape.', 'Livraison', 'Bukavu et Goma']
 ];
@@ -201,7 +217,7 @@ export function ouvrirCommentCaMarche() {
     titre: 'Comment ça marche',
     contenu: () => (
       <ol class="etapes-import verticales">
-        {ETAPES_IMPORT.map(([ic, t, s], i) => <li key={i}><span class="ei-icone"><Icone n={ic} /></span><div><b>{i + 1}. {t}</b><p>{s}</p></div></li>)}
+        {etapesImport().map(([ic, t, s], i) => <li key={i}><span class="ei-icone"><Icone n={ic} /></span><div><b>{i + 1}. {t}</b><p>{s}</p></div></li>)}
       </ol>
     )
   });

@@ -110,6 +110,8 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 .logo-op[data-op="airtel"] { background-image: url(../marque/operateurs/airtel.webp); }
 .logo-op[data-op="orange"] { background-image: url(../marque/operateurs/orange.webp); }
 :root[data-theme="dark"] .logo-op[data-op="orange"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+.logo-op[data-op="carte"] { background-image: linear-gradient(135deg, #2B4CB0, #14275F); }
+.logo-op[data-op="carte"] .ic { --ic: calc(var(--t) * .62); }
 .choix-icone .logo-op { --t: 42px; }
 .mode-op { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
 .mode-op .logo-op { --t: 22px; }
@@ -177,6 +179,7 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 .montants > div { display: flex; justify-content: space-between; gap: var(--e3); }
 .montants dt, .montants .lib { color: var(--encre-2); }
 .montants .moins { color: var(--ok); font-weight: 650; }
+.montants dd.num { white-space: nowrap; }
 .montants .total { padding-top: 11px; margin-top: 3px; border-top: 1px dashed var(--ligne-2); font-size: var(--t-l); font-weight: 800; }
 .montants .total .lib { color: var(--encre); }
 
@@ -344,3 +347,78 @@ img.media.charge-en-cours { opacity: 0; }
 .quantite.petit { height: 38px; }
 .quantite.petit button { width: 36px; height: 36px; }
 .quantite.petit button .ic { --ic: 16px; }
+
+/* Discussion entre un client et la boutique (fil commun à la boutique et à l'administration) */
+.fil-messages { display: flex; flex-direction: column; gap: 6px; }
+.fil-jour { align-self: center; margin: 12px 0 6px; }
+.fil-jour span { display: inline-block; padding: 4px 12px; border-radius: var(--r-rond); background: var(--surface-2); color: var(--encre-3); font-size: var(--t-xs); font-weight: 700; }
+.fil-jour span::first-letter { text-transform: uppercase; }
+.bulle { display: grid; gap: 6px; max-width: min(84%, 540px); padding: 9px 12px 6px; border-radius: 20px; background: var(--surface); border: 1px solid var(--ligne); box-shadow: var(--ombre-1); animation: bulle-arrive var(--moyen) var(--sortie); }
+.bulle p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: var(--t-base); }
+.bulle small { justify-self: end; font-size: 11.5px; color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.bulle-autre { align-self: flex-start; border-bottom-left-radius: 6px; }
+.bulle-moi { align-self: flex-end; border-bottom-right-radius: 6px; background: var(--marque-doux); border-color: var(--marque-doux-2); }
+.bulle.en-envoi { opacity: .7; }
+@keyframes bulle-arrive { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+.bulle-piece { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 10px 6px 6px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--ligne); color: var(--encre); transition: border-color var(--rapide); }
+.bulle-moi .bulle-piece { background: var(--surface); }
+.bulle-piece:hover { border-color: var(--ligne-saisie); }
+.bulle-piece-photo { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; background: var(--surface-3); flex: none; }
+.bulle-piece-photo img, .bulle-piece-photo .media { width: 100%; height: 100%; object-fit: cover; }
+.bulle-piece-icone { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: var(--marque-doux); color: var(--marque-texte); flex: none; }
+.bulle-piece-texte { min-width: 0; display: grid; }
+.bulle-piece-texte b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulle-piece-texte small { justify-self: start; font-size: 12.5px; color: var(--encre-2); }
+@media (prefers-reduced-motion: reduce) { .bulle { animation: none; } }
+
+/* Zone d'écriture d'une discussion : article ou commande joint, idées de messages, texte et envoi */
+.composeur-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.composeur-ligne textarea.saisie { min-height: 48px; max-height: 200px; padding: 12px 16px; border-radius: 24px; resize: none; line-height: 1.4; }
+.composeur-ligne > .btn-icone { height: 48px; color: var(--encre-2); }
+.composeur-envoyer { width: 48px; height: 48px; padding: 0; border-radius: 50%; }
+.composeur-envoyer .ic { --ic: 21px; }
+.composeur-idees { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gouttiere-d)) 0 calc(-1 * var(--gouttiere)); padding: 0 var(--gouttiere-d) 0 var(--gouttiere); }
+.composeur-idees::-webkit-scrollbar { display: none; }
+.composeur-idees .puce { height: 34px; font-size: 13.5px; }
+.composeur-sujet { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 4px 4px 6px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--ligne); }
+.composeur-sujet .bulle-piece-photo, .composeur-sujet .bulle-piece-icone { width: 36px; height: 36px; border-radius: 9px; }
+.composeur-sujet-texte { display: grid; min-width: 0; }
+.composeur-sujet-texte small { font-size: 11.5px; color: var(--encre-3); font-weight: 650; }
+.composeur-sujet-texte b { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composeur-sujet .btn-icone { width: 36px; height: 36px; }
+
+/* ---------- Avis des clients : étoiles, choix d'une note, répartition, avis publiés ---------- */
+.etoiles { position: relative; display: inline-flex; flex: none; vertical-align: middle; --ic: var(--etoile, 15px); }
+.etoiles-fond, .etoiles-pleines { display: flex; gap: 1px; }
+.etoiles-fond { color: var(--ligne-2); }
+.etoiles-pleines { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: var(--or); }
+.choix-etoiles { display: grid; justify-items: center; gap: 2px; }
+.choix-etoiles-boutons { display: flex; gap: 2px; }
+.choix-etoile { display: grid; place-items: center; width: var(--cible); height: var(--cible); border-radius: var(--r-rond); color: var(--ligne-saisie); --ic: 30px; transition: transform var(--rapide) var(--ressort), color var(--rapide); }
+.choix-etoiles.grande .choix-etoile { width: 52px; height: 52px; --ic: 38px; }
+.choix-etoile.pleine { color: var(--or); }
+.choix-etoile:active { transform: scale(.86); }
+@media (hover: hover) { .choix-etoile:hover { transform: scale(1.1); } }
+.choix-etoiles-mot { font-size: var(--t-s); font-weight: 650; color: var(--encre-2); min-height: 1.5em; }
+.repartition { display: grid; gap: 2px; min-width: 0; }
+.repartition-ligne { display: grid; grid-template-columns: 30px minmax(0, 1fr) 26px; align-items: center; gap: var(--e2); width: 100%; min-height: 26px; padding: 2px 6px; border-radius: 8px; font-size: var(--t-s); color: var(--encre-2); text-align: left; }
+button.repartition-ligne { transition: background var(--rapide); }
+@media (hover: hover) { button.repartition-ligne:hover { background: var(--surface-2); } }
+.repartition-ligne.choisie { background: var(--marque-doux); color: var(--encre); }
+.repartition-n { display: inline-flex; align-items: center; gap: 2px; font-weight: 650; --ic: 12px; }
+.repartition-n .ic { color: var(--or); }
+.repartition-barre { height: 8px; border-radius: var(--r-rond); background: var(--surface-3); overflow: hidden; }
+.repartition-barre i { display: block; height: 100%; border-radius: inherit; background: var(--or); transition: width var(--lent) var(--sortie); }
+.repartition-k { text-align: right; font-variant-numeric: tabular-nums; color: var(--encre-3); }
+.liste-avis { display: grid; }
+.avis { display: grid; gap: var(--e2); padding: var(--e4) 0; border-top: 1px solid var(--ligne); }
+.avis-tete { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--e3); }
+.avis-initiale { width: 36px; height: 36px; font-size: 16px; background: var(--marque-doux); color: var(--marque-texte); }
+.avis-qui { display: grid; min-width: 0; }
+.avis-qui b { font-size: var(--t-m); }
+.avis-qui small { color: var(--encre-3); font-size: var(--t-xs); }
+.avis-verifie { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); font-weight: 650; color: var(--ok); --ic: 14px; }
+.avis-texte { color: var(--encre-2); line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
+.avis-reponse { display: grid; gap: 4px; padding: var(--e3) var(--e4); border-radius: var(--r-m); background: var(--surface-2); border-left: 3px solid var(--marque); }
+.avis-reponse b { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-s); --ic: 16px; }
+.avis-reponse p { color: var(--encre-2); font-size: var(--t-m); line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }

@@ -19,7 +19,9 @@ function contacts(c) {
 
 export function modeleLegal(cle, c) {
   const L = c.legal || {}; const qui = L.company || c.name; const ville = c.city || 'Bukavu';
-  const moyens = R.moyensDePaiement(c).map((m) => m.label).join(', ') || 'Mobile Money';
+  const moyens = R.moyensDePaiement(c).filter((m) => !m.carte).map((m) => m.label).join(', ') || 'Mobile Money';
+  // Carte Visa / Mastercard proposée : saisie sur la page sécurisée du prestataire de paiement, jamais dans la boutique.
+  const carte = R.moyensDePaiement(c).some((m) => m.carte);
   const contact = contacts(c);
   const T = {
     'mentions-legales': [
@@ -40,7 +42,7 @@ export function modeleLegal(cle, c) {
       '## 4. Commande',
       'La commande se fait en trois étapes : coordonnées et livraison, paiement, puis reçu. Vous pouvez vérifier et corriger chaque élément avant de payer. Chaque commande reçoit un numéro unique, inscrit sur le reçu : il permet de la suivre et de la retrouver depuis n’importe quel téléphone.',
       '## 5. Paiement',
-      `Le paiement se fait à la commande, par Mobile Money (${moyens}), directement dans l’application. Il n’y a pas de paiement à la livraison. Une demande de paiement est envoyée au numéro que vous indiquez ; vous la validez sur votre téléphone avec votre code PIN. La commande n’est confirmée qu’une fois le paiement validé par l’opérateur ; vous recevez alors un reçu. Sans paiement dans le délai indiqué${R.int(c.payment && c.payment.holdMinutes) ? ` (${R.int(c.payment.holdMinutes)} minutes)` : ''}, la commande est annulée automatiquement. Personne ne vous demandera jamais votre code PIN.`,
+      `Le paiement se fait à la commande, par Mobile Money (${moyens})${carte ? ' ou par carte bancaire (Visa, Mastercard)' : ''}, directement dans l’application. Il n’y a pas de paiement à la livraison. ${carte ? 'Par Mobile Money, une' : 'Une'} demande de paiement est envoyée au numéro que vous indiquez ; vous la validez sur votre téléphone avec votre code PIN.${carte ? ' Par carte, vous saisissez votre carte sur la page sécurisée de notre prestataire de paiement : la boutique ne voit jamais son numéro.' : ''} La commande n’est confirmée qu’une fois le paiement validé${carte ? '' : ' par l’opérateur'} ; vous recevez alors un reçu. Sans paiement dans le délai indiqué${R.int(c.payment && c.payment.holdMinutes) ? ` (${R.int(c.payment.holdMinutes)} minutes)` : ''}, la commande est annulée automatiquement. Personne ne vous demandera jamais votre code PIN.`,
       '## 6. Livraison',
       'Les zones, frais et délais indicatifs sont affichés lors de la commande ; la date de livraison prévue figure sur le reçu. Nous vous appelons pour organiser la remise. Merci de vérifier votre colis à la réception.',
       '## 7. Annulation, retours et remboursements',
@@ -58,13 +60,13 @@ export function modeleLegal(cle, c) {
       '## Qui traite vos données',
       `${qui}${L.address ? `, ${L.address}` : `, ${ville}`}. Contact : ${contact}.`,
       '## Données collectées',
-      'Uniquement ce qui est nécessaire pour traiter votre commande : votre nom, votre numéro de téléphone, la zone et l’adresse de livraison, un point de repère et une note facultatifs, le numéro Mobile Money qui paie et la référence de la transaction transmise par l’opérateur. Aucun mot de passe et aucune donnée bancaire ne sont demandés. Nous ne collectons jamais votre code PIN.',
+      `Uniquement ce qui est nécessaire pour traiter votre commande : votre nom, votre numéro de téléphone, la zone et l’adresse de livraison, un point de repère et une note facultatifs, le numéro Mobile Money qui paie et la référence de la transaction transmise par l’opérateur. ${carte ? 'Si vous payez par carte, vous la saisissez chez notre prestataire de paiement : la boutique ne reçoit jamais le numéro ni le code de votre carte, seulement la référence de la transaction. Aucun mot de passe n’est demandé.' : 'Aucun mot de passe et aucune donnée bancaire ne sont demandés.'} Nous ne collectons jamais votre code PIN.`,
       '## Compte client (facultatif)',
       'Vous pouvez commander sans compte. Si vous en créez un, il tient à votre numéro de téléphone : un code à usage unique vous est envoyé par WhatsApp (ou par SMS), sans mot de passe. Le compte garde votre nom, votre panier, vos favoris, vos coordonnées de livraison et vos commandes, pour les retrouver sur tous vos appareils ; la boutique voit ainsi quels articles vous avez mis au panier ou en favori. Le code passe par Meta (WhatsApp) ou par notre service d’envoi de SMS. Vous pouvez vous déconnecter ou supprimer votre compte à tout moment depuis « Mon compte » : vos commandes restent pour la comptabilité, détachées du compte.',
       '## Pourquoi',
       'Préparer, livrer et suivre votre commande, vérifier votre paiement, répondre à vos questions et tenir notre comptabilité. Ces traitements sont nécessaires à l’exécution de votre commande et au respect de nos obligations légales.',
       '## Qui y a accès',
-      'Seules les personnes chargées de votre commande (préparation et livraison), et notre prestataire de paiement pour le numéro Mobile Money et le montant. Vos données ne sont jamais vendues ni louées. Si vous nous écrivez sur WhatsApp, vos messages transitent par ce service.',
+      `Seules les personnes chargées de votre commande (préparation et livraison), et notre prestataire de paiement pour le numéro Mobile Money${carte ? ' (ou la carte)' : ''} et le montant. Vos données ne sont jamais vendues ni louées. Si vous nous écrivez sur WhatsApp, vos messages transitent par ce service.`,
       '## Durée de conservation',
       'Les données de commande sont conservées le temps du suivi et de la garantie, puis archivées pendant la durée exigée par la réglementation comptable (OHADA). Les informations enregistrées sur votre appareil (panier, favoris, coordonnées pré-remplies) y restent jusqu’à ce que vous les effaciez. Un compte client reste ouvert jusqu’à ce que vous le supprimiez ; les traces des codes de connexion (jamais le code lui-même, seulement son empreinte) sont effacées au bout de 30 jours.',
       '## Vos droits',
@@ -90,13 +92,13 @@ export function modeleLegal(cle, c) {
     ],
     retours: [
       '## Annuler une commande',
-      'Vous pouvez annuler votre commande tant qu’elle n’est pas expédiée, en nous écrivant avec votre numéro de commande. Le remboursement est effectué sous 72 heures sur le numéro Mobile Money qui a payé.',
+      `Vous pouvez annuler votre commande tant qu’elle n’est pas expédiée, en nous écrivant avec votre numéro de commande. Le remboursement est effectué sous 72 heures sur le numéro Mobile Money qui a payé${carte ? ' (ou sur la carte qui a payé)' : ''}.`,
       '## Échanges',
       c.returns || 'Échange possible sous 7 jours sur les articles non portés, avec leur étiquette.',
       '## Article défectueux ou non conforme',
       'Signalez-le-nous dès que possible, idéalement dans les 48 heures suivant la réception, avec une photo. Nous l’échangeons ou vous remboursons intégralement, frais de retour à notre charge.',
       '## Comment procéder',
-      `1. Contactez-nous (${contact}) en indiquant votre numéro de commande.\n2. Nous vous indiquons comment rapporter ou faire récupérer l’article.\n3. Le remboursement est versé par Mobile Money au numéro qui a payé.`
+      `1. Contactez-nous (${contact}) en indiquant votre numéro de commande.\n2. Nous vous indiquons comment rapporter ou faire récupérer l’article.\n3. Le remboursement est versé par Mobile Money au numéro qui a payé${carte ? ', ou sur la carte qui a payé' : ''}.`
     ]
   };
   return (T[cle] || []).join('\n\n');

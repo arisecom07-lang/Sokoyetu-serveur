@@ -1,5 +1,5 @@
 // Sokoyetu (administration) — clients, menu « Plus », compte.
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Champ, Note, Vide, Bascule, Pastille, toast, confirmer, ouvrirFeuille, fermerFeuille, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
@@ -7,9 +7,9 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { changerMotDePasse } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
-import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
+import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, dateHeure, normaliser, copier, secret } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, comptes, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises } from '../etat.js';
+import { cfg, clients, comptes, discussions, avis, avisAVerifier, produitsParId, pret, compte, etatServeur, sante, effacerClient, cagnotteClient, offrirCagnotte, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
 
@@ -59,6 +59,7 @@ export function Client() {
   if (!pret.value) return <Chargement />;
   if (!c) return <><TetePage titre="Client" parent="/clients" /><div class="carte"><Vide icone="personnes" titre="Client introuvable" /></div></>;
   const valides = c.commandes.filter((o) => o.status !== 'cancelled' && R.estPayee(o));
+  const discussion = peut('messages') ? discussions.value.find((d) => R.chiffres(d.telephone) === c.tel || (c.compte && d.client === c.compte.id)) : null;
   const effacer = async () => {
     if (!(await confirmer({ titre: `Effacer les données de ${c.nom || 'ce client'} ?`, texte: 'Nom, téléphones et adresses sont retirés de toutes ses commandes. Les montants restent pour la comptabilité. C’est définitif.', ok: 'Effacer définitivement', danger: true }))) return;
     try { const r = await effacerClient(c.tel); toast(`Données effacées (${pluriel(r.effacees, 'commande')})`, { icone: 'poubelle' }); history.back(); } catch (e) { gererErreur(e, 'Effacement impossible'); }
@@ -74,11 +75,13 @@ export function Client() {
           <Kpi libelle="Dernière commande" icone="calendrier" valeur={c.derniere ? date(c.derniere, { day: 'numeric', month: 'short' }) : '—'} sous={c.derniere ? ilya(c.derniere) : 'pas encore de commande'} />
         </div>
         <div class="rangee-l">
-          <a class="btn btn-primaire" href={lienWhatsApp(c.affiche, `Bonjour ${String(c.nom).split(' ')[0]}, `)} target="_blank" rel="noopener"><Icone n="bulle" />WhatsApp</a>
+          {discussion ? <a class="btn btn-primaire" href={lien('/messages/' + discussion.id)}><Icone n="bulle" />Discussion{discussion.a_repondre ? ' (à répondre)' : ''}</a> : null}
+          <a class={discussion ? 'btn btn-secondaire' : 'btn btn-primaire'} href={lienWhatsApp(c.affiche, `Bonjour ${String(c.nom).split(' ')[0]}, `)} target="_blank" rel="noopener"><Icone n="bulle" />WhatsApp</a>
           <a class="btn btn-secondaire" href={lienAppel(c.affiche)}><Icone n="appel" />Appeler</a>
           <button class="btn btn-secondaire" onClick={async () => { if (await copier(R.chiffres(c.affiche))) toast('Numéro copié'); }}><Icone n="copier" />Copier le numéro</button>
         </div>
         {c.compte ? <CompteClient a={c.compte} /> : null}
+        {cfg.value.loyalty && cfg.value.loyalty.enabled ? <CagnotteClient tel={c.tel} nom={c.nom} /> : null}
         <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Commandes</h2>{c.commandes.length ? <div class="liste sans-bord">{c.commandes.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div> : <p class="attenue petit">Pas encore de commande.</p>}</section>
         <section class="carte">
           <h2 class="carte-titre"><Icone n="cadenas" />Données personnelles</h2>
@@ -113,8 +116,54 @@ function CompteClient({ a }) {
           <p class="intertitre">Favoris</p>
           {favs.length ? <div class="liste sans-bord">{favs.map((x) => ligne(x.p, x.depuis ? 'en favori ' + ilya(x.depuis) : 'en favori', x.id))}</div> : <p class="attenue petit">Aucun favori.</p>}
         </div>
-        {pa.lignes.length ? <Note ton="info" icone="bulle">Ce client n’a pas encore commandé son panier. Un message, un appel ou une réduction peut l’aider à finir son achat (boutons ci-dessus).</Note> : null}
+        {pa.lignes.length ? <Note ton="info" icone="bulle">Ce client n’a pas encore commandé son panier.{a.relance ? ` Rappel gratuit envoyé ${ilya(a.relance)}.` : ''} Un message, un appel ou une réduction peut l’aider à finir son achat (boutons ci-dessus).</Note> : null}
       </div>
+    </section>
+  );
+}
+
+const MOUVEMENTS = { achat: (m) => `Commande #${m.numero} livrée`, parrainage: (m) => `Parrainage : ${m.filleul || 'un proche'}`, geste: (m) => `Geste de la boutique${m.motif ? ' : ' + m.motif : ''}${m.par ? ' (' + m.par + ')' : ''}` };
+
+/* Cagnotte du client : solde, gains, filleuls ; le propriétaire peut y ajouter un geste (retard, désagrément…). */
+function CagnotteClient({ tel, nom }) {
+  const [g, setG] = useState(null);
+  const charger = () => cagnotteClient(tel).then(setG).catch((e) => gererErreur(e, 'Cagnotte indisponible'));
+  useEffect(() => { setG(null); charger(); }, [tel]);
+  const offrir = () => {
+    const jeton = secret(32); let montant = ''; let motif = ''; let occupe = false;
+    const id = ouvrirFeuille({
+      titre: 'Offrir à sa cagnotte',
+      contenu: () => (
+        <div class="formulaire">
+          <p class="attenue petit">Un geste pour {nom || 'ce client'} : le montant rejoint sa cagnotte tout de suite, et une notification gratuite le lui annonce.</p>
+          <Champ libelle="Montant ($)" aide="De 0,01 à 100 $.">{(a) => <input class="saisie" {...a} inputmode="decimal" onInput={(e) => { montant = e.currentTarget.value; }} placeholder="Ex. : 2" />}</Champ>
+          <Champ libelle="Motif" facultatif aide="Montré au client.">{(a) => <input class="saisie" {...a} maxlength="80" onInput={(e) => { motif = e.currentTarget.value; }} placeholder="Ex. : retard de livraison" />}</Champ>
+        </div>
+      ),
+      pied: () => <button class="btn btn-primaire btn-bloc" onClick={async () => {
+        if (occupe) return;
+        const v = R.arrondi(String(montant).replace(',', '.'));
+        if (!(v > 0 && v <= 100)) { toast('Montant de 0,01 à 100 $', { icone: 'alerte', ton: 'danger' }); return; }
+        occupe = true;
+        try { const r = await offrirCagnotte(tel, { montant: v, motif, jeton }); setG(r); fermerFeuille(id); toast(`${dollars(v)} ajoutés à sa cagnotte`, { icone: 'cadeau' }); }
+        catch (e) { occupe = false; gererErreur(e, 'Geste impossible'); }
+      }}><Icone n="cadeau" />Offrir</button>
+    });
+  };
+  return (
+    <section class="carte">
+      <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="tirelire" />Cagnotte</h2>{peut('cagnotte') ? <button class="btn btn-secondaire btn-s" onClick={offrir}><Icone n="cadeau" />Offrir</button> : null}</div>
+      {!g ? <div class="squelette espace-haut" style={{ height: 80 }} /> : (
+        <div class="pile espace-haut">
+          <dl class="infos">
+            <dt>Disponible</dt><dd><b class="num">{dollars(g.solde)}</b>{g.compte ? '' : <small class="discret"> · sans compte : utilisable une fois son compte créé</small>}</dd>
+            <dt>Gagné</dt><dd class="num">{dollars(g.gagne)}</dd>
+            {g.utilise ? <><dt>Utilisé</dt><dd class="num">{dollars(g.utilise)}</dd></> : null}
+            {g.filleuls ? <><dt>Parrainés</dt><dd>{pluriel(g.filleuls, 'proche')}{g.code ? ` · code ${g.code}` : ''}</dd></> : g.code ? <><dt>Code</dt><dd class="code">{g.code}</dd></> : null}
+          </dl>
+          {g.mouvements.length ? <ul class="liste-simple">{g.mouvements.slice(0, 8).map((m, i) => <li key={i}><span>{(MOUVEMENTS[m.type] || MOUVEMENTS.geste)(m)}<small class="discret"> · {dateHeure(m.le)}</small></span><b class="num">+{dollars(m.montant)}</b></li>)}</ul> : <p class="attenue petit">Pas encore de gain : la cagnotte se remplit à chaque commande livrée.</p>}
+        </div>
+      )}
     </section>
   );
 }
@@ -134,27 +183,35 @@ export function Plus() {
       <div class="pile-l formulaire-etroit">
         <p class="intertitre">Suivi</p>
         <div class="menu">
-          {item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article')}
-          {item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site')}
+          {peut('clients') ? item(lien('/clients'), 'personnes', 'Clients', `${pluriel(clients.value.length, 'client')}${comptes.value.length ? ` · ${pluriel(comptes.value.length, 'compte')}` : ''}`) : null}
+          {peut('avis') ? item(lien('/avis'), 'etoile', 'Avis des clients', avisAVerifier.value ? pluriel(avisAVerifier.value, 'avis à vérifier', 'avis à vérifier') : avis.value.length ? pluriel(avis.value.filter((a) => a.etat === 'publie').length, 'avis publié', 'avis publiés') : 'Notes et commentaires des articles reçus') : null}
+          {peut('audience') ? item(lien('/audience'), 'oeil', 'Audience', 'En ligne maintenant, visiteurs, vues, paniers et favoris par article') : null}
+          {peut('journal') ? item(lien('/journal'), 'bouclier', 'Santé et journal', problemesGraves() ? 'Un problème demande votre attention' : 'Sauvegardes, paiement, erreurs du site') : null}
         </div>
         <p class="intertitre">Catalogue</p>
         <div class="menu">
-          {item(lien('/rayons'), 'rayons', 'Rayons', pluriel(rayons.value.length, 'rayon'))}
-          {item(lien('/remises'), 'pourcent', 'Réductions', pluriel(remises.value.filter((d) => d.active !== false).length, 'code actif', 'codes actifs'))}
+          {peut('catalogue') ? item(lien('/rayons'), 'rayons', 'Rayons', pluriel(rayons.value.length, 'rayon')) : null}
+          {peut('remises') ? item(lien('/remises'), 'pourcent', 'Réductions', pluriel(remises.value.filter((d) => d.active !== false).length, 'code actif', 'codes actifs')) : null}
         </div>
         <p class="intertitre">Boutique en ligne</p>
         <div class="menu">
-          {item(lien('/bannieres'), 'megaphone', 'Bannières d’accueil', bannieres.value.length ? pluriel(bannieres.value.filter((b) => b.active !== false).length, 'bannière active', 'bannières actives') : 'Images du port par défaut')}
-          {item(lien('/reglages/boutique'), 'boutique', 'Identité de la boutique', `${c.name} · ${c.tagline}`)}
+          {peut('annonces') ? item(lien('/annonces'), 'cloche', 'Annonces aux clients', 'Promotions et nouveautés, en notification gratuite') : null}
+          {peut('catalogue') ? item(lien('/bannieres'), 'megaphone', 'Bannières d’accueil', bannieres.value.length ? pluriel(bannieres.value.filter((b) => b.active !== false).length, 'bannière active', 'bannières actives') : 'Images du port par défaut') : null}
+          {peut('reglages') ? item(lien('/reglages/boutique'), 'boutique', 'Identité de la boutique', `${c.name} · ${c.tagline}`) : null}
           {item(adresseBoutique('/'), 'oeil', 'Voir la boutique', 'Comme vos clients la voient', true)}
         </div>
-        <p class="intertitre">Réglages</p>
-        <div class="menu">
-          {item(lien('/reglages/paiements'), 'portefeuille', 'Paiements Mobile Money', ms.length ? ms.map((m) => m.label).join(', ') : 'À configurer')}
-          {item(lien('/reglages/livraison'), 'camion', 'Livraison', c.zones.map((z) => z.name).join(', '))}
-          {item(lien('/reglages/general'), 'reglages', 'Général', 'Contact, devise, échanges, statistiques, exemples')}
-          {item(lien('/reglages/legal'), 'recu', 'Informations légales', 'RCCM, adresse, conditions de vente')}
-        </div>
+        {peut('reglages') ? (
+          <>
+            <p class="intertitre">Réglages</p>
+            <div class="menu">
+              {item(lien('/reglages/paiements'), 'portefeuille', 'Paiements', ms.length ? ms.map((m) => m.label).join(', ') : 'À configurer')}
+              {item(lien('/reglages/livraison'), 'camion', 'Livraison', c.zones.map((z) => z.name).join(', '))}
+              {item(lien('/reglages/general'), 'reglages', 'Général', 'Contact, devise, échanges, statistiques, exemples')}
+              {item(lien('/reglages/legal'), 'recu', 'Informations légales', 'RCCM, adresse, conditions de vente')}
+            </div>
+          </>
+        ) : null}
+        {peut('equipe') ? <div class="menu">{item(lien('/equipe'), 'personnes', 'Équipe', 'Vendeurs et livreurs : chacun son accès')}</div> : null}
         <p class="intertitre">Compte</p>
         <div class="menu">{item(lien('/compte'), 'personne', 'Mon compte', compte.value && compte.value.email)}</div>
       </div>
@@ -230,16 +287,14 @@ export function Compte() {
   const s = etatServeur.value;
   return (
     <>
-      <TetePage titre="Mon compte" sous={compte.value && compte.value.email} parent="/plus" />
+      <TetePage titre="Mon compte" sous={`${compte.value && compte.value.email} · ${R.ROLES[role.value].label}`} parent={role.value === 'livreur' ? undefined : '/plus'} />
       <div class="pile-l formulaire-etroit">
         <div class="menu">
-          <button class="menu-item" onClick={ouvrirMotDePasse}><span class="menu-icone"><Icone n="cadenas" /></span><span class="menu-texte"><b>Changer le mot de passe</b><small>Recommandé après l’installation</small></span><Icone n="droite" classe="chevron" /></button>
+          <button class="menu-item" onClick={ouvrirMotDePasse}><span class="menu-icone"><Icone n="cadenas" /></span><span class="menu-texte"><b>Changer le mot de passe</b><small>{role.value === 'proprietaire' ? 'Recommandé après l’installation' : 'Remplacez le mot de passe provisoire reçu'}</small></span><Icone n="droite" classe="chevron" /></button>
           <Bascule actif={themeSombre.value} onClick={basculerTheme} libelle="Thème sombre" sous={themeSombre.value ? 'Activé sur cet appareil' : 'Désactivé : thème clair'} />
         </div>
-        <div class="pile">
-          <AlertesCommandes />
-        </div>
-        <section class="carte">
+        {role.value !== 'livreur' ? <div class="pile"><AlertesCommandes /></div> : null}
+        {peut('produits') && (s.ia || peut('reglages')) ? <section class="carte">
           <h2 class="carte-titre"><Icone n="ia" />Assistant IA des fiches produits</h2>
           {s.ia ? <Note ton="ok" icone="coche">Activé. Dans Produits, touchez « Ajouter avec l’IA » et prenez l’article en photo.</Note> : (
             <div class="pile">
@@ -247,14 +302,14 @@ export function Compte() {
               <code class="commande">sudo /opt/sokoyetu/ia.sh 'sk-ant-…'</code>
             </div>
           )}
-        </section>
-        <ComptesClients s={s.codes} />
-        <section class="carte">
+        </section> : null}
+        {peut('reglages') ? <ComptesClients s={s.codes} /> : null}
+        {peut('journal') ? <section class="carte">
           <h2 class="carte-titre"><Icone n="info" />Serveur</h2>
           <dl class="infos"><dt>Version</dt><dd>{s.version || __VERSION__}</dd><dt>Sauvegardes</dt><dd>Chaque nuit, 7 gardées</dd></dl>
           <a class="btn btn-secondaire btn-s espace-haut" href={lien('/journal')}><Icone n="bouclier" />Santé et journal des erreurs</a>
           <p class="champ-aide espace-haut">Tableau technique (sauvegardes, journal complet) : <a class="lien" href={adresseBoutique('/_/')} target="_blank" rel="noopener">{adresseBoutique('/_/').replace(/^https?:\/\//, '')}</a></p>
-        </section>
+        </section> : null}
         <button class="btn btn-secondaire" onClick={async () => { if (await confirmer({ titre: 'Se déconnecter ?', ok: 'Se déconnecter' })) seDeconnecter(); }}><Icone n="sortie" />Se déconnecter</button>
       </div>
     </>
