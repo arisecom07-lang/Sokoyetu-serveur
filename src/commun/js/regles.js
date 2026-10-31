@@ -63,6 +63,12 @@ const CONFIG_DEFAUT = {
   /* Avis des clients : achats livrés seulement ; moderation : chaque avis attend la vérification de la boutique ;
      reminder : notification gratuite quelques jours après la livraison pour demander l'avis du client. */
   reviews: { enabled: true, moderation: false, reminder: true },
+  /* Cagnotte de fidélité (désactivée au départ) : chaque commande livrée rapporte pct % des articles payés au client, qui
+     l'utilise connecté à son compte sur ses commandes suivantes (jusqu'à la moitié des articles). */
+  loyalty: { enabled: false, pct: 2 },
+  /* Parrainage (avec la cagnotte) : le filleul reçoit welcome $ sur la première commande de son compte, dès min $ d'achat ;
+     le parrain gagne reward $ dans sa cagnotte quand cette commande est livrée. */
+  referral: { enabled: false, reward: 3, welcome: 2, min: 10 },
   legal: { company: '', address: '', email: '', rccm: '', idnat: '', nif: '', texts: {}, updatedAt: 0 },
   analytics: { provider: '', id: '' },
   setup: {}
@@ -175,6 +181,11 @@ function config(brut) {
   c.cartReminder = { enabled: r.enabled !== false, hours: Math.min(72, Math.max(2, int(r.hours) || 24)) };
   const av = estObjet(c.reviews) ? c.reviews : {};
   c.reviews = { enabled: av.enabled !== false, moderation: av.moderation === true, reminder: av.reminder !== false };
+  const fi = estObjet(c.loyalty) ? c.loyalty : {};
+  c.loyalty = { enabled: fi.enabled === true, pct: Math.min(10, Math.max(0, arrondi(fi.pct))) };
+  const pa = estObjet(c.referral) ? c.referral : {};
+  const borne = (v) => Math.min(100, Math.max(0, arrondi(v)));
+  c.referral = { enabled: c.loyalty.enabled && pa.enabled === true, reward: borne(pa.reward), welcome: borne(pa.welcome), min: Math.min(1000, Math.max(0, arrondi(pa.min))) };
   return c;
 }
 const zoneDe = (cfg, id) => (cfg.zones || []).find((z) => z.id === id) || null;
@@ -311,9 +322,12 @@ function verifierRemise(remise, code, sousTotal, maintenant) {
 
 /*
  * opts = { cfg, produit: (id) => doc|null, lignes: [{ productId, color, size, qty, title? }], zoneId,
- *          code: 'BIENVENUE10', remise: doc|null, maintenant }
- * Renvoie { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct, total, zone }.
- * frais : frais de service de la boutique (cfg.serviceFeePct % du panier, après réduction).
+ *          code: 'BIENVENUE10', remise: doc|null, parrainage: { code, montant, min }|null, cagnotte: solde, maintenant }
+ * Renvoie { lignes, problemes, sousTotal, remise, bienvenue, cagnotte, livraison, frais, fraisPct, total, gain, zone }.
+ * bienvenue : cadeau du filleul (parrainage vérifié par le serveur), sans code promo et dès parrainage.min d'achat.
+ * cagnotte : part des articles payée avec la cagnotte du client (opts.cagnotte : son solde), PART_CAGNOTTE % au plus.
+ * frais : frais de service de la boutique (cfg.serviceFeePct % des articles payés, après réductions et cagnotte).
+ * gain : ce que la commande rapportera à la cagnotte du client, à la livraison (cfg.loyalty.pct % des articles payés).
  * Chaque problème = { code, message, ligne? } ; aucun problème = la commande peut être payée telle quelle.
  */
 function devis(opts) {
@@ -375,15 +389,23 @@ function devis(opts) {
     if (r.ok) remise = { code: r.code, type: r.type, value: r.value, amount: r.amount };
     else problemes.push({ code: 'remise', message: r.reason });
   }
+  // Cadeau de bienvenue du parrainage : jamais avec un code promo.
+  const pa = opts.parrainage;
+  const bienvenue = pa && pa.code && !remise && num(pa.montant) > 0 && sousTotal > 0 && sousTotal >= num(pa.min)
+    ? { code: String(pa.code), amount: arrondi(Math.min(num(pa.montant), sousTotal)) } : null;
   const zone = zoneDe(cfg, opts.zoneId);
   if (!zone) problemes.push({ code: 'zone', message: 'Choisissez une zone de livraison.' });
   poids = Math.round(poids * 1000) / 1000;
   let livraison = zone ? arrondi(num(zone.fee) + (estRetrait(zone) ? 0 : num(zone.perKg) * poids)) : 0;
-  const net = Math.max(0, sousTotal - (remise ? remise.amount : 0));
-  if (num(cfg.freeShippingOver) > 0 && net >= num(cfg.freeShippingOver)) livraison = 0;
+  const articles = arrondi(Math.max(0, sousTotal - (remise ? remise.amount : 0) - (bienvenue ? bienvenue.amount : 0)));
+  // La cagnotte paie (elle ne réduit pas le prix) : la livraison offerte se compte avant elle.
+  if (num(cfg.freeShippingOver) > 0 && articles >= num(cfg.freeShippingOver)) livraison = 0;
+  const cagnotte = num(opts.cagnotte) > 0 ? arrondi(Math.min(arrondi(opts.cagnotte), Math.floor(articles * PART_CAGNOTTE) / 100)) : 0;
+  const net = arrondi(articles - cagnotte);
   const frais = fraisService(cfg, net);
   const total = arrondi(net + livraison + frais);
-  return { lignes, problemes, sousTotal, remise, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, zone, poids };
+  const gain = gainCommande(cfg, net);
+  return { lignes, problemes, sousTotal, remise, bienvenue, cagnotte, livraison, frais, fraisPct: num(cfg.serviceFeePct), total, gain, zone, poids };
 }
 
 /* ---------- Commande ---------- */
@@ -434,7 +456,10 @@ function preparerCommande(opts) {
   const payeur = valider.mobileMoney(pay.phone || client.phone);
   if (!payeur) stop(`Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, 'payphone');
 
-  const dv = devis({ cfg, produit: opts.produit, lignes: d.items, zoneId: zone.id, code: d.discountCode, remise: opts.remise, maintenant: now });
+  // Fidélité (lib/fidelite.js) : opts.parrainage, cadeau vérifié pour ce compte ; opts.cagnotte, solde du client connecté.
+  const pa = opts.parrainage || null;
+  const dv = devis({ cfg, produit: opts.produit, lignes: d.items, zoneId: zone.id, code: d.discountCode, remise: opts.remise, parrainage: pa,
+    cagnotte: d.cagnotte === true ? num(opts.cagnotte) : 0, maintenant: now });
   const bloquants = dv.problemes.filter((p) => p.code !== 'zone');
   if (bloquants.length) stop(bloquants.map((p) => p.message).join(' '), bloquants.some((p) => p.code === 'remise') && bloquants.length === 1 ? 'remise' : 'panier');
   const annonce = d.total === undefined || d.total === null || d.total === '' ? null : arrondi(d.total);
@@ -449,6 +474,11 @@ function preparerCommande(opts) {
     note: nettoyer(d.note, 300),
     items: dv.lignes.map((l) => { const o = Object.assign({}, l); delete o.available; return o; }),
     subtotal: dv.sousTotal, discount: dv.remise ? { code: dv.remise.code, amount: dv.remise.amount } : null,
+    // Parrainage : by et byPhone (le parrain, récompensé de reward à la livraison) ne sont jamais montrés au client.
+    referral: dv.bienvenue ? { code: dv.bienvenue.code, amount: dv.bienvenue.amount, reward: arrondi(pa.recompense), by: String(pa.parrain || ''), byPhone: chiffres(pa.parrainTel) } : null,
+    wallet: dv.cagnotte ? { used: dv.cagnotte } : null,
+    // Gain promis à la commande, crédité à la livraison au téléphone du compte (opts.titulaire), sinon à celui de la commande.
+    loyalty: dv.gain ? { pct: num(cfg.loyalty.pct), amount: dv.gain, phone: chiffres(opts.titulaire || phone) } : null,
     shippingFee: dv.livraison, weight: dv.poids, serviceFee: dv.frais, serviceFeePct: dv.fraisPct, total: dv.total,
     payment: { method: moyen.k, label: moyen.label, phone: payeur, provider: fournisseur, test: fournisseur === 'simulation', status: 'pending', attempts: 0, startedAt: now, providerId: '', reference: '', error: '' },
     expiresAt: now + cfg.payment.holdMinutes * 60000,
@@ -667,15 +697,18 @@ function incoherences(o) {
   const items = o.items || [];
   const st = arrondi(items.reduce((a, i) => a + num(i.price) * int(i.qty), 0));
   if (Math.abs(st - num(o.subtotal)) > 0.01) out.push(`Le sous-total (${dollars(o.subtotal)}) ne correspond pas aux articles (${dollars(st)}).`);
-  const calc = arrondi(st - num(o.discount && o.discount.amount) + num(o.shippingFee) + num(o.serviceFee));
+  const calc = arrondi(st - reductions(o) + num(o.shippingFee) + num(o.serviceFee));
   if (Math.abs(calc - num(o.total)) > 0.01) out.push(`Le total (${dollars(o.total)}) ne correspond pas au calcul (${dollars(calc)}).`);
   return out.filter((v, i, a) => a.indexOf(v) === i);
 }
 
+/* Ce que la boutique n'encaisse pas sur les articles : code promo, cadeau de bienvenue, part payée avec la cagnotte. */
+const reductions = (o) => arrondi(num(o.discount && o.discount.amount) + num(o.referral && o.referral.amount) + num(o.wallet && o.wallet.used));
+
 function margeCommande(o) {
   const couts = (o.items || []).reduce((a, i) => a + num(i.cost) * int(i.qty), 0);
   /* Les frais de service reviennent à la boutique : ils s'ajoutent à la marge. */
-  return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - num(o.discount && o.discount.amount) + num(o.serviceFee) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
+  return { couts: arrondi(couts), marge: arrondi(num(o.subtotal) - reductions(o) + num(o.serviceFee) - couts), connue: (o.items || []).every((i) => num(i.cost) > 0) };
 }
 
 /* ---------- Comptes clients (facultatifs) : connexion par code (WhatsApp ou SMS), panier et favoris sur tous les appareils ---------- */
@@ -832,6 +865,8 @@ function evenementsCommande(avant, apres) {
   const a = avant || {}, b = apres || {};
   if (!b.number) return [];
   const details = { numero: b.number, zone: (b.shipping && b.shipping.zoneName) || '', moyen: (b.payment && b.payment.label) || '' };
+  // Livrée : la cagnotte du client vient de recevoir le gain de la commande (lib/fidelite.js).
+  if (b.fulfillment === 'delivered' && b.loyalty && b.loyalty.phone && num(b.loyalty.amount) > 0) details.gain = arrondi(b.loyalty.amount);
   const ev = (type) => ({ type, details });
   const l = [];
   const ouverte = b.status !== 'cancelled';
@@ -853,8 +888,8 @@ const TEXTES_NOTIFICATIONS = {
     preparation: ['Commande en préparation', 'Commande #{numero} : vos articles sont en cours de préparation.'],
     expediee: ['Commande en route', 'Commande #{numero} : le livreur est en route ({zone}).'],
     prete: ['Commande prête', 'Commande #{numero} : vos articles vous attendent en boutique.'],
-    livree: ['Commande livrée', 'Commande #{numero} remise. Merci pour votre confiance !'],
-    retiree: ['Commande retirée', 'Commande #{numero} remise en boutique. Merci pour votre confiance !'],
+    livree: ['Commande livrée', (d) => `Commande #${d.numero} remise. Merci pour votre confiance !${num(d.gain) > 0 ? ` ${dollars(d.gain)} ajoutés à votre cagnotte.` : ''}`],
+    retiree: ['Commande retirée', (d) => `Commande #${d.numero} remise en boutique. Merci pour votre confiance !${num(d.gain) > 0 ? ` ${dollars(d.gain)} ajoutés à votre cagnotte.` : ''}`],
     annulee: ['Commande annulée', 'Commande #{numero} annulée par la boutique.'],
     expiree: ['Paiement non reçu', 'Commande #{numero} annulée : le paiement n’est pas arrivé à temps.'],
     remboursee: ['Remboursement effectué', 'Commande #{numero} remboursée ({moyen}).'],
@@ -865,6 +900,8 @@ const TEXTES_NOTIFICATIONS = {
       ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous plaisent ? Donnez votre avis en un geste : il aide les autres clients.`
       : `« ${d.titre} » vous plaît ? Donnez votre avis en un geste : il aide les autres clients.`)],
     avis_reponse: ['La boutique vous a répondu', 'Votre avis sur « {titre} » : {texte}'],
+    parrainage: ['Merci pour votre parrainage !', (d) => `${d.filleul || 'Votre filleul'} a reçu sa première commande : ${dollars(d.montant)} ajoutés à votre cagnotte.`],
+    cagnotte: ['Cadeau de la boutique', (d) => `${dollars(d.montant)} ajoutés à votre cagnotte${d.motif ? ` (${d.motif})` : ''}. Merci de votre fidélité !`],
     panier: ['Votre panier vous attend', (d) => (int(d.autres)
       ? `« ${d.titre} » et ${int(d.autres) === 1 ? 'un autre article' : int(d.autres) + ' autres articles'} vous attendent dans votre panier, toujours disponibles. Commandez quand vous voulez.`
       : `« ${d.titre} » vous attend dans votre panier, toujours disponible. Commandez quand vous voulez.`)]
@@ -1016,6 +1053,34 @@ function rappelAvis({ cfg, o, notes, maintenant }) {
   return reste.length ? { titre: reste[0].titre, autres: reste.length - 1 } : null;
 }
 
+/* ---------- Fidélité : cagnotte et parrainage (serveur : lib/fidelite.js) ---------- */
+
+const PART_CAGNOTTE = 50;            // la cagnotte paie au plus la moitié des articles d'une commande
+const PARRAIN_JOURS = 30;            // un lien de parrainage ouvert reste valable 30 jours sur le téléphone
+const MOUVEMENTS_CAGNOTTE = 50;      // lignes de l'historique montrées au client
+
+/* Gain d'une commande pour la cagnotte du client : loyalty.pct % des articles payés (0 si la cagnotte est fermée). */
+const gainCommande = (cfg, articlesPayes) => (cfg && cfg.loyalty && cfg.loyalty.enabled ? arrondi(Math.max(0, num(articlesPayes)) * num(cfg.loyalty.pct) / 100) : 0);
+/* Code de parrainage d'un client : 6 caractères faciles à dicter (sans 0/O ni 1/I/L), '' si invalide. */
+function codeParrainValide(s) {
+  const v = String(s == null ? '' : s).trim().toUpperCase().replace(/[\s-]/g, '');
+  return /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{6}$/.test(v) ? v : '';
+}
+/* Pourquoi le cadeau de bienvenue ne s'applique pas : raison donnée par le serveur, sinon tirée du devis ('' : il s'applique). */
+const RAISONS_PARRAINAGE = {
+  compte: 'Connectez-vous à votre compte pour recevoir votre cadeau de bienvenue.',
+  'deja-client': 'Le cadeau de bienvenue est réservé à la première commande d’un nouveau client.',
+  'soi-meme': 'Votre lien de parrainage est fait pour vos proches : il ne s’applique pas à vos commandes.',
+  code: 'Ce lien de parrainage n’est plus valable.'
+};
+function raisonParrainage(raison, dv, min) {
+  if (raison) return RAISONS_PARRAINAGE[raison] || RAISONS_PARRAINAGE.code;
+  if (dv && dv.bienvenue) return '';
+  if (dv && dv.remise) return 'Le cadeau de bienvenue ne se cumule pas avec un code promo.';
+  if (dv && num(min) > 0 && dv.sousTotal < num(min)) return `Le cadeau de bienvenue s’applique dès ${dollars(min)} d’achat.`;
+  return '';
+}
+
 module.exports = {
   OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
@@ -1034,5 +1099,6 @@ module.exports = {
   MAX_ALERTES, ANNONCES_PAR_JOUR, libelleVariante, varianteAlerte, alerteDisponible, annonceNettoyee,
   RELANCE_PANIER_JOURS, relancePanier,
   MAX_MESSAGE, MESSAGES_PAR_JOUR, messageNettoye, apercuMessage,
-  MAX_AVIS, AVIS_PAR_PAGE, RAPPEL_AVIS_JOURS, MOTIFS_AVIS, avisNettoye, reponseAvisNettoyee, nomPublic, resumeAvis, etatAvis, optionAchetee, articlesANoter, rappelAvis
+  MAX_AVIS, AVIS_PAR_PAGE, RAPPEL_AVIS_JOURS, MOTIFS_AVIS, avisNettoye, reponseAvisNettoyee, nomPublic, resumeAvis, etatAvis, optionAchetee, articlesANoter, rappelAvis,
+  PART_CAGNOTTE, PARRAIN_JOURS, MOUVEMENTS_CAGNOTTE, gainCommande, codeParrainValide, RAISONS_PARRAINAGE, raisonParrainage, reductions
 };

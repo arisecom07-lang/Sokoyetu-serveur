@@ -1040,3 +1040,118 @@ test('avis : seul le client qui a reçu l’article le note ; l’équipe répon
   const reste = await notes();
   assert.ok(!reste['t-jupe'] && !reste['t-montre'], 'notes retirées du catalogue');
 });
+
+test('fidélité : cagnotte gagnée à la livraison, utilisée connecté ; parrainage : cadeau du filleul, récompense du parrain', async () => {
+  const technicien = { Authorization: technique };
+  const cfg0 = (await api('/api/collections/config/records/store', { auth: true })).json.doc;
+  // Comptes clients créés par le tableau technique (sans code de connexion), puis « connectés ».
+  const compte = async (phone, name) => {
+    const mdp = secret() + secret();
+    const c = await api('/api/collections/clients/records', { method: 'POST', headers: technicien, body: { phone, name, password: mdp, passwordConfirm: mdp, verified: true, doc: { panier: [], favoris: [], profil: {} } } });
+    assert.equal(c.status, 200, c.texte);
+    return { Authorization: (await api(`/api/collections/clients/impersonate/${c.json.id}`, { method: 'POST', headers: technicien, body: {} })).json.token };
+  };
+  const cagnotte = async (headers) => { const r = await api('/api/sokoyetu/cagnotte', { headers }); assert.equal(r.status, 200, r.texte); return r.json; };
+  const devis = async (corps, headers = {}) => { const r = await api('/api/sokoyetu/devis', { method: 'POST', headers, body: { zoneId: 'bukavu', ...corps } }); assert.equal(r.status, 200, r.texte); return r.json; };
+  const montre = [{ productId: 't-montre', qty: 1 }];
+  const passer = async ({ headers = {}, name, phone, items = montre, extra = {} }) => {
+    const dv = await devis({ items, ...extra }, headers);
+    const t = secret();
+    const o = await commander(saisie({ token: t, customer: { name, phone }, items, discountCode: '', total: dv.total, payment: { method: 'mpesa', phone }, ...extra }), headers);
+    assert.equal(o.status, 200, o.texte);
+    await attendre(o.json.id, t, 'paid');
+    return { id: o.json.id, t, order: o.json.order, dv };
+  };
+  const etapes = async (id, actions) => { for (const action of actions) assert.equal((await api(`/api/sokoyetu/commandes/${id}`, { method: 'POST', auth: true, body: { action } })).status, 200); };
+  const notifs = async (type, headers) => (await api('/api/sokoyetu/notifications', { method: 'POST', headers, body: { appareil: secret() } })).json.notifications.filter((n) => n.type === type).map((n) => [n.titre, n.texte, n.url]);
+
+  // Fermées au départ : ni cagnotte, ni lien de parrainage.
+  const aline = await compte('0811112222', 'Aline Furaha');
+  const ferme = await cagnotte(aline);
+  assert.deepEqual([ferme.ouverte, ferme.solde, ferme.parrainage], [false, 0, null]);
+  assert.deepEqual((await api('/api/sokoyetu/cagnotte')).status, 401);
+  const sans = await devis({ items: montre });
+  assert.deepEqual([sans.bienvenue, sans.cagnotte, sans.gain, sans.fidelite], [null, 0, 0, { solde: 0, raison: '' }]);
+  assert.equal((await ecrire('config', 'store', { ...cfg0, loyalty: { enabled: true, pct: 5 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } })).status, 200);
+
+  // Le parrain : son code (créé à la première visite de sa cagnotte, toujours le même), et le lien public.
+  const a = await cagnotte(aline);
+  assert.deepEqual([a.ouverte, a.pct, a.part, a.solde, a.aVenir, a.premiere, a.mouvements], [true, 5, 50, 0, 0, true, []]);
+  const code = a.parrainage.code;
+  assert.match(code, /^[A-HJ-KM-NP-Z2-9]{6}$/);
+  assert.deepEqual([a.parrainage.bienvenue, a.parrainage.recompense, a.parrainage.min, a.parrainage.filleuls, a.parrainage.gagne, a.parrainage.enCours], [2, 3, 10, 0, 0, []]);
+  assert.equal((await cagnotte(aline)).parrainage.code, code);
+  assert.deepEqual((await api('/api/sokoyetu/parrainage?code=' + code.toLowerCase().slice(0, 3) + ' ' + code.slice(3))).json, { ok: true, code, prenom: 'Aline F.', bienvenue: 2, min: 10 });
+  assert.deepEqual((await api('/api/sokoyetu/parrainage?code=ZZZZZZ')).json, { ok: false });
+  assert.deepEqual((await api('/api/sokoyetu/parrainage?code=../x')).json, { ok: false });
+
+  // Le cadeau de bienvenue : pour un compte qui n'a jamais commandé, sans code promo, jamais avec son propre lien.
+  assert.deepEqual((await devis({ items: montre, parrain: code })).fidelite.raison, 'compte');
+  assert.deepEqual((await devis({ items: montre, parrain: code }, aline)).fidelite.raison, 'soi-meme');
+  const patrick = await compte('0822223333', 'Patrick Bisimwa');
+  const promo = await devis({ items: montre, parrain: code, discountCode: 'ESSAI10' }, patrick);
+  assert.deepEqual([promo.fidelite.raison, promo.bienvenue, promo.remise.amount], ['', null, 1.5]);
+  const dv = await devis({ items: montre, parrain: code }, patrick);
+  // 15 $ − 2 $ offerts = 13 $ d'articles ; frais 2 % : 0,26 $ ; livraison 2 $ ; gain 5 % : 0,65 $.
+  assert.deepEqual([dv.sousTotal, dv.bienvenue, dv.cagnotte, dv.frais, dv.livraison, dv.total, dv.gain, dv.fidelite.raison], [15, { code, amount: 2 }, 0, 0.26, 2, 15.26, 0.65, '']);
+  const o1 = await passer({ headers: patrick, name: 'Patrick Bisimwa', phone: '0822223333', extra: { parrain: code } });
+  assert.deepEqual([o1.order.total, o1.order.referral, o1.order.loyalty, o1.order.wallet], [15.26, { code, amount: 2 }, { pct: 5, amount: 0.65 }, null]);
+  const brut = (await enregistrement(o1.id)).doc;
+  assert.deepEqual([brut.referral.reward, brut.referral.byPhone, brut.loyalty.phone], [3, '0811112222', '0822223333']);
+  assert.equal((await devis({ items: montre, parrain: code }, patrick)).fidelite.raison, 'deja-client');
+
+  // Payée, pas encore livrée : gains à venir, récompense du parrain en cours.
+  const p1 = await cagnotte(patrick);
+  assert.deepEqual([p1.solde, p1.aVenir, p1.premiere], [0, 0.65, false]);
+  assert.deepEqual((await cagnotte(aline)).parrainage.enCours, [{ filleul: 'Patrick B.', montant: 3 }]);
+
+  // Livrée : chacun reçoit son gain, une seule fois, et en est prévenu (gratuit).
+  await etapes(o1.id, ['shipped', 'delivered']);
+  await etapes(o1.id, ['note']);
+  const p2 = await cagnotte(patrick);
+  assert.deepEqual([p2.solde, p2.aVenir, p2.mouvements.map((m) => [m.type, m.montant, m.numero])], [0.65, 0, [['achat', 0.65, o1.order.number]]]);
+  assert.deepEqual(await notifs('livree', patrick), [['Commande livrée', `Commande #${o1.order.number} remise. Merci pour votre confiance ! $0.65 ajoutés à votre cagnotte.`, `/suivi/${o1.id}`]]);
+  const a2 = await cagnotte(aline);
+  assert.deepEqual([a2.solde, a2.parrainage.filleuls, a2.parrainage.gagne, a2.parrainage.enCours, a2.mouvements.map((m) => [m.type, m.montant, m.filleul])], [3, 1, 3, [], [['parrainage', 3, 'Patrick B.']]]);
+  assert.deepEqual(await notifs('parrainage', aline), [['Merci pour votre parrainage !', 'Patrick B. a reçu sa première commande : $3.00 ajoutés à votre cagnotte.', '/compte/cagnotte']]);
+
+  // Le parrain utilise sa cagnotte (connecté seulement, la moitié des articles au plus) : 20 $ de robe, 3 $ de cagnotte.
+  const robe = [{ productId: 't-robe', color: 'Noir', size: 'M', qty: 1 }];
+  assert.equal((await devis({ items: robe, cagnotte: true })).cagnotte, 0);
+  const avec = await devis({ items: robe, cagnotte: true }, aline);
+  assert.deepEqual([avec.cagnotte, avec.frais, avec.total, avec.gain, avec.fidelite.solde], [3, 0.34, 19.34, 0.85, 3]);
+  const o2 = await passer({ headers: aline, name: 'Aline Furaha', phone: '0811112222', items: robe, extra: { cagnotte: true } });
+  assert.deepEqual([o2.order.wallet, o2.order.total], [{ used: 3 }, 19.34]);
+  const a3 = await cagnotte(aline);
+  assert.deepEqual([a3.solde, a3.mouvements[0].type, a3.mouvements[0].montant], [0, 'utilise', -3]);
+  // Déjà dépensée : une autre commande au même montant est refusée (le client revoit le total).
+  const refus = await commander(saisie({ token: secret(), customer: { name: 'Aline Furaha', phone: '0811112222' }, items: robe, discountCode: '', total: 19.34, cagnotte: true, payment: { method: 'mpesa', phone: '0811112222' } }), aline);
+  assert.deepEqual([refus.status, refus.json.champ], [400, 'total']);
+  // Commande annulée : la cagnotte revient.
+  await etapes(o2.id, ['cancel']);
+  assert.equal((await cagnotte(aline)).solde, 3);
+
+  // Sans compte : le gain va au téléphone de la commande ; le client qui crée son compte avec ce numéro le retrouve.
+  const o3 = await passer({ name: 'Neema Kahindo', phone: '0833334444' });
+  await etapes(o3.id, ['shipped', 'delivered']);
+  const neema = await compte('0833334444', 'Neema Kahindo');
+  assert.equal((await cagnotte(neema)).solde, 0.75);
+
+  // Administration : la cagnotte d'un client, et le geste de la boutique (une fois par jeton), annoncé au client.
+  const fiche = await api('/api/sokoyetu/clients/0811112222/cagnotte', { auth: true });
+  assert.deepEqual((({ solde, gagne, utilise, filleuls, compte: c, code: k }) => [solde, gagne, utilise, filleuls, c, k])(fiche.json), [3, 3, 0, 1, true, code]);
+  assert.equal((await api('/api/sokoyetu/clients/0811112222/cagnotte')).status, 403);
+  const jetonGeste = secret();
+  const geste = (corps) => api('/api/sokoyetu/clients/0811112222/cagnotte', { method: 'POST', auth: true, body: { jeton: jetonGeste, ...corps } });
+  assert.equal((await geste({ montant: 0 })).status, 400);
+  assert.equal((await geste({ montant: 500 })).status, 400);
+  const g = await geste({ montant: 5, motif: 'Retard de livraison' });
+  assert.deepEqual([g.status, g.json.ajoute, g.json.solde], [200, true, 8], g.texte);
+  assert.deepEqual([(await geste({ montant: 5 })).json.ajoute, (await cagnotte(aline)).solde], [false, 8]);
+  assert.deepEqual(await notifs('cagnotte', aline), [['Cadeau de la boutique', '$5.00 ajoutés à votre cagnotte (Retard de livraison). Merci de votre fidélité !', '/compte/cagnotte']]);
+
+  // Compte supprimé : la cagnotte disparaît avec lui.
+  assert.equal((await api('/api/sokoyetu/compte/supprimer', { method: 'POST', headers: patrick, body: {} })).status, 200);
+  assert.deepEqual((({ solde, gagne }) => [solde, gagne])((await api('/api/sokoyetu/clients/0822223333/cagnotte', { auth: true })).json), [0, 0]);
+  assert.equal((await ecrire('config', 'store', cfg0)).status, 200);
+});

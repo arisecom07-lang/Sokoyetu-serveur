@@ -161,6 +161,8 @@ function supprimer(app, rec) {
   try { require(`${__hooks}/lib/discussions.js`).effacer(app, [rec.id], [], ''); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Discussion du compte non effacée', { module: 'comptes', erreur: String(e) }); }
   // Ses avis aussi (donnés connecté, ou avec le téléphone du compte).
   try { require(`${__hooks}/lib/avis.js`).effacer(app, [rec.id], rec.getString('phone')); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Avis du compte non effacés', { module: 'comptes', erreur: String(e) }); }
+  // Et sa cagnotte, avec les gains promis à son téléphone.
+  try { app.runInTransaction((tx) => require(`${__hooks}/lib/fidelite.js`).effacer(tx, rec.getString('phone'))); } catch (e) { require(`${__hooks}/lib/serveur.js`).trace('warn', 'Cagnotte du compte non effacée', { module: 'comptes', erreur: String(e) }); }
 }
 
 /* Droit à l'effacement demandé à la boutique (administration) : le compte de ce téléphone disparaît aussi. */

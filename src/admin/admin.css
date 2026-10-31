@@ -553,3 +553,9 @@ label.import-ligne { cursor: pointer; grid-template-columns: auto auto minmax(0,
 .avis-admin-actions { flex-wrap: wrap; }
 .avis-admin-resume { padding: var(--e4); }
 @media (min-width: 900px) { .avis-admin-resume .repartition { max-width: 520px; } }
+
+/* Cagnotte d'un client (fiche client) */
+.liste-simple { display: grid; margin: 0; padding: 0; list-style: none; }
+.liste-simple li { display: flex; justify-content: space-between; gap: var(--e3); align-items: baseline; padding: 8px 0; font-size: var(--t-s); }
+.liste-simple li + li { border-top: 1px solid var(--ligne); }
+.liste-simple b { color: var(--ok); white-space: nowrap; }

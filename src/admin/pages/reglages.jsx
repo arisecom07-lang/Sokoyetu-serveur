@@ -6,7 +6,7 @@ import { Champ, LogoOperateur, Note, Bascule, toast, confirmer } from '../../com
 import { uid, copie, classes, copier } from '../../commun/js/outils.js';
 import { PAGES_LEGALES, ANCIENNES_CLES, modeleLegal } from '../../commun/js/legal.js';
 import { aller, route, lien } from '../routeur.js';
-import { cfg, pret, sauver, gererErreur, chargerExemple, retirerExemples, nbExemples, paiementServeur } from '../etat.js';
+import { cfg, pret, sauver, gererErreur, chargerExemple, retirerExemples, nbExemples, paiementServeur, etatServeur } from '../etat.js';
 import { TetePage, BarreEnregistrer, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement } from './accueil.jsx';
 import { useFormulaire } from './catalogue.jsx';
@@ -48,6 +48,15 @@ function Formulaire({ section }) {
     d.serviceFeePct = R.num(d.serviceFeePct); if ((d.serviceFeePct < 0 || d.serviceFeePct > 20) && stop('Frais de service : entre 0 et 20 %')) return;
     const delai = R.int(d.payment && d.payment.holdMinutes); if ((delai < 5 || delai > 120) && stop('Délai pour payer : entre 5 et 120 minutes')) return;
     d.payment = { holdMinutes: delai };
+    // Fidélité : de 0 à 10 % par commande ; parrainage de 0 à 100 $, l'achat minimum au-dessus du cadeau (sinon l'article serait offert).
+    d.loyalty = { enabled: !!(d.loyalty && d.loyalty.enabled), pct: R.num(d.loyalty && d.loyalty.pct) };
+    if (d.loyalty.enabled && (d.loyalty.pct < 0 || d.loyalty.pct > 10) && stop('Cagnotte : de 0 à 10 % de chaque commande')) return;
+    const pa = d.referral || {};
+    d.referral = { enabled: d.loyalty.enabled && !!pa.enabled, welcome: R.arrondi(pa.welcome), reward: R.arrondi(pa.reward), min: R.arrondi(pa.min) };
+    if (d.referral.enabled) {
+      if ([d.referral.welcome, d.referral.reward].some((v) => !(v >= 0 && v <= 100)) && stop('Parrainage : cadeau et gain de 0 à 100 $')) return;
+      if (d.referral.welcome > 0 && !(d.referral.min > d.referral.welcome && d.referral.min <= 1000) && stop('L’achat minimum doit dépasser le cadeau du filleul (jusqu’à 1 000 $)')) return;
+    }
     d.zones = (d.zones || []).filter((z) => String(z.name || '').trim()).map((z) => ({ id: z.id || uid(), name: R.nettoyer(z.name, 40), fee: Math.max(0, R.num(z.fee)), days: R.int(z.days), pickup: !!z.pickup, perKg: Math.max(0, R.arrondi(z.perKg)) }));
     if (!d.zones.length && stop('Gardez au moins une zone de livraison')) return;
     for (const k of ['company', 'address', 'rccm', 'idnat', 'nif']) d.legal[k] = R.nettoyer(d.legal[k], k === 'address' ? 140 : 80);
@@ -190,6 +199,26 @@ function Formulaire({ section }) {
                     sous={f.reviews.moderation ? 'Un avis n’apparaît qu’une fois publié par la boutique (page Avis)' : 'Publiés tout de suite ; vous pouvez masquer un avis abusif'} />
                   <Bascule actif={f.reviews.reminder} onClick={() => maj({ reviews: { ...f.reviews, reminder: !f.reviews.reminder } })} libelle="Demander son avis au client"
                     sous="Notification gratuite, une fois par commande, 2 jours après la livraison" />
+                </>
+              ) : null}
+            </section>
+            <section class="carte formulaire">
+              <h2 class="carte-titre"><Icone n="tirelire" />Fidélité et parrainage</h2>
+              {!(etatServeur.value.codes && etatServeur.value.codes.pret) ? <Note ton="info" icone="info">La cagnotte s’utilise avec un compte client : elle apparaît dans la boutique dès que les comptes clients sont ouverts (Plus → Mon compte).</Note> : null}
+              <Bascule actif={f.loyalty.enabled} onClick={() => maj({ loyalty: { ...f.loyalty, enabled: !f.loyalty.enabled } })} libelle="Cagnotte de fidélité"
+                sous="Chaque commande livrée rapporte au client un pourcentage de ses achats, qu’il utilise sur ses commandes suivantes (jusqu’à la moitié des articles)" />
+              {f.loyalty.enabled ? (
+                <>
+                  <Champ libelle="Gagné sur chaque commande (%)" aide="Des articles payés, versé à la livraison. 0 % : la cagnotte ne sert qu’au parrainage.">{(a) => <input class="saisie" {...a} type="number" inputmode="decimal" min="0" max="10" step="0.5" value={f.loyalty.pct} onInput={(e) => maj({ loyalty: { ...f.loyalty, pct: e.currentTarget.value } })} />}</Champ>
+                  <Bascule actif={f.referral.enabled} onClick={() => maj({ referral: { ...f.referral, enabled: !f.referral.enabled } })} libelle="Parrainage"
+                    sous="Chaque client a son lien et son code : ses proches reçoivent un cadeau sur leur première commande, et lui gagne dans sa cagnotte quand elle est livrée" />
+                  {f.referral.enabled ? (
+                    <div class="deux-colonnes">
+                      <Champ libelle="Cadeau du filleul ($)" aide="Sur la première commande d’un nouveau compte, sans code promo.">{(a) => <input class="saisie" {...a} inputmode="decimal" value={f.referral.welcome} onInput={(e) => maj({ referral: { ...f.referral, welcome: e.currentTarget.value } })} />}</Champ>
+                      <Champ libelle="Dès un achat de ($)" aide="Articles, avant le cadeau.">{(a) => <input class="saisie" {...a} inputmode="decimal" value={f.referral.min} onInput={(e) => maj({ referral: { ...f.referral, min: e.currentTarget.value } })} />}</Champ>
+                      <Champ libelle="Gain du parrain ($)" aide="Dans sa cagnotte, quand la commande de son filleul est livrée.">{(a) => <input class="saisie" {...a} inputmode="decimal" value={f.referral.reward} onInput={(e) => maj({ referral: { ...f.referral, reward: e.currentTarget.value } })} />}</Champ>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </section>

@@ -177,6 +177,7 @@ button.ligne:hover, a.ligne:hover { background: var(--surface-2); }
 .montants > div { display: flex; justify-content: space-between; gap: var(--e3); }
 .montants dt, .montants .lib { color: var(--encre-2); }
 .montants .moins { color: var(--ok); font-weight: 650; }
+.montants dd.num { white-space: nowrap; }
 .montants .total { padding-top: 11px; margin-top: 3px; border-top: 1px dashed var(--ligne-2); font-size: var(--t-l); font-weight: 800; }
 .montants .total .lib { color: var(--encre); }
 

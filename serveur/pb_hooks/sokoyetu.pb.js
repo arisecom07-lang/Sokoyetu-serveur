@@ -73,10 +73,15 @@ routerAdd('POST', '/api/sokoyetu/devis', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
   const b = S.corps(e);
   const P = S.lecteurProduits(e.app);
+  const cfg = S.configuration(e.app);
   const code = R.valider.codePromo(b.discountCode);
-  const d = R.devis({ cfg: S.configuration(e.app), produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null, maintenant: Date.now() });
+  // Cagnotte du client connecté ({ cagnotte: true } pour l'utiliser) et cadeau de bienvenue du parrainage ({ parrain: code }).
+  const fi = require(`${__hooks}/lib/fidelite.js`).pourCommande(e.app, require(`${__hooks}/lib/comptes.js`).compteDe(e), b, cfg);
+  const d = R.devis({ cfg, produit: (id) => P.doc(id), lignes: b.items, zoneId: b.zoneId, code: b.discountCode, remise: code ? S.remiseParCode(e.app, code) : null,
+    parrainage: fi.parrainage, cagnotte: b.cagnotte === true ? fi.cagnotte : 0, maintenant: Date.now() });
   d.lignes.forEach((l) => { delete l.cost; });
-  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' });
+  return e.json(200, { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, bienvenue: d.bienvenue, cagnotte: d.cagnotte, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, gain: d.gain, poids: d.poids, zoneId: d.zone ? d.zone.id : '',
+    fidelite: { solde: fi.cagnotte, raison: fi.raison } });
 }, LIMITE.commande);
 
 /*
@@ -102,11 +107,17 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     try { deja = tx.findFirstRecordByData('orders', 'token', jeton); } catch (err) { deja = null; }
     if (deja) return;
     const P = S.lecteurProduits(tx);
+    const cfg = S.configuration(tx);
     const code = R.valider.codePromo(b.discountCode);
+    // Client connecté à son compte : la commande s'y rattache (sinon, commande sans compte).
+    const compte = require(`${__hooks}/lib/comptes.js`).compteDe(e);
+    // Solde de la cagnotte relu ici, dans la transaction : deux commandes simultanées ne la dépensent jamais deux fois.
+    const fi = require(`${__hooks}/lib/fidelite.js`).pourCommande(tx, compte, b, cfg);
     let prep;
     try {
       prep = R.preparerCommande({
-        cfg: S.configuration(tx), produit: (x) => P.doc(x), remise: code ? S.remiseParCode(tx, code) : null,
+        cfg, produit: (x) => P.doc(x), remise: code ? S.remiseParCode(tx, code) : null,
+        parrainage: fi.parrainage, cagnotte: fi.cagnotte, titulaire: fi.titulaire,
         saisie: b, maintenant: Date.now(), numero: S.numeroUnique(tx)
       });
     } catch (err) {
@@ -116,8 +127,6 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
     S.appliquerStock(tx, prep.reserve, -1);
     const rec = new Record(tx.findCollectionByNameOrId('orders'));
     rec.set('token', jeton);
-    // Client connecté à son compte : la commande s'y rattache (sinon, commande sans compte).
-    const compte = require(`${__hooks}/lib/comptes.js`).compteDe(e);
     if (compte) rec.set('client', compte.id);
     // Appareil qui commande (empreinte de son jeton) : il reçoit les notifications de la commande, même sans compte.
     rec.set('appareil', require(`${__hooks}/lib/notifications.js`).empreinte(b.appareil));
@@ -330,6 +339,16 @@ routerAdd('POST', '/api/sokoyetu/avis/donner', (e) => {
   return e.json(200, A.donner(e.app, A.qui(e, b), b));
 }, LIMITE.petite);
 
+/* ---------- Boutique : cagnotte de fidélité et parrainage (voir lib/fidelite.js) ---------- */
+
+// La cagnotte du client connecté : solde, gains à venir, historique, et son code de parrainage.
+routerAdd('GET', '/api/sokoyetu/cagnotte', (e) => {
+  const C = require(`${__hooks}/lib/comptes.js`);
+  return e.json(200, require(`${__hooks}/lib/fidelite.js`).vue(e.app, C.exigerCompte(e)));
+});
+// Lien de parrainage ouvert (?code=K7M2QX) : prénom du parrain et cadeau de bienvenue du filleul.
+routerAdd('GET', '/api/sokoyetu/parrainage', (e) => e.json(200, require(`${__hooks}/lib/fidelite.js`).lien(e.app, (e.requestInfo().query || {})['code'])));
+
 /* ---------- Boutique : fréquentation (compteurs anonymes, voir lib/audience.js) ---------- */
 
 // La boutique se signale tant qu'elle est à l'écran, et à chaque article ouvert, mis au panier ou en favori.
@@ -420,6 +439,7 @@ routerAdd('POST', '/api/sokoyetu/clients/effacer', (e) => {
   require(`${__hooks}/lib/alertes.js`).effacer(e.app, clients, appareils);
   require(`${__hooks}/lib/discussions.js`).effacer(e.app, clients, appareils, tel);
   require(`${__hooks}/lib/avis.js`).effacer(e.app, clients, tel);
+  e.app.runInTransaction((tx) => require(`${__hooks}/lib/fidelite.js`).effacer(tx, tel));
   const comptes = require(`${__hooks}/lib/comptes.js`).effacerParTelephone(e.app, tel);
   return e.json(200, { effacees: n, comptes });
 }, LIMITE.petite);
@@ -529,6 +549,20 @@ routerAdd('POST', '/api/sokoyetu/avis/{id}', (e) => {
   S.exigerGerant(e, 'avis');
   const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
   return e.json(200, require(`${__hooks}/lib/avis.js`).moderer(e.app, e.request.pathValue('id'), S.corps(e), auteur));
+}, LIMITE.petite);
+
+/* ---------- Administration : cagnotte d'un client (voir lib/fidelite.js) ---------- */
+// Solde, gains, cagnotte utilisée et filleuls du client de ce téléphone.
+routerAdd('GET', '/api/sokoyetu/clients/{tel}/cagnotte', (e) => {
+  require(`${__hooks}/lib/serveur.js`).exigerGerant(e, 'clients');
+  return e.json(200, require(`${__hooks}/lib/fidelite.js`).pourClient(e.app, e.request.pathValue('tel')));
+});
+// Geste de la boutique (propriétaire) : { montant, motif, jeton } ajoutés à sa cagnotte ; le client en est prévenu.
+routerAdd('POST', '/api/sokoyetu/clients/{tel}/cagnotte', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`);
+  S.exigerGerant(e, 'cagnotte');
+  const auteur = e.auth ? (e.auth.getString('name') || e.auth.email()) : '';
+  return e.json(200, require(`${__hooks}/lib/fidelite.js`).offrir(e.app, e.request.pathValue('tel'), S.corps(e), auteur));
 }, LIMITE.petite);
 
 /* ---------- Administration : messages des clients (propriétaire et vendeurs, voir lib/discussions.js) ---------- */

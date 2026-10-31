@@ -12,7 +12,7 @@ import { EntetePage, Pied } from '../composants/cadre.jsx';
 import { lienProduit } from '../composants/produits.jsx';
 import { useSeo } from './commun.jsx';
 
-const ICONES = { payee: 'portefeuille', preparation: 'colis', expediee: 'camion', prete: 'boutique', livree: 'coche', retiree: 'coche', annulee: 'alerte', expiree: 'alerte', remboursee: 'portefeuille', stock: 'etincelle', promo: 'megaphone', panier: 'sac', message: 'bulle', avis: 'etoile', avis_reponse: 'etoile' };
+const ICONES = { payee: 'portefeuille', preparation: 'colis', expediee: 'camion', prete: 'boutique', livree: 'coche', retiree: 'coche', annulee: 'alerte', expiree: 'alerte', remboursee: 'portefeuille', stock: 'etincelle', promo: 'megaphone', panier: 'sac', message: 'bulle', avis: 'etoile', avis_reponse: 'etoile', parrainage: 'cadeau', cagnotte: 'cadeau' };
 const TONS = { livree: 'ok', retiree: 'ok', payee: 'ok', stock: 'ok', annulee: 'danger', expiree: 'danger' };
 
 /*

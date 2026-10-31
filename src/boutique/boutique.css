@@ -776,3 +776,50 @@ body[data-bas="barre"] .page-discussion { padding-bottom: calc(var(--h-composeur
   .etoiles-rapides .etoile-rapide:hover ~ .etoile-rapide { color: var(--ligne-saisie); }
 }
 @media (min-width: 900px) { .avis-resume { grid-template-columns: 170px minmax(0, 1fr); } }
+
+/* ---------- Fidélité : « Ma cagnotte », parrainage, cadeau de bienvenue ---------- */
+.cagnotte-grille { display: grid; gap: var(--e4); padding-top: var(--e3); }
+.cagnotte-solde { display: grid; justify-items: center; gap: var(--e2); text-align: center; padding: var(--e6) var(--e5); background: linear-gradient(160deg, var(--marque-doux), var(--surface) 70%); }
+.cagnotte-icone, .cadeau-icone { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: var(--surface); color: var(--or-texte); box-shadow: var(--ombre-1); --ic: 30px; }
+.cagnotte-libelle { margin: var(--e2) 0 0; font-family: var(--police); font-size: var(--t-s); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); }
+.cagnotte-montant { margin: 0; font-family: var(--police-titre); font-size: 44px; line-height: 1.05; font-weight: 600; color: var(--encre); }
+.cagnotte-solde > .attenue { max-width: 34ch; }
+.cagnotte-a-venir { display: flex; gap: var(--e2); align-items: flex-start; max-width: 40ch; margin: 0; padding: 10px var(--e3); border-radius: var(--r-s); background: var(--ok-doux); color: var(--encre); font-size: var(--t-s); text-align: left; }
+.cagnotte-a-venir .ic { --ic: 17px; flex: none; margin-top: 1px; color: var(--ok); }
+.cagnotte-solde .btn { max-width: 320px; margin-top: var(--e2); }
+.cagnotte-etapes { display: grid; gap: var(--e3); margin: 0; padding: 0; list-style: none; counter-reset: etape; }
+.cagnotte-etapes li { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: var(--e3); counter-increment: etape; }
+.cagnotte-etapes li::before { content: counter(etape); grid-row: span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--marque-doux); color: var(--marque-texte); font-weight: 700; font-size: var(--t-s); }
+.cagnotte-etapes small { color: var(--encre-2); font-size: var(--t-s); line-height: 1.45; }
+.cagnotte-mouvements { display: grid; margin: 0 calc(-1 * var(--e4)); padding: 0; list-style: none; }
+.cagnotte-mouvements li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--e3); align-items: center; padding: 10px var(--e4); }
+.cagnotte-mouvements li + li { border-top: 1px solid var(--ligne); }
+.mv-texte { display: grid; min-width: 0; }
+.mv-texte small { color: var(--encre-3); font-size: var(--t-xs); }
+.mv-plus { color: var(--ok); font-weight: 700; }
+.mv-moins { color: var(--encre-2); font-weight: 700; }
+.carte-parrainage { display: grid; gap: var(--e3); }
+.carte-parrainage .carte-titre { margin-bottom: 0; }
+.parrainage-offre { margin: 0; font-size: var(--t-base); line-height: 1.5; }
+.parrainage-code { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); padding: 12px 12px 12px 18px; border-radius: var(--r-m); background: var(--fond-2); border: 1.5px dashed var(--ligne-saisie); }
+.parrainage-code small { display: block; font-size: 12.5px; color: var(--encre-3); font-weight: 600; }
+.parrainage-code b { display: block; font-size: 26px; line-height: 1.15; letter-spacing: .14em; }
+.parrainage-chiffres { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e3); margin: 0; }
+.parrainage-chiffres div { padding: 10px var(--e3); border-radius: var(--r-s); background: var(--surface-2); }
+.parrainage-chiffres dt { font-size: var(--t-xs); color: var(--encre-3); font-weight: 600; }
+.parrainage-chiffres dd { margin: 2px 0 0; font-size: var(--t-xl); font-weight: 700; }
+.parrainage-en-cours { display: grid; gap: var(--e2); margin: 0; padding: 0; list-style: none; font-size: var(--t-s); color: var(--encre-2); }
+.parrainage-en-cours li { display: flex; gap: var(--e2); align-items: flex-start; }
+.parrainage-en-cours .ic { --ic: 16px; flex: none; margin-top: 2px; color: var(--ok); }
+.cadeau-bienvenue { display: grid; justify-items: center; gap: var(--e2); text-align: center; padding-bottom: var(--e2); }
+.cadeau-bienvenue p { margin: 0; max-width: 36ch; }
+.cadeau-montant { font-family: var(--police-titre); font-size: 34px; line-height: 1.1; font-weight: 600; color: var(--encre); }
+.gain-cagnotte { display: flex; gap: var(--e2); align-items: flex-start; margin: var(--e3) 0 0; padding: 10px var(--e3); border-radius: var(--r-s); background: var(--surface-2); color: var(--encre-2); font-size: var(--t-s); line-height: 1.45; text-decoration: none; }
+.gain-cagnotte .ic { --ic: 18px; flex: none; color: var(--or-texte); }
+.gain-cagnotte b { color: var(--encre); }
+a.gain-cagnotte:hover { background: var(--surface-3); }
+.carte-fidelite .gain-cagnotte { margin: 0; }
+.case-sous { display: block; margin-top: 2px; color: var(--encre-3); font-size: var(--t-s); font-weight: 500; }
+@media (min-width: 900px) {
+  .cagnotte-grille { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: var(--e5); }
+}

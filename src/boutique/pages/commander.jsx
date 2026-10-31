@@ -16,6 +16,7 @@ import { EntetePage, BarreAction } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
 import { jetonAppareil } from '../notifications.js';
 import { devisLocal, prixPieces } from './panier.jsx';
+import { cagnotte, chargerCagnotte, cagnotteOuverte, parrainageOuvert, parrain, oublierParrain, garderParrain, parrainageEstime } from '../fidelite.js';
 import { useSeo } from './commun.jsx';
 
 export const NOMS_ETAPES = ['Livraison', 'Paiement', 'Reçu'];
@@ -28,7 +29,7 @@ function brouillonInitial() {
   const zone = R.zoneDe(c, (frais && frais.zoneId) || pf.zoneId) || c.zones[0];
   const f = {
     etape: 1, nom: pf.name || '', tel: pf.phone || '', zoneId: zone ? zone.id : '', adresse: pf.address || '', repere: pf.landmark || '', note: '',
-    methode: pf.payMethod || (ms[0] || {}).k || '', telPaiement: pf.payPhone || '', code: '', remise: null, conditions: false,
+    methode: pf.payMethod || (ms[0] || {}).k || '', telPaiement: pf.payPhone || '', code: '', remise: null, conditions: false, cagnotte: false,
     ...(frais || {}), erreurs: {}, devis: null, envoi: false,
     jeton: frais && R.valider.jeton(frais.jeton) ? frais.jeton : secret(32)
   };
@@ -43,6 +44,8 @@ export function Montants({ m, zone, libelleTotal = 'Total' }) {
     <dl class="montants espace-haut">
       <div><dt>Sous-total</dt><dd class="num">{dollars(m.sousTotal)}</dd></div>
       {m.remise ? <div><dt>Code {m.remise.code}</dt><dd class="moins num">−{dollars(m.remise.amount)}</dd></div> : null}
+      {m.bienvenue ? <div><dt>Cadeau de bienvenue</dt><dd class="moins num">−{dollars(m.bienvenue.amount)}</dd></div> : null}
+      {m.cagnotte ? <div><dt>Ma cagnotte</dt><dd class="moins num">−{dollars(m.cagnotte)}</dd></div> : null}
       <div><dt>Livraison{zone ? ` · ${zone}` : ''}</dt><dd class="num">{m.livraison ? dollars(m.livraison) : 'Gratuite'}</dd></div>
       {m.frais ? <div><dt>Frais de service ({R.num(m.fraisPct)} %)</dt><dd class="num">{dollars(m.frais)}</dd></div> : null}
       <div class="total"><dt class="lib">{libelleTotal}</dt><dd class="num">{dollars(m.total)}</dd></div>
@@ -69,6 +72,34 @@ export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, tel
   );
 }
 
+/* Étape du paiement : cadeau de bienvenue du parrainage, cagnotte à utiliser, et ce que la commande rapportera. */
+function CarteFidelite({ dv, utiliser, onUtiliser }) {
+  const cl = client.value; const g = cl ? cagnotte.value : null; const p = parrainageOuvert.value ? parrain.value : null;
+  const de = p && p.prenom ? ` de ${p.prenom}` : '';
+  let cadeau = null;
+  if (p && !cl) cadeau = <Note ton="info" icone="cadeau">Votre cadeau{de} (<span class="num">{dollars(p.montant)}</span>) s’applique avec votre compte, gratuit et sans mot de passe. <a class="lien" href={lien('/compte/connexion?pour=commande&retour=/commander')}>Créer mon compte</a></Note>;
+  else if (p && g) {
+    const texte = R.raisonParrainage(!g.premiere ? 'deja-client' : g.parrainage && g.parrainage.code === p.code ? 'soi-meme' : '', dv, p.min);
+    cadeau = texte ? <Note ton="info" icone="cadeau">{texte}</Note> : <Note ton="ok" icone="cadeau">Cadeau{de} : <b class="num">−{dollars(dv.bienvenue ? dv.bienvenue.amount : p.montant)}</b> sur votre première commande.</Note>;
+  }
+  const solde = g ? g.solde : 0;
+  return (
+    <section class="carte entree-avant carte-fidelite">
+      <h2 class="carte-titre"><Icone n="tirelire" />Ma cagnotte</h2>
+      <div class="pile">
+        {cadeau}
+        {solde > 0 ? (
+          <CaseACocher coche={utiliser} onClick={onUtiliser}>
+            Utiliser ma cagnotte : <b class="num">{dollars(solde)}</b> disponibles
+            <small class="case-sous">{utiliser && dv.cagnotte ? `−${dollars(dv.cagnotte)} sur cette commande` : 'Elle règle jusqu’à la moitié des articles.'}</small>
+          </CaseACocher>
+        ) : g ? <p class="attenue petit">Votre cagnotte est vide pour l’instant : elle se remplit à chaque commande livrée.</p> : null}
+        {dv.gain > 0 ? <p class="gain-cagnotte"><Icone n="tirelire" /><span>Cette commande vous rapportera <b class="num">{dollars(dv.gain)}</b>, versés à la livraison{cl ? '' : ' : votre compte les retrouve avec votre numéro'}.</span></p> : null}
+      </div>
+    </section>
+  );
+}
+
 export function NoteModeTest() {
   return <Note ton="info" icone="info"><b>Mode test.</b> Aucun argent n’est débité : le paiement est confirmé tout seul après quelques secondes (refusé si le numéro se termine par 0000).</Note>;
 }
@@ -89,6 +120,8 @@ export function Commander() {
     Local.ecrire('commandeEnCours', { ...garde, le: Date.now() });
   }, [f.nom, f.tel, f.zoneId, f.adresse, f.repere, f.note, f.methode, f.telPaiement, f.code, f.remise, f.jeton]);
   useEffect(() => { if (!ms.some((m) => m.k === f.methode) && ms[0]) maj({ methode: ms[0].k }); }, [ms.length]);
+  // Connecté : solde de la cagnotte, et première commande ou non (cadeau de bienvenue du parrainage).
+  useEffect(() => { if (client.value && cagnotteOuverte.value) chargerCagnotte().catch(() => { }); }, [client.value && client.value.id, cagnotteOuverte.value]);
 
   if (!lignes.length) {
     return <><EntetePage titre="Commande" repli="/panier" /><main id="contenu" class="page conteneur"><Vide icone="sac" titre="Aucun article à commander" texte="Cochez dans votre panier les articles que vous voulez commander maintenant."><a class="btn btn-primaire" href={lien('/panier')}>Voir mon panier</a></Vide></main></>;
@@ -100,7 +133,7 @@ export function Commander() {
       <>
         <EntetePage titre="Commande" sous="Avec ou sans compte" repli="/panier" />
         <main id="contenu" class="page conteneur page-choix-compte">
-          <InvitationCompte titre="Créez votre compte et commencez à commander dès maintenant" texte="En 30 secondes, avec votre numéro de téléphone." retour="/commander" pour="commande" tel={f.tel}
+          <InvitationCompte titre={parrainageOuvert.value && parrain.value ? `Créez votre compte pour recevoir votre cadeau de ${dollars(parrain.value.montant)}` : 'Créez votre compte et commencez à commander dès maintenant'} texte="En 30 secondes, avec votre numéro de téléphone." retour="/commander" pour="commande" tel={f.tel}
             sansCompte={() => { continuerSansCompte(); window.scrollTo(0, 0); }} />
           <p class="discret petit centre">Sans compte, vous commandez tout de suite. Vous pourrez créer votre compte plus tard : vos commandes passées avec le même téléphone vous suivront.</p>
         </main>
@@ -109,7 +142,11 @@ export function Commander() {
   }
 
   const zone = R.zoneDe(c, f.zoneId); const retrait = R.estRetrait(zone);
-  const dv = f.devis || devisLocal({ zoneId: f.zoneId, remise: f.remise });
+  // Cagnotte (connecté) et cadeau de bienvenue : estimés ici, confirmés par le serveur avant le paiement.
+  const g = client.value && cagnotteOuverte.value ? cagnotte.value : null;
+  const utiliser = !!(f.cagnotte && g && g.solde > 0);
+  const dv = f.devis || devisLocal({ zoneId: f.zoneId, remise: f.remise, parrainage: parrainageEstime(), cagnotte: utiliser ? g.solde : 0 });
+  const fidelite = { parrain: parrainageOuvert.value && parrain.value ? parrain.value.code : '', cagnotte: utiliser };
   const moyen = ms.find((m) => m.k === f.methode);
   const ouvert = ms.length > 0;
   const enTest = !!(c.payment && c.payment.test);
@@ -133,8 +170,16 @@ export function Commander() {
     if (!code) { maj({ remise: null, erreurs: { ...f.erreurs, code: 'Ce code n’est pas valide.' } }); return; }
     try {
       const r = await requete(`sokoyetu/discount?code=${encodeURIComponent(code)}&subtotal=${dv.sousTotal}`);
-      if (r && r.ok) { maj({ remise: { code: r.code, type: r.type, value: r.value, minSubtotal: r.minSubtotal }, devis: null, erreurs: { ...f.erreurs, code: '' } }); toast(`Code ${r.code} appliqué`, { icone: 'etiquette' }); }
-      else maj({ remise: null, erreurs: { ...f.erreurs, code: (r && r.reason) || 'Ce code n’est pas valide.' } });
+      if (r && r.ok) { maj({ remise: { code: r.code, type: r.type, value: r.value, minSubtotal: r.minSubtotal }, devis: null, erreurs: { ...f.erreurs, code: '' } }); toast(`Code ${r.code} appliqué`, { icone: 'etiquette' }); return; }
+      // Le code d'un parrain, saisi à la place d'un code promo : son cadeau de bienvenue est gardé.
+      const p = parrainageOuvert.value && R.codeParrainValide(code) ? await requete('sokoyetu/parrainage?code=' + encodeURIComponent(code)).catch(() => null) : null;
+      if (p && p.ok) {
+        garderParrain(p);
+        maj({ code: '', remise: null, devis: null, erreurs: { ...f.erreurs, code: '' } });
+        toast(`Code de parrainage${p.prenom ? ' de ' + p.prenom : ''} : ${dollars(p.bienvenue)} offerts sur votre première commande`, { icone: 'cadeau', duree: 4500 });
+        return;
+      }
+      maj({ remise: null, erreurs: { ...f.erreurs, code: (r && r.reason) || 'Ce code n’est pas valide.' } });
     } catch (e) { maj({ erreurs: { ...f.erreurs, code: e.message } }); }
   }
 
@@ -148,11 +193,15 @@ export function Commander() {
 
   /* Le serveur confirme prix, stock, remise, livraison et frais. Renvoie le devis, ou null si le client doit d'abord revoir le montant. */
   async function confirmerMontant() {
-    const r = await requete('sokoyetu/devis', { method: 'POST', corps: { items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })), zoneId: f.zoneId, discountCode: f.remise ? f.remise.code : '' } });
+    const r = await requete('sokoyetu/devis', { method: 'POST', corps: { items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })), zoneId: f.zoneId, discountCode: f.remise ? f.remise.code : '', ...fidelite } });
     const bloquants = (r.problemes || []).filter((p) => p.code !== 'remise');
     if (bloquants.length) { panierChange(bloquants.map((p) => p.message)); return null; }
     const remiseRefusee = (r.problemes || []).find((p) => p.code === 'remise');
-    const devis = { lignes: r.lignes, sousTotal: r.sousTotal, remise: r.remise, livraison: r.livraison, frais: r.frais, fraisPct: r.fraisPct, total: r.total, poids: r.poids, problemes: [] };
+    const devis = { lignes: r.lignes, sousTotal: r.sousTotal, remise: r.remise, bienvenue: r.bienvenue, cagnotte: r.cagnotte, livraison: r.livraison, frais: r.frais, fraisPct: r.fraisPct, total: r.total, gain: r.gain, poids: r.poids, problemes: [] };
+    // Le serveur a le dernier mot : cadeau de bienvenue refusé (déjà client, son propre lien), solde de la cagnotte.
+    const fi = r.fidelite || {};
+    if (fidelite.parrain && fi.raison && fi.raison !== 'compte') { toast(R.raisonParrainage(fi.raison), { icone: 'cadeau', duree: 5000 }); oublierParrain(); }
+    if (cagnotte.value && typeof fi.solde === 'number' && fi.solde !== cagnotte.value.solde) cagnotte.value = { ...cagnotte.value, solde: fi.solde };
     if (remiseRefusee) {
       maj({ devis, remise: null, erreurs: { code: remiseRefusee.message } });
       toast('Le code promo ne s’applique plus : vérifiez le nouveau montant', { icone: 'alerte', ton: 'danger', duree: 4500 });
@@ -187,7 +236,7 @@ export function Commander() {
       customer: { name: f.nom, phone: f.tel }, shipping: { zoneId: f.zoneId, address: f.adresse, landmark: f.repere }, note: f.note,
       items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })),
       discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: telDebite }, total: devis.total,
-      appareil: jetonAppareil()
+      appareil: jetonAppareil(), ...fidelite
     };
     mesurerEvenement('add_payment_info', { value: devis.total, currency: 'USD', payment_type: moyen.label });
     try {
@@ -195,6 +244,9 @@ export function Commander() {
       suivreCommande(r.id, f.jeton); recevoirCommande(r.id, r.order);
       enregistrerProfil({ name: R.valider.nom(f.nom), phone: R.valider.telephone(f.tel), zoneId: f.zoneId, address: f.adresse, landmark: f.repere, payMethod: f.methode, payPhone: R.valider.mobileMoney(telDebite) });
       retirerCommandes(corps.items); Local.retirer('commandeEnCours');
+      // Cadeau de bienvenue reçu : il ne servira plus ; la cagnotte a pu changer.
+      if (r.order && r.order.referral) oublierParrain();
+      if (client.value && cagnotteOuverte.value) chargerCagnotte().catch(() => { });
       naviguer('/paiement/' + r.id, { remplacer: true });
     } catch (err) {
       maj({ envoi: false });
@@ -295,6 +347,7 @@ export function Commander() {
                   </form>
                   {f.remise ? <p class="ligne-stock ok espace-haut"><Icone n="coche" />Code {f.remise.code} appliqué{dv.remise ? ` : −${dollars(dv.remise.amount)}` : ''}<button class="lien petit" style={{ marginLeft: 'auto' }} onClick={() => maj({ remise: null, code: '', devis: null })}>Retirer</button></p> : null}
                 </section>
+                {cagnotteOuverte.value ? <CarteFidelite dv={dv} utiliser={utiliser} onUtiliser={() => maj({ cagnotte: !utiliser, devis: null })} /> : null}
                 <section class="carte entree-avant">
                   <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="repere" />{retrait ? 'Retrait' : 'Livraison'}</h2><button class="btn btn-fantome btn-s" onClick={() => allerA(1)}><Icone n="crayon" />Modifier</button></div>
                   <dl class="infos espace-haut"><dt>Nom</dt><dd>{f.nom}</dd><dt>Téléphone</dt><dd>{telephone(R.valider.telephone(f.tel)) || f.tel}</dd><dt>Zone</dt><dd>{zone && zone.name}</dd>{!retrait && f.adresse ? <><dt>Adresse</dt><dd>{f.adresse}</dd></> : null}</dl>

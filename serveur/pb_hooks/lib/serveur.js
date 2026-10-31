@@ -87,6 +87,9 @@ function commandePublique(doc) {
   // Références internes des demandes de paiement : jamais montrées au client.
   if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
+  // Parrainage : qui a parrainé le client et ce qu'il y gagne restent à la boutique.
+  if (d.referral) { delete d.referral.by; delete d.referral.byPhone; delete d.referral.reward; }
+  if (d.loyalty) delete d.loyalty.phone;
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
 }
@@ -122,6 +125,9 @@ function enregistrerCommande(app, rec, doc) {
   rec.set('doc', doc);
   champsCommande(rec, doc);
   app.save(rec);
+  // À la livraison, la cagnotte du client (et celle de son parrain) reçoit son gain, dans la même transaction.
+  try { require(`${__hooks}/lib/fidelite.js`).apresCommande(app, rec, avant, doc); }
+  catch (e) { trace('error', 'Cagnotte non créditée', { module: 'fidelite', commande: doc.number, erreur: String(e) }); }
   // Le client est prévenu de chaque étape (centre de notifications, téléphone), dans la même transaction.
   try { require(`${__hooks}/lib/notifications.js`).apresCommande(app, rec, avant, doc); }
   catch (e) { trace('error', 'Notification de commande impossible', { module: 'notifications', commande: doc.number, erreur: String(e) }); }

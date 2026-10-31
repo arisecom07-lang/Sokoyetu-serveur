@@ -8,7 +8,7 @@ const HASH = typeof __DEMO__ !== 'undefined' && __DEMO__;
 const ROUTES = [
   ['/', 'accueil'], ['/categories', 'rayons'], ['/nouveautes', 'nouveautes'], ['/en-stock', 'en-stock'], ['/import-chine', 'import-chine'], ['/c/:id/:slug?', 'rayon'], ['/p/:id/:slug?', 'produit'],
   ['/recherche', 'recherche'], ['/favoris', 'favoris'], ['/panier', 'panier'], ['/panier/partage', 'panier-partage'], ['/commander', 'commander'], ['/paiement/:id', 'paiement'], ['/merci/:id', 'merci'],
-  ['/compte', 'compte'], ['/compte/commandes', 'commandes'], ['/compte/retrouver', 'retrouver'], ['/compte/connexion', 'connexion'], ['/suivi/:id', 'suivi'], ['/infos/:page', 'infos'], ['/notifications', 'notifications'], ['/discussion', 'discussion'], ['/avis', 'avis']
+  ['/compte', 'compte'], ['/compte/commandes', 'commandes'], ['/compte/retrouver', 'retrouver'], ['/compte/connexion', 'connexion'], ['/compte/cagnotte', 'cagnotte'], ['/suivi/:id', 'suivi'], ['/infos/:page', 'infos'], ['/notifications', 'notifications'], ['/discussion', 'discussion'], ['/avis', 'avis']
 ].map(([motif, nom]) => {
   const cles = [];
   const re = new RegExp('^' + motif.replace(/\/:(\w+)(\?)?/g, (_, k, opt) => { cles.push(k); return opt ? '(?:/([^/]+))?' : '/([^/]+)'; }) + '/?$');

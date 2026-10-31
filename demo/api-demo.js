@@ -9,7 +9,7 @@ import { Local } from '../src/commun/js/stockage.js';
 import EXEMPLE from '../src/admin/public/exemple-catalogue.json';
 
 export const DEMO = true;
-const VERSION_BASE = 10;
+const VERSION_BASE = 11;
 const DELAI_PAIEMENT = 5000;
 const CLE = 'sokoyetu-demo:base';
 const CLE_MEDIA = 'sokoyetu-demo:media:';
@@ -29,21 +29,23 @@ const CONFIG_DEMO = {
   name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir', setup: { livraison: true },
   payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false } },
   serviceFeePct: 2, payment: { holdMinutes: 30 },
+  // Cagnotte de fidélité et parrainage ouverts dans la démo (fermés sur une nouvelle boutique).
+  loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 },
   // Identité d'exemple : aucune société ni numéro d'immatriculation inventés (la boutique se présente sous son nom).
   legal: { company: '', address: 'av. Patrice Lumumba n° 12, Ibanda, Bukavu (adresse d’exemple)', email: 'contact@sokoyakwetu.com' }
 };
-// [nom, téléphone, zone, adresse, articles, opérateur, paiement (payé, refusé, jamais reçu), étapes, âge en jours]
+// [nom, téléphone, zone, adresse, articles, opérateur, paiement (payé, refusé, jamais reçu), étapes, âge en jours, parrain (téléphone)]
 const CLIENTS = [
   ['Grâce Mapendo', '0991234501', 'bukavu', 'Nyawera, av. Lumumba 12', [{ productId: 'ex-p08', size: 'L', qty: 2 }, { productId: 'ex-p17', qty: 1 }], 'mpesa', 'paye', ['preparing', 'shipped', 'delivered'], 9],
   ['Patient Bisimwa', '0971234502', 'goma', 'Himbi, av. du Lac 4', [{ productId: 'ex-p10', qty: 1 }], 'airtel', 'paye', [], 6],
   ['Esther Furaha', '0891234503', 'bukavu', 'Ibanda, Q. Ndendere 33', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 1 }], 'orange', 'refuse', [], 0],
   ['Josué Mugisho', '0991234504', 'retrait', '', [{ productId: 'ex-p15', qty: 1 }], 'mpesa', 'paye', ['preparing', 'shipped'], 2],
-  ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', 'paye', ['preparing'], 1],
+  ['Chantal Neema', '0971234505', 'bukavu', 'Kadutu, av. Industrielle 8', [{ productId: 'ex-p01', size: 'M', qty: 1 }, { productId: 'ex-p04', qty: 1 }], 'airtel', 'paye', ['preparing'], 1, '0991234501'],
   ['Didier Kambale', '0821234506', 'goma', 'Katindo, av. Mapendo 21', [{ productId: 'ex-p18', qty: 2 }], 'mpesa', 'echu', [], 3]
 ];
-// [nom, téléphone, panier, favoris, dernière visite (heures)]
+// [nom, téléphone, panier, favoris, dernière visite (heures), code de parrainage]
 const COMPTES = [
-  ['Grâce Mapendo', '0991234501', [{ productId: 'ex-p04', qty: 1 }], ['ex-p05', 'ex-p13'], 3],
+  ['Grâce Mapendo', '0991234501', [{ productId: 'ex-p04', qty: 1 }], ['ex-p05', 'ex-p13'], 3, 'K7M2QX'],
   ['Aline Zawadi', '0971234507', [{ productId: 'ex-p05', qty: 1 }, { productId: 'ex-p13', qty: 2 }], ['ex-p10'], 30],
   ['Patient Bisimwa', '0971234502', [], ['ex-p18'], 50]
 ];
@@ -77,30 +79,35 @@ function creerBase() {
       poser(k, id, doc, k === 'products' ? { active: doc.status !== 'draft' } : k === 'discounts' ? { code: R.valider.codePromo(doc.code) } : {});
     }
   }
+  // Quelques clients ont créé leur compte : panier en attente, favoris (page Clients, Audience → Paniers à relancer).
+  COMPTES.forEach(([name, phone, panier, favoris, heures, code]) => {
+    const t = now - heures * 3600e3; const dates = {};
+    panier.forEach((l) => { dates['panier:' + l.productId] = t; }); favoris.forEach((id) => { dates['favori:' + id] = t - 3600e3; });
+    poser('clients', 'cli' + uid().slice(0, 12), R.docCompte({ panier, favoris, dates }), { phone, name, seen: t, created: t - 9 * JOUR, parrain_code: code || '' });
+  });
+  const compte = (tel) => Object.values(b.cols.clients).find((c) => c.phone === tel);
   // Quelques commandes déjà passées, pour que le tableau de bord ait de quoi montrer.
   const cfg = configPaiement(b.cols.config.store.doc);
   const produit = (id) => (b.cols.products[id] ? b.cols.products[id].doc : null);
-  CLIENTS.forEach(([name, phone, zoneId, address, items, method, mode, suites, age], i) => {
+  CLIENTS.forEach(([name, phone, zoneId, address, items, method, mode, suites, age, parrainTel], i) => {
     const t = mode === 'refuse' ? now - 6 * 60000 : now - age * JOUR - (5 - i) * 3600e3;
-    const dv = R.devis({ cfg, produit, lignes: items, zoneId, maintenant: t });
+    const p = parrainTel && compte(parrainTel);
+    const parrainage = p ? { code: p.parrain_code, montant: cfg.referral.welcome, min: cfg.referral.min, recompense: cfg.referral.reward, parrain: p.id, parrainTel: R.chiffres(p.phone) } : null;
+    const dv = R.devis({ cfg, produit, lignes: items, zoneId, parrainage, maintenant: t });
     const payeur = mode === 'paye' ? phone : phone.slice(0, 6) + '0000';
-    const { commande, reserve } = R.preparerCommande({ cfg, produit, saisie: { termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address }, items, payment: { method, phone: payeur }, total: dv.total, note: i === 1 ? 'Appelez avant de passer, merci.' : '' }, maintenant: t, numero: R.numeroCommande() });
+    const { commande, reserve } = R.preparerCommande({ cfg, produit, parrainage, saisie: { termsAccepted: true, customer: { name, phone }, shipping: { zoneId, address }, items, payment: { method, phone: payeur }, total: dv.total, note: i === 1 ? 'Appelez avant de passer, merci.' : '' }, maintenant: t, numero: R.numeroCommande() });
     stock(b, reserve, -1);
     let o = R.paiementEnvoye(commande, { maintenant: t + 2000, providerId: `SIM-${commande.number}-1` });
     if (mode === 'paye') o = R.paiementConfirme(o, { maintenant: t + 45000, reference: 'TEST' + String(t).slice(-8) }).commande;
     else o = R.paiementEchoue(o, { maintenant: t + 45000, raison: 'Solde insuffisant (simulation).' });
     if (mode === 'echu') { const x = R.paiementExpire(o, { maintenant: t + 31 * 60000 }); stock(b, x.entrees, 1); o = x.commande; }
     suites.forEach((a, j) => { const r = R.etapeCommande(o, a, { maintenant: t + (j + 1) * 5400e3, produit }); o = r.commande; });
-    poser('orders', 'cmd' + uid().slice(0, 12), o, { token: jeton(), phone: o.phone, status: o.status, created: t });
-  });
-  // Quelques clients ont créé leur compte : panier en attente, favoris (page Clients, Audience → Paniers à relancer).
-  COMPTES.forEach(([name, phone, panier, favoris, heures]) => {
-    const t = now - heures * 3600e3; const dates = {};
-    panier.forEach((l) => { dates['panier:' + l.productId] = t; }); favoris.forEach((id) => { dates['favori:' + id] = t - 3600e3; });
-    poser('clients', 'cli' + uid().slice(0, 12), R.docCompte({ panier, favoris, dates }), { phone, name, seen: t, created: t - 9 * JOUR });
+    const id = 'cmd' + uid().slice(0, 12);
+    poser('orders', id, o, { token: jeton(), phone: o.phone, status: o.status, created: t });
+    // Livrée : le gain promis a rejoint la cagnotte du client (page « Ma cagnotte », fiche client).
+    if (o.fulfillment === 'delivered' && o.loyalty && o.loyalty.phone) crediterDemo(b, { telephone: o.loyalty.phone, montant: o.loyalty.amount, type: 'achat', commande: id, details: { numero: o.number }, cle: 'achat:' + id, cree: Number(o.deliveredAt) || t });
   });
   // Deux discussions avec la boutique : une question qui attend sa réponse, une commande suivie (page Messages).
-  const compte = (tel) => Object.values(b.cols.clients).find((c) => c.phone === tel);
   const discussion = (c, l, extra) => {
     const id = 'dis' + uid().slice(0, 12);
     l.forEach(([auteur, texte, heures, piece]) => b.messages.push({ id: b.messages.length + 1, discussion: id, auteur, texte, produit: (piece && piece.produit) || '', commande: (piece && piece.commande) || '', par: auteur === 'boutique' ? 'demo' : '', cree: now - heures * 3600e3 }));
@@ -170,6 +177,8 @@ function commandePublique(doc) {
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
   if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
+  if (d.referral) { delete d.referral.by; delete d.referral.byPhone; delete d.referral.reward; }
+  if (d.loyalty) delete d.loyalty.phone;
   d.review = aVerifier && d.status !== 'cancelled' && !(d.payment && d.payment.status === 'paid');
   return d;
 }
@@ -391,6 +400,7 @@ async function serveur(chemin, method, corps) {
       ['notifications', 'alertes'].forEach((k) => { b[k] = (b[k] || []).map((x) => (x.client === rec.id ? { ...x, client: '' } : x)).filter((x) => x.client || x.appareil); });
       effacerDiscussions(b, (d) => d.client === rec.id);
       effacerAvis(b, (x) => x.client === rec.id || (x.telephone && x.telephone === R.chiffres(rec.phone)));
+      effacerCagnotteDemo(b, rec.phone);
       delete b.cols.clients[rec.id]; enregistrer(b); diffuser('clients', rec.id, 'delete', rec); return { ok: true };
     }
     if (method === 'GET') return { compte: vueCompte(rec), commandes: commandesDuCompte(b, rec) };
@@ -412,10 +422,12 @@ async function serveur(chemin, method, corps) {
   const cfg = () => configPaiement(b.cols.config.store ? b.cols.config.store.doc : {});
   const produit = (id) => (b.cols.products[id] ? b.cols.products[id].doc : null);
   if (p === 'sokoyetu/devis') {
-    const code = R.valider.codePromo(corps.discountCode);
-    const d = R.devis({ cfg: cfg(), produit, lignes: corps.items, zoneId: corps.zoneId, code: corps.discountCode, remise: code ? remiseParCode(b, code) : null, maintenant: Date.now() });
+    const code = R.valider.codePromo(corps.discountCode); const c = cfg();
+    const fi = pourCommandeDemo(b, clientConnecte(b), corps, c);
+    const d = R.devis({ cfg: c, produit, lignes: corps.items, zoneId: corps.zoneId, code: corps.discountCode, remise: code ? remiseParCode(b, code) : null, parrainage: fi.parrainage, cagnotte: corps.cagnotte === true ? fi.cagnotte : 0, maintenant: Date.now() });
     d.lignes.forEach((l) => { delete l.cost; });
-    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, poids: d.poids, zoneId: d.zone ? d.zone.id : '' };
+    return { lignes: d.lignes, problemes: d.problemes, sousTotal: d.sousTotal, remise: d.remise, bienvenue: d.bienvenue, cagnotte: d.cagnotte, livraison: d.livraison, frais: d.frais, fraisPct: d.fraisPct, total: d.total, gain: d.gain, poids: d.poids, zoneId: d.zone ? d.zone.id : '',
+      fidelite: { solde: fi.cagnotte, raison: fi.raison } };
   }
   if (p === 'sokoyetu/commander') {
     if (corps.website) throw new ErreurApi(400, 'Vérification impossible. Rechargez la page et réessayez.');
@@ -423,14 +435,15 @@ async function serveur(chemin, method, corps) {
     if (!t) throw new ErreurApi(400, 'Jeton de commande invalide. Rechargez la page et réessayez.');
     const deja = Object.values(b.cols.orders).find((x) => x.token === t);
     if (deja) { suivrePaiement(b, deja); return reponseClient(deja); }
+    const cl = clientConnecte(b);
     let prep;
     try {
-      const code = R.valider.codePromo(corps.discountCode);
-      prep = R.preparerCommande({ cfg: cfg(), produit, remise: code ? remiseParCode(b, code) : null, saisie: corps, maintenant: Date.now(), numero: R.numeroCommande() });
+      const code = R.valider.codePromo(corps.discountCode); const c = cfg();
+      const fi = pourCommandeDemo(b, cl, corps, c);
+      prep = R.preparerCommande({ cfg: c, produit, remise: code ? remiseParCode(b, code) : null, parrainage: fi.parrainage, cagnotte: fi.cagnotte, titulaire: fi.titulaire, saisie: corps, maintenant: Date.now(), numero: R.numeroCommande() });
     } catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message, { champ: err.champ || '' }); throw err; }
     const modifies = stock(b, prep.reserve, -1);
     const id = 'cmd' + uid().slice(0, 12); const now = Date.now();
-    const cl = clientConnecte(b);
     b.cols.orders[id] = { id, doc: prep.commande, token: t, phone: prep.commande.phone, status: 'open', created: now, updated: now, client: cl ? cl.id : '', appareil: R.valider.jeton(corps.appareil) };
     enregistrer(b);
     modifies.forEach((pid) => diffuser('products', pid, 'update'));
@@ -451,6 +464,16 @@ async function serveur(chemin, method, corps) {
     if (!tel) throw new ErreurApi(400, `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, { champ: 'payphone' });
     demanderPaiement(b, rec, { methode: moyen.k, label: moyen.label, telephone: tel });
     return reponseClient(rec);
+  }
+  // Cagnotte de fidélité et parrainage (comme lib/fidelite.js).
+  if (p === 'sokoyetu/cagnotte') { const c = clientConnecte(b); if (!c) throw new ErreurApi(401, 'Connectez-vous à votre compte.'); return vueCagnotteDemo(b, c); }
+  if (p === 'sokoyetu/parrainage') {
+    const c = cfg(); const x = c.referral.enabled ? parrainDemo(b, q.get('code')) : null;
+    return x ? { ok: true, code: x.parrain_code, prenom: x.name ? R.nomPublic(x.name) : '', bienvenue: c.referral.welcome, min: c.referral.min } : { ok: false };
+  }
+  if ((m = p.match(/^sokoyetu\/clients\/([^/]+)\/cagnotte$/))) {
+    if (method === 'POST') { exigerGerant('cagnotte'); return offrirDemo(b, decodeURIComponent(m[1]), corps); }
+    exigerGerant('clients'); return pourClientDemo(b, decodeURIComponent(m[1]));
   }
   // Notifications (comme lib/notifications.js) : centre de notifications ; la démo n'a pas de service de notification du téléphone.
   if (p === 'sokoyetu/notifications') {
@@ -550,6 +573,7 @@ async function serveur(chemin, method, corps) {
     try { r = R.etapeCommande(rec.doc, String(corps.action || ''), { maintenant: Date.now(), note: corps.note, produit }); }
     catch (err) { if (err instanceof R.ErreurCommande) throw new ErreurApi(400, err.message); throw err; }
     const modifies = r.stock === 'reserver' ? stock(b, r.entrees, -1) : r.stock === 'restituer' ? stock(b, r.entrees, 1) : [];
+    apresCommandeDemo(b, rec, rec.doc, r.commande);
     notifierCommande(b, rec, rec.doc, r.commande);
     rec.doc = r.commande; rec.status = r.commande.status; rec.updated = Date.now();
     enregistrer(b);
@@ -608,6 +632,7 @@ async function serveur(chemin, method, corps) {
     b.alertes = (b.alertes || []).filter((x) => !appareils.includes(x.appareil) && !comptes.some((c) => c.id === x.client));
     effacerDiscussions(b, (d) => R.chiffres(d.telephone) === tel || comptes.some((c) => c.id === d.client) || (d.appareil && appareils.includes(d.appareil)));
     effacerAvis(b, (x) => R.chiffres(x.telephone) === tel || comptes.some((c) => c.id === x.client));
+    effacerCagnotteDemo(b, tel);
     comptes.forEach((c) => { delete b.cols.clients[c.id]; });
     enregistrer(b); l.forEach((rec) => diffuser('orders', rec.id, 'update')); comptes.forEach((c) => diffuser('clients', c.id, 'delete', c));
     return { effacees: l.length, comptes: comptes.length };
@@ -958,6 +983,115 @@ function rappelerAvis(b) {
 }
 function effacerAvis(b, choix) {
   Object.values(b.cols.avis || {}).filter(choix).forEach((x) => { delete b.cols.avis[x.id]; diffuser('avis', x.id, 'delete', x); });
+}
+
+/* ---------- Cagnotte de fidélité et parrainage (comme serveur/pb_hooks/lib/fidelite.js) ---------- */
+
+const ALPHABET_PARRAIN = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const cagnotteDe = (b) => (b.cagnotte = Array.isArray(b.cagnotte) ? b.cagnotte : []);
+const gainsDemo = (b, tel) => (tel ? R.arrondi(cagnotteDe(b).filter((x) => x.telephone === tel).reduce((s, x) => s + R.num(x.montant), 0)) : 0);
+const utiliseDemo = (b, id) => (id ? R.arrondi(Object.values(b.cols.orders).filter((o) => o.client === id && o.doc.status !== 'cancelled').reduce((s, o) => s + R.num(o.doc.wallet && o.doc.wallet.used), 0)) : 0);
+const soldeDemo = (b, c) => (c ? Math.max(0, R.arrondi(gainsDemo(b, R.chiffres(c.phone)) - utiliseDemo(b, c.id))) : 0);
+const premiereDemo = (b, c) => !Object.values(b.cols.orders).some((o) => o.doc.status !== 'cancelled' && (o.client === c.id || (o.phone && o.phone === R.chiffres(c.phone))));
+const parrainDemo = (b, code) => { const k = R.codeParrainValide(code); return (k && Object.values(b.cols.clients).find((c) => c.parrain_code === k)) || null; };
+const mouvementDemo = (x) => ({ type: x.type, montant: R.arrondi(x.montant), numero: x.details.numero || '', filleul: x.details.filleul || '', motif: x.details.motif || '', par: x.details.par || '', le: x.cree });
+/* Code de parrainage du compte, créé au premier besoin. */
+function codeDemo(b, c) {
+  while (!c.parrain_code) {
+    const k = Array.from({ length: 6 }, () => ALPHABET_PARRAIN[Math.floor(Math.random() * ALPHABET_PARRAIN.length)]).join('');
+    if (!parrainDemo(b, k)) { c.parrain_code = k; enregistrer(b); }
+  }
+  return c.parrain_code;
+}
+/* Cagnotte utilisable et cadeau de bienvenue d'une commande (devis, commande), pour le compte connecté (ou null). */
+function pourCommandeDemo(b, compte, corps, cfg) {
+  const out = { cagnotte: 0, titulaire: compte ? R.chiffres(compte.phone) : '', parrainage: null, raison: '' };
+  if (compte && cfg.loyalty.enabled) out.cagnotte = soldeDemo(b, compte);
+  const code = R.codeParrainValide(corps && corps.parrain);
+  if (!code) return out;
+  const p = cfg.referral.enabled ? parrainDemo(b, code) : null;
+  if (!p) out.raison = 'code';
+  else if (!compte) out.raison = 'compte';
+  else if (p.id === compte.id || R.chiffres(p.phone) === out.titulaire) out.raison = 'soi-meme';
+  else if (!premiereDemo(b, compte)) out.raison = 'deja-client';
+  else out.parrainage = { code, montant: cfg.referral.welcome, min: cfg.referral.min, recompense: cfg.referral.reward, parrain: p.id, parrainTel: R.chiffres(p.phone) };
+  return out;
+}
+/* Un gain dans la cagnotte d'un téléphone ; false s'il y est déjà (même cle). */
+function crediterDemo(b, m) {
+  const l = cagnotteDe(b);
+  if (!m.telephone || !(R.num(m.montant) > 0) || l.some((x) => x.cle === m.cle)) return false;
+  l.push({ id: l.reduce((n, x) => Math.max(n, x.id), 0) + 1, telephone: m.telephone, montant: R.arrondi(m.montant), type: m.type, commande: m.commande || '', details: m.details || {}, cle: m.cle, cree: m.cree || Date.now() });
+  return true;
+}
+/* Commande livrée : le gain promis rejoint la cagnotte du client, la récompense du parrain la sienne (il en est prévenu). */
+function apresCommandeDemo(b, rec, avant, apres) {
+  if (!apres || apres.status === 'cancelled' || apres.fulfillment !== 'delivered' || (avant && avant.fulfillment === 'delivered')) return;
+  const l = apres.loyalty;
+  if (l && l.phone) crediterDemo(b, { telephone: l.phone, montant: l.amount, type: 'achat', commande: rec.id, details: { numero: apres.number }, cle: 'achat:' + rec.id });
+  const r = apres.referral;
+  if (!r || !r.byPhone) return;
+  const filleul = R.nomPublic(apres.customer && apres.customer.name);
+  if (!crediterDemo(b, { telephone: r.byPhone, montant: r.reward, type: 'parrainage', commande: rec.id, details: { numero: apres.number, filleul }, cle: 'parrainage:' + rec.id })) return;
+  const client = (b.cols.clients[r.by] || Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === r.byPhone) || {}).id || '';
+  if (client) ajouterNotification(b, { client, appareil: '', type: 'parrainage', details: { filleul, montant: R.arrondi(r.reward) }, url: '/compte/cagnotte', cle: 'parrainage:' + rec.id });
+}
+/* « Ma cagnotte » du client connecté : solde, gains à venir, historique, et son parrainage. */
+function vueCagnotteDemo(b, c) {
+  const cfg = configPaiement(b.cols.config.store ? b.cols.config.store.doc : {}); const tel = R.chiffres(c.phone);
+  const out = { ouverte: cfg.loyalty.enabled, pct: cfg.loyalty.pct, part: R.PART_CAGNOTTE, solde: soldeDemo(b, c), aVenir: 0, premiere: premiereDemo(b, c), mouvements: cagnotteDe(b).filter((x) => x.telephone === tel).map(mouvementDemo), parrainage: null };
+  Object.values(b.cols.orders).filter((o) => o.client === c.id || (o.phone && o.phone === tel)).forEach((o) => {
+    const d = o.doc;
+    if (d.status === 'cancelled') return;
+    if (o.client === c.id && d.wallet && R.num(d.wallet.used) > 0) out.mouvements.push({ type: 'utilise', montant: -R.arrondi(d.wallet.used), numero: d.number || '', le: R.int(d.createdAt) });
+    if (d.loyalty && d.loyalty.phone === tel && d.fulfillment !== 'delivered' && R.estPayee(d)) out.aVenir += R.num(d.loyalty.amount);
+  });
+  out.mouvements = out.mouvements.sort((x, y) => y.le - x.le).slice(0, R.MOUVEMENTS_CAGNOTTE);
+  out.aVenir = R.arrondi(out.aVenir);
+  if (cfg.referral.enabled) {
+    const f = cagnotteDe(b).filter((x) => x.telephone === tel && x.type === 'parrainage');
+    // Premières commandes de ses filleuls, payées et pas encore livrées : la récompense arrive à la livraison.
+    const enCours = Object.values(b.cols.orders).filter((o) => o.doc.status === 'open' && R.estPayee(o.doc) && o.doc.fulfillment !== 'delivered' && o.doc.referral && o.doc.referral.by === c.id)
+      .sort((x, y) => y.created - x.created).slice(0, 20).map((o) => ({ filleul: R.nomPublic(o.doc.customer && o.doc.customer.name), montant: R.arrondi(o.doc.referral.reward) }));
+    out.parrainage = { code: codeDemo(b, c), bienvenue: cfg.referral.welcome, recompense: cfg.referral.reward, min: cfg.referral.min, filleuls: f.length, gagne: R.arrondi(f.reduce((s, x) => s + x.montant, 0)), enCours };
+  }
+  return out;
+}
+/* Administration (fiche d'un client, par téléphone) : solde, gains, cagnotte utilisée, filleuls, derniers mouvements. */
+function pourClientDemo(b, tel) {
+  const t = R.chiffres(tel);
+  const compte = Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === t) || null;
+  const gagne = gainsDemo(b, t); const depense = compte ? utiliseDemo(b, compte.id) : 0;
+  const l = cagnotteDe(b).filter((x) => x.telephone === t).sort((x, y) => y.cree - x.cree || y.id - x.id);
+  return { solde: Math.max(0, R.arrondi(gagne - depense)), gagne, utilise: depense, filleuls: l.filter((x) => x.type === 'parrainage').length, compte: !!compte, code: compte ? compte.parrain_code || '' : '', mouvements: l.slice(0, 20).map(mouvementDemo) };
+}
+/* Geste de la boutique (propriétaire) : ajouté une fois par jeton, le client en est prévenu. */
+function offrirDemo(b, tel, corps) {
+  const t = R.chiffres(tel); const montant = R.arrondi(corps && corps.montant);
+  if (t.length < 6) throw new ErreurApi(400, 'Numéro de téléphone manquant.');
+  if (!(montant > 0) || montant > 100) throw new ErreurApi(400, 'Montant de 0,01 à 100 $.');
+  const jeton = R.valider.jeton(corps && corps.jeton);
+  if (!jeton) throw new ErreurApi(400, 'Rechargez la page et réessayez.');
+  const motif = R.nettoyer(corps && corps.motif, 80);
+  const fait = crediterDemo(b, { telephone: t, montant, type: 'geste', details: { motif, par: (Auth.compte && (Auth.compte.name || Auth.compte.email)) || '' }, cle: 'geste:' + jeton });
+  if (fait) {
+    const client = (Object.values(b.cols.clients).find((c) => R.chiffres(c.phone) === t) || {}).id || '';
+    if (client) ajouterNotification(b, { client, appareil: '', type: 'cagnotte', details: { montant, motif }, url: '/compte/cagnotte', cle: 'geste:' + jeton });
+    enregistrer(b);
+  }
+  return { ajoute: fait, ...pourClientDemo(b, t) };
+}
+/* Compte supprimé ou effacement demandé : la cagnotte disparaît, les gains promis ne lui seront plus versés. */
+function effacerCagnotteDemo(b, tel) {
+  const t = R.chiffres(tel);
+  if (!t) return;
+  b.cagnotte = cagnotteDe(b).filter((x) => x.telephone !== t);
+  Object.values(b.cols.orders).forEach((o) => {
+    const d = o.doc; let change = false;
+    if (d.loyalty && d.loyalty.phone === t) { d.loyalty.phone = ''; change = true; }
+    if (d.referral && d.referral.byPhone === t) { d.referral.byPhone = ''; d.referral.by = ''; change = true; }
+    if (change) { o.updated = Date.now(); diffuser('orders', o.id, 'update'); }
+  });
 }
 
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */

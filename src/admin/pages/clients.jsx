@@ -1,5 +1,5 @@
 // Sokoyetu (administration) — clients, menu « Plus », compte.
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import R from '../../commun/js/regles.js';
 import { Icone } from '../../commun/js/icones.jsx';
 import { Champ, Note, Vide, Bascule, Pastille, toast, confirmer, ouvrirFeuille, fermerFeuille, useParPage, AfficherPlus } from '../../commun/js/interface.jsx';
@@ -7,9 +7,9 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { changerMotDePasse } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { themeSombre, basculerTheme } from '../../commun/js/theme.js';
-import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, normaliser, copier } from '../../commun/js/outils.js';
+import { dollars, pluriel, telephone, lienWhatsApp, lienAppel, ilya, date, dateHeure, normaliser, copier, secret } from '../../commun/js/outils.js';
 import { lien, route } from '../routeur.js';
-import { cfg, clients, comptes, discussions, avis, avisAVerifier, produitsParId, pret, compte, etatServeur, sante, effacerClient, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
+import { cfg, clients, comptes, discussions, avis, avisAVerifier, produitsParId, pret, compte, etatServeur, sante, effacerClient, cagnotteClient, offrirCagnotte, seDeconnecter, gererErreur, rayons, bannieres, remises, role, peut } from '../etat.js';
 import { TetePage, Kpi, adresseBoutique } from '../composants/cadre.jsx';
 import { Chargement, LigneCommandeCourte } from './accueil.jsx';
 
@@ -81,6 +81,7 @@ export function Client() {
           <button class="btn btn-secondaire" onClick={async () => { if (await copier(R.chiffres(c.affiche))) toast('Numéro copié'); }}><Icone n="copier" />Copier le numéro</button>
         </div>
         {c.compte ? <CompteClient a={c.compte} /> : null}
+        {cfg.value.loyalty && cfg.value.loyalty.enabled ? <CagnotteClient tel={c.tel} nom={c.nom} /> : null}
         <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Commandes</h2>{c.commandes.length ? <div class="liste sans-bord">{c.commandes.map((o) => <LigneCommandeCourte key={o.id} o={o} />)}</div> : <p class="attenue petit">Pas encore de commande.</p>}</section>
         <section class="carte">
           <h2 class="carte-titre"><Icone n="cadenas" />Données personnelles</h2>
@@ -117,6 +118,52 @@ function CompteClient({ a }) {
         </div>
         {pa.lignes.length ? <Note ton="info" icone="bulle">Ce client n’a pas encore commandé son panier.{a.relance ? ` Rappel gratuit envoyé ${ilya(a.relance)}.` : ''} Un message, un appel ou une réduction peut l’aider à finir son achat (boutons ci-dessus).</Note> : null}
       </div>
+    </section>
+  );
+}
+
+const MOUVEMENTS = { achat: (m) => `Commande #${m.numero} livrée`, parrainage: (m) => `Parrainage : ${m.filleul || 'un proche'}`, geste: (m) => `Geste de la boutique${m.motif ? ' : ' + m.motif : ''}${m.par ? ' (' + m.par + ')' : ''}` };
+
+/* Cagnotte du client : solde, gains, filleuls ; le propriétaire peut y ajouter un geste (retard, désagrément…). */
+function CagnotteClient({ tel, nom }) {
+  const [g, setG] = useState(null);
+  const charger = () => cagnotteClient(tel).then(setG).catch((e) => gererErreur(e, 'Cagnotte indisponible'));
+  useEffect(() => { setG(null); charger(); }, [tel]);
+  const offrir = () => {
+    const jeton = secret(32); let montant = ''; let motif = ''; let occupe = false;
+    const id = ouvrirFeuille({
+      titre: 'Offrir à sa cagnotte',
+      contenu: () => (
+        <div class="formulaire">
+          <p class="attenue petit">Un geste pour {nom || 'ce client'} : le montant rejoint sa cagnotte tout de suite, et une notification gratuite le lui annonce.</p>
+          <Champ libelle="Montant ($)" aide="De 0,01 à 100 $.">{(a) => <input class="saisie" {...a} inputmode="decimal" onInput={(e) => { montant = e.currentTarget.value; }} placeholder="Ex. : 2" />}</Champ>
+          <Champ libelle="Motif" facultatif aide="Montré au client.">{(a) => <input class="saisie" {...a} maxlength="80" onInput={(e) => { motif = e.currentTarget.value; }} placeholder="Ex. : retard de livraison" />}</Champ>
+        </div>
+      ),
+      pied: () => <button class="btn btn-primaire btn-bloc" onClick={async () => {
+        if (occupe) return;
+        const v = R.arrondi(String(montant).replace(',', '.'));
+        if (!(v > 0 && v <= 100)) { toast('Montant de 0,01 à 100 $', { icone: 'alerte', ton: 'danger' }); return; }
+        occupe = true;
+        try { const r = await offrirCagnotte(tel, { montant: v, motif, jeton }); setG(r); fermerFeuille(id); toast(`${dollars(v)} ajoutés à sa cagnotte`, { icone: 'cadeau' }); }
+        catch (e) { occupe = false; gererErreur(e, 'Geste impossible'); }
+      }}><Icone n="cadeau" />Offrir</button>
+    });
+  };
+  return (
+    <section class="carte">
+      <div class="entre"><h2 class="carte-titre" style={{ margin: 0 }}><Icone n="tirelire" />Cagnotte</h2>{peut('cagnotte') ? <button class="btn btn-secondaire btn-s" onClick={offrir}><Icone n="cadeau" />Offrir</button> : null}</div>
+      {!g ? <div class="squelette espace-haut" style={{ height: 80 }} /> : (
+        <div class="pile espace-haut">
+          <dl class="infos">
+            <dt>Disponible</dt><dd><b class="num">{dollars(g.solde)}</b>{g.compte ? '' : <small class="discret"> · sans compte : utilisable une fois son compte créé</small>}</dd>
+            <dt>Gagné</dt><dd class="num">{dollars(g.gagne)}</dd>
+            {g.utilise ? <><dt>Utilisé</dt><dd class="num">{dollars(g.utilise)}</dd></> : null}
+            {g.filleuls ? <><dt>Parrainés</dt><dd>{pluriel(g.filleuls, 'proche')}{g.code ? ` · code ${g.code}` : ''}</dd></> : g.code ? <><dt>Code</dt><dd class="code">{g.code}</dd></> : null}
+          </dl>
+          {g.mouvements.length ? <ul class="liste-simple">{g.mouvements.slice(0, 8).map((m, i) => <li key={i}><span>{(MOUVEMENTS[m.type] || MOUVEMENTS.geste)(m)}<small class="discret"> · {dateHeure(m.le)}</small></span><b class="num">+{dollars(m.montant)}</b></li>)}</ul> : <p class="attenue petit">Pas encore de gain : la cagnotte se remplit à chaque commande livrée.</p>}
+        </div>
+      )}
     </section>
   );
 }

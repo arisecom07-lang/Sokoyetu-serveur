@@ -28,7 +28,7 @@ export async function partager(o) {
   }
   const message = `${o.texte} ${o.url}`;
   const fid = ouvrirFeuille({
-    titre: o.type === 'panier' ? 'Partager le panier' : 'Partager cet article',
+    titre: o.type === 'panier' ? 'Partager le panier' : o.type === 'parrainage' ? 'Partager mon lien' : 'Partager cet article',
     contenu: () => (
       <div class="partage">
         <div class="partage-choix">

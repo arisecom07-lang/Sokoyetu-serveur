@@ -118,6 +118,30 @@ await client.bringToFront();
 await client.goto(BASE + '/boutique/index.html#/notifications'); await client.waitForSelector('.notif-texte b:text("La boutique vous a répondu")');
 etape('avis : commande livrée, le client note l’article, l’avis paraît sur sa fiche, la boutique répond et le client est prévenu');
 
+// Cagnotte : la commande livrée d'Amani lui a rapporté un gain, qu'il retrouve en créant son compte avec son numéro.
+await client.goto(BASE + '/boutique/index.html#/compte/connexion'); await client.waitForSelector('.page-connexion input[type=tel]');
+await client.fill('.page-connexion input[type=tel]', '0997654321'); await client.click('.page-connexion button[type=submit]');
+await client.waitForSelector('.saisie-otp'); await client.fill('.saisie-otp', (await client.locator('.page-connexion .note .code').innerText()).trim());
+// Le nom de sa commande est repris : pas de question.
+await client.waitForSelector('.page-connexion', { state: 'detached' });
+await client.goto(BASE + '/boutique/index.html#/compte/cagnotte'); await client.waitForSelector(`.cagnotte-mouvements b:text("Commande #${numero} livrée")`);
+assert.notEqual((await client.locator('.cagnotte-montant').innerText()).trim(), '$0.00');
+await client.waitForSelector('.carte-parrainage .parrainage-code .code');
+await client.screenshot({ path: SORTIE + 'demo-cagnotte.png' });
+etape('cagnotte : le gain de la commande livrée attend le client, retrouvé en créant son compte ; son code de parrainage est prêt');
+// Parrainage : un proche ouvre le lien de Grâce (cadeau de bienvenue) ; l'équipe voit la cagnotte de Grâce et lui offre un geste.
+const proche = await (await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'fr-FR' })).newPage(); surveiller(proche, 'proche');
+await proche.goto(BASE + '/boutique/index.html#/?parrain=K7M2QX'); await proche.waitForSelector('.feuille .cadeau-bienvenue:has-text("Grâce M. vous invite")');
+assert.ok(!(await proche.evaluate(() => location.hash)).includes('parrain'));
+await proche.screenshot({ path: SORTIE + 'demo-parrainage.png' });
+await admin.bringToFront();
+await admin.goto(BASE + '/admin/index.html#/clients/0991234501'); await admin.waitForSelector('dd.code:text("K7M2QX")');
+await admin.click('button:has-text("Offrir")'); await admin.fill('.feuille input[inputmode="decimal"]', '2'); await admin.fill('.feuille input[maxlength="80"]', 'Merci pour votre fidélité');
+await admin.click('.feuille button:has-text("Offrir")'); await admin.waitForSelector('.toast:has-text("$2.00 ajoutés à sa cagnotte")');
+await admin.waitForSelector('.liste-simple li:has-text("Geste de la boutique : Merci pour votre fidélité")');
+await admin.screenshot({ path: SORTIE + 'demo-cagnotte-admin.png' });
+etape('parrainage : lien de Grâce ouvert par un proche (cadeau annoncé), sa cagnotte vue par l’équipe, geste de la boutique ajouté');
+
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.
 const envelopper = async (route) => { const r = await route.fetch(); route.fulfill({ response: r, headers: { ...r.headers(), 'content-type': 'text/html; charset=utf-8' }, body: '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + (await r.text()) + '</body></html>' }); };

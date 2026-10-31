@@ -454,3 +454,51 @@ test('avis : note de 1 à 5, nom public, résumé, articles à noter et rappel a
   assert.equal(R.texteNotification({ type: 'avis_reponse', details: { titre: 'Robe', texte: 'Merci !' } }, 'fr').texte, 'Votre avis sur « Robe » : Merci !');
   assert.ok(R.peut('vendeur', 'avis') && R.peut('proprietaire', 'avis') && !R.peut('livreur', 'avis'));
 });
+
+test('fidélité : cadeau de bienvenue sans code promo, cagnotte jusqu’à la moitié des articles, gain promis à la livraison', () => {
+  assert.deepEqual([R.config({}).loyalty, R.config({}).referral], [{ enabled: false, pct: 2 }, { enabled: false, reward: 3, welcome: 2, min: 10 }]);
+  assert.deepEqual(R.config({ loyalty: { enabled: true, pct: 40 }, referral: { enabled: true, reward: -5, welcome: '4', min: 5000 } }).referral, { enabled: true, reward: 0, welcome: 4, min: 1000 });
+  assert.equal(R.config({ loyalty: { enabled: true, pct: 40 } }).loyalty.pct, 10);
+  assert.equal(R.config({ referral: { enabled: true } }).referral.enabled, false, 'le parrainage passe par la cagnotte');
+  assert.equal(R.codeParrainValide(' k7m-2qx '), 'K7M2QX');
+  for (const x of ['K7M2Q', 'K7M2QXX', 'K7M2Q0', 'IL1O00', '../x', null]) assert.equal(R.codeParrainValide(x), '');
+
+  const fid = R.config({ payments: { mpesa: { enabled: true } }, payment: { provider: 'simulation' }, loyalty: { enabled: true, pct: 5 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } });
+  const lignes = [{ productId: 'robe', color: 'Noir', size: 'M', qty: 1 }];
+  const pa = { code: 'K7M2QX', montant: 2, min: 10, recompense: 3, parrain: 'parrain1', parrainTel: '0811112222' };
+  // Robe 20 $ − 2 $ offerts = 18 $ ; cagnotte de 30 $ : 9 $ au plus (la moitié) ; frais 2 % de 9 $ ; gain 5 % de 9 $.
+  const d = R.devis({ cfg: fid, produit, lignes, zoneId: 'bukavu', parrainage: pa, cagnotte: 30 });
+  assert.deepEqual([d.sousTotal, d.bienvenue, d.cagnotte, d.livraison, d.frais, d.total, d.gain], [20, { code: 'K7M2QX', amount: 2 }, 9, 2, 0.18, 11.18, 0.45]);
+  assert.equal(R.devis({ cfg: fid, produit, lignes, zoneId: 'bukavu', cagnotte: 1.5 }).cagnotte, 1.5, 'un petit solde est utilisé entier');
+  const promo = R.devis({ cfg: fid, produit, lignes, zoneId: 'bukavu', parrainage: pa, code: 'BIENVENUE10', remise: remise10 });
+  assert.deepEqual([promo.bienvenue, promo.remise.amount], [null, 2]);
+  assert.equal(R.raisonParrainage('', promo, 10), 'Le cadeau de bienvenue ne se cumule pas avec un code promo.');
+  const petit = R.devis({ cfg: fid, produit, lignes: [{ productId: 'sac', qty: 0.5 }], zoneId: 'bukavu', parrainage: { ...pa, min: 15 } });
+  assert.equal(petit.bienvenue, null);
+  assert.equal(R.raisonParrainage('', petit, 15), 'Le cadeau de bienvenue s’applique dès $15.00 d’achat.');
+  assert.equal(R.raisonParrainage('', d, 10), '');
+  assert.equal(R.raisonParrainage('deja-client', d, 10), 'Le cadeau de bienvenue est réservé à la première commande d’un nouveau client.');
+  assert.equal(R.devis({ cfg: R.config({ ...fid, loyalty: { enabled: false } }), produit, lignes, zoneId: 'bukavu' }).gain, 0, 'cagnotte fermée : aucun gain');
+  // La livraison offerte se compte avant la cagnotte (elle paie, elle ne réduit pas le prix).
+  const seuil = R.config({ ...fid, freeShippingOver: 15 });
+  assert.equal(R.devis({ cfg: seuil, produit, lignes, zoneId: 'bukavu', cagnotte: 10 }).livraison, 0);
+
+  // Commande : cadeau, cagnotte et gain enregistrés ; le gain va au téléphone du compte (titulaire), sinon à celui de la commande.
+  const s = saisie({ items: lignes, cagnotte: true, total: 11.18 });
+  const { commande } = R.preparerCommande({ cfg: fid, produit, saisie: s, parrainage: pa, cagnotte: 30, titulaire: '0822223333', numero: 'K7P2QA' });
+  assert.deepEqual([commande.referral, commande.wallet, commande.loyalty, commande.total], [{ code: 'K7M2QX', amount: 2, reward: 3, by: 'parrain1', byPhone: '0811112222' }, { used: 9 }, { pct: 5, amount: 0.45, phone: '0822223333' }, 11.18]);
+  assert.deepEqual(R.incoherences(commande), []);
+  assert.equal(R.margeCommande(commande).marge, 1.18, "20 $ − 2 $ offerts − 9 $ de cagnotte + 0,18 $ de frais − 8 $ de coût");
+  const sansCagnotte = R.preparerCommande({ cfg: fid, produit, saisie: { ...s, cagnotte: false, total: 22.4 }, cagnotte: 30, numero: 'K7P2QB' }).commande;
+  assert.deepEqual([sansCagnotte.wallet, sansCagnotte.referral, sansCagnotte.loyalty], [null, null, { pct: 5, amount: 1, phone: '0991234567' }]);
+  assert.throws(() => R.preparerCommande({ cfg: fid, produit, saisie: s, parrainage: pa, cagnotte: 4, numero: 'K7P2QC' }), /maintenant de \$16\.28/, 'solde changé entre-temps : le client revoit le total');
+
+  // Livrée : la notification annonce le gain ; le parrain reçoit la sienne.
+  const livree = { ...commande, status: 'open', payment: { status: 'paid' }, fulfillment: 'delivered' };
+  const ev = R.evenementsCommande({ ...livree, fulfillment: 'shipped' }, livree);
+  assert.deepEqual(ev.map((e) => [e.type, e.details.gain]), [['livree', 0.45]]);
+  assert.equal(R.texteNotification(ev[0], 'fr').texte, 'Commande #K7P2QA remise. Merci pour votre confiance ! $0.45 ajoutés à votre cagnotte.');
+  assert.equal(R.texteNotification({ type: 'livree', details: { numero: 'K7P2QA' } }, 'fr').texte, 'Commande #K7P2QA remise. Merci pour votre confiance !');
+  assert.equal(R.texteNotification({ type: 'parrainage', details: { filleul: 'Patrick B.', montant: 3 } }, 'fr').texte, 'Patrick B. a reçu sa première commande : $3.00 ajoutés à votre cagnotte.');
+  assert.ok(R.peut('proprietaire', 'cagnotte') && !R.peut('vendeur', 'cagnotte'));
+});

@@ -325,6 +325,10 @@ export const chargerAttentes = () => requete('sokoyetu/alertes/attente', { essai
 export const lireAnnonces = () => requete('sokoyetu/annonces');
 export const envoyerAnnonce = (a) => requete('sokoyetu/annonces', { method: 'POST', corps: a });
 
+/* Cagnotte d'un client (téléphone) : solde, gains, filleuls ; offrir : geste de la boutique (propriétaire), une fois par jeton. */
+export const cagnotteClient = (tel) => requete(`sokoyetu/clients/${encodeURIComponent(tel)}/cagnotte`);
+export const offrirCagnotte = (tel, { montant, motif, jeton }) => requete(`sokoyetu/clients/${encodeURIComponent(tel)}/cagnotte`, { method: 'POST', corps: { montant, motif, jeton } });
+
 export async function effacerClient(tel) {
   const r = await requete('sokoyetu/clients/effacer', { method: 'POST', corps: { phone: tel } });
   await charger().catch(() => { }); // l'effacement est fait ; les fiches se mettent à jour en direct si la relecture échoue

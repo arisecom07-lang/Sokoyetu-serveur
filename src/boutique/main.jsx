@@ -26,8 +26,10 @@ import { Introuvable } from './pages/introuvable.jsx';
 import { Notifications } from './pages/notifications.jsx';
 import { Discussion } from './pages/discussion.jsx';
 import { MesAvis } from './pages/avis.jsx';
+import { MaCagnotte, ouvrirCadeauBienvenue } from './pages/cagnotte.jsx';
+import { lireLienParrainage } from './fidelite.js';
 
-const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos, notifications: Notifications, discussion: Discussion, avis: MesAvis };
+const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos, notifications: Notifications, discussion: Discussion, avis: MesAvis, cagnotte: MaCagnotte };
 /* Ce qui occupe le bas de l'écran du téléphone : navigation, barre d'action, ou les deux. */
 const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', 'panier-partage': 'barre', paiement: '', merci: '', recherche: '', discussion: 'barre' };
 
@@ -71,5 +73,5 @@ if (suivi) suivreCommande(suivi.id, suivi.t);
 const racine = document.getElementById('app');
 racine.textContent = '';
 render(<App />, racine);
-chargerCatalogue().then(() => { suivreCatalogue(); actualiserMesCommandes(); suivreVisites(); synchroniserCompte(); suivreNotifications(); });
+chargerCatalogue().then(() => { suivreCatalogue(); actualiserMesCommandes(); suivreVisites(); synchroniserCompte(); suivreNotifications(); lireLienParrainage(ouvrirCadeauBienvenue); });
 enregistrerServiceWorker();

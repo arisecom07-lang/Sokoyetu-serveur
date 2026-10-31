@@ -14,9 +14,10 @@ import { useSeo } from './commun.jsx';
 import { partager, lienPanierPartage, textePanier } from '../partage.jsx';
 
 /* Totaux estimés dans le navigateur, sur les articles cochés (le serveur recalcule tout avant le paiement). */
-export function devisLocal({ zoneId, remise } = {}) {
+export function devisLocal({ zoneId, remise, parrainage, cagnotte } = {}) {
   const m = produitsParId.value;
-  return R.devis({ cfg: cfg.value, produit: (id) => m.get(id) || null, lignes: aCommander.value, zoneId: zoneId || (cfg.value.zones[0] || {}).id, code: remise ? remise.code : '', remise: remise ? { ...remise, active: true } : null, maintenant: Date.now() });
+  return R.devis({ cfg: cfg.value, produit: (id) => m.get(id) || null, lignes: aCommander.value, zoneId: zoneId || (cfg.value.zones[0] || {}).id, code: remise ? remise.code : '', remise: remise ? { ...remise, active: true } : null,
+    parrainage: parrainage || null, cagnotte: cagnotte || 0, maintenant: Date.now() });
 }
 
 /* Prix à la pièce de chaque ligne (vente flash, prix de gros) : le palier compte les pièces cochées du même article. */

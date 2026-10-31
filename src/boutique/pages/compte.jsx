@@ -17,6 +17,7 @@ import { ActiverNotifications } from './notifications.jsx';
 import { nonLues, pushEtat, promos, desactiverPush, activerPush, changerPromos, oublierNotifications } from '../notifications.js';
 import { messagesNonLus, oublierDiscussion } from '../discussion.js';
 import { restantsANoter, chargerANoter, articleANoter } from '../avis.js';
+import { cagnotte, chargerCagnotte, cagnotteOuverte, parrainageOuvert } from '../fidelite.js';
 
 const imageLigne = (i) => i.image || R.imagePrincipale(produitsParId.value.get(i.productId) || {});
 const lienSuivi = (id) => { const t = jetonDe(id); return t ? `${location.origin}/suivi/${id}#${t}` : ''; };
@@ -31,7 +32,19 @@ function texteLivraison(o) {
   if (R.estRetraitCmd(o) && !d.days) return 'Dès que possible : nous vous appelons quand elle est prête';
   return `${R.estRetraitCmd(o) ? 'Prête vers le' : 'Vers le'} ${jourLong(d.at)} (environ ${pluriel(d.days, 'jour')}${d.import ? ', article importé' : ''})`;
 }
-const montantsCommande = (o) => ({ sousTotal: o.subtotal, remise: o.discount, livraison: o.shippingFee, frais: o.serviceFee, fraisPct: o.serviceFeePct, total: o.total });
+const montantsCommande = (o) => ({ sousTotal: o.subtotal, remise: o.discount, bienvenue: o.referral, cagnotte: o.wallet ? o.wallet.used : 0, livraison: o.shippingFee, frais: o.serviceFee, fraisPct: o.serviceFeePct, total: o.total });
+
+/* Ce que la commande rapporte à la cagnotte du client : promis à la commande, versé à la livraison. */
+function GainCagnotte({ o }) {
+  const g = o.loyalty && R.num(o.loyalty.amount);
+  if (!g || o.status === 'cancelled' || !cagnotteOuverte.value) return null;
+  const livree = o.fulfillment === 'delivered';
+  return (
+    <a class="gain-cagnotte" href={lien('/compte/cagnotte')}>
+      <Icone n="tirelire" /><span>{livree ? <><b class="num">{dollars(g)}</b> ajoutés à votre cagnotte</> : <>Cette commande vous rapporte <b class="num">{dollars(g)}</b> de cagnotte, versés à la livraison</>}</span>
+    </a>
+  );
+}
 
 function Articles({ o }) {
   return (
@@ -49,6 +62,8 @@ function texteRecu(o) {
     `Payée le ${dateHeure(p.paidAt || o.createdAt)} · ${p.label}${p.reference ? ` · réf. ${p.reference}` : ''}`,
     ...(o.items || []).map((i) => `• ${i.title}${i.color || i.size ? ` (${[i.color, i.size].filter(Boolean).join(' / ')})` : ''} × ${i.qty} : ${dollars(i.price * i.qty)}`),
     o.discount ? `Code ${o.discount.code} : −${dollars(o.discount.amount)}` : '',
+    o.referral ? `Cadeau de bienvenue : −${dollars(o.referral.amount)}` : '',
+    o.wallet && o.wallet.used ? `Payé avec ma cagnotte : −${dollars(o.wallet.used)}` : '',
     `Livraison : ${o.shippingFee ? dollars(o.shippingFee) : 'gratuite'}`,
     o.serviceFee ? `Frais de service (${R.num(o.serviceFeePct)} %) : ${dollars(o.serviceFee)}` : '',
     `Total payé : ${dollars(o.total)}`,
@@ -86,6 +101,7 @@ function Recu({ o }) {
       <div class="recu-trait" aria-hidden="true" />
       <Articles o={o} />
       <Montants o={o} libelleTotal="Total payé" />
+      <GainCagnotte o={o} />
       {p.status !== 'refunded' ? (
         <div class="recu-cachet">
           <p><b>Payée et confirmée</b><small>{dateHeure(p.paidAt || o.createdAt)}</small></p>
@@ -198,13 +214,16 @@ async function confirmerDeconnexion() {
   seDeconnecterCompte(); toast('Vous êtes déconnecté', { icone: 'sortie' }); naviguer('/');
 }
 async function confirmerSuppression() {
-  if (!(await confirmer({ titre: 'Supprimer votre compte ?', texte: 'Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.', ok: 'Supprimer mon compte', danger: true }))) return;
+  const g = cagnotte.value && cagnotte.value.solde > 0 ? cagnotte.value.solde : 0;
+  if (!(await confirmer({ titre: 'Supprimer votre compte ?', texte: `Le panier, les favoris et les coordonnées gardés dans votre compte sont effacés${g ? `, ainsi que votre cagnotte (${dollars(g)})` : ''}. Vos commandes restent chez la boutique (comptabilité, garantie) : retrouvez-les avec leur numéro.`, ok: 'Supprimer mon compte', danger: true }))) return;
   try { await supprimerCompte(); toast('Compte supprimé', { icone: 'poubelle' }); naviguer('/'); } catch (e) { toast(e.message, { icone: 'alerte', ton: 'danger' }); }
 }
 
 export function Compte() {
   const c = cfg.value; const pf = profil.value; const cl = client.value;
   useEffect(() => { chargerCompte(); actualiserMesCommandes(); chargerANoter().catch(() => { }); }, []);
+  // La cagnotte, une fois le catalogue (réglages de la boutique) et le compte connus.
+  useEffect(() => { if (cl && cagnotteOuverte.value) chargerCagnotte().catch(() => { }); }, [cl && cl.id, cagnotteOuverte.value]);
   useSeo(() => ({ titre: 'Mon compte', noindex: true }), []);
   const liste = [...commandes.value.values()];
   const enCours = liste.filter((o) => o.status !== 'cancelled' && o.fulfillment !== 'delivered');
@@ -241,6 +260,7 @@ export function Compte() {
             {item({ href: lien('/notifications'), icone: 'cloche', titre: 'Notifications', sous: nonLues.value ? pluriel(nonLues.value, 'nouvelle', 'nouvelles') : 'Les étapes de vos commandes' })}
             {item({ href: lien('/discussion'), icone: 'bulle', titre: 'Écrire à la boutique', sous: messagesNonLus.value ? pluriel(messagesNonLus.value, 'nouvelle réponse', 'nouvelles réponses') : 'Une question ? Réponse ici, dans l’application' })}
             {c.reviews.enabled ? item({ href: lien('/avis'), icone: 'etoile', titre: 'Mes avis', sous: restantsANoter.value ? pluriel(restantsANoter.value, 'article à noter', 'articles à noter') : 'Notez les articles reçus' }) : null}
+            {cagnotteOuverte.value ? item({ href: lien('/compte/cagnotte'), icone: 'tirelire', titre: parrainageOuvert.value ? 'Ma cagnotte et parrainage' : 'Ma cagnotte', sous: cl && cagnotte.value ? `${dollars(cagnotte.value.solde)} disponibles${cagnotte.value.aVenir ? ` · +${dollars(cagnotte.value.aVenir)} à venir` : ''}` : `${R.num(c.loyalty.pct)} % de chaque commande, à réutiliser` }) : null}
             {item({ href: lien('/compte/retrouver'), icone: 'recherche', titre: 'Retrouver une commande', sous: 'Avec le numéro de votre reçu' })}
             {item({ href: lien('/favoris'), icone: 'coeur', titre: 'Mes favoris', sous: favoris.value.size ? pluriel(favoris.value.size, 'article') : 'Vos coups de cœur' })}
             {item({ onClick: ouvrirLivraisonPaiement, icone: 'camion', titre: 'Livraison et paiement', sous: 'Zones, délais, Mobile Money' })}
@@ -440,7 +460,7 @@ export function Suivi() {
               )}
               {o.review && s.etape >= 0 ? <Note ton="alerte" icone="info" classe="espace-haut">Un point de votre commande est à vérifier : la boutique vous appelle.</Note> : null}
             </section>
-            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} />
+            <section class="carte"><h2 class="carte-titre"><Icone n="recu" />Articles</h2><Articles o={o} /><Montants o={o} libelleTotal={payee ? 'Total payé' : 'Total'} />{payee ? <GainCagnotte o={o} /> : null}
               {o.fulfillment === 'delivered' && o.status !== 'cancelled' ? <button class="btn btn-secondaire btn-bloc espace-haut" onClick={() => { const n = remettreAuPanier(o); toast(n ? 'Articles ajoutés à votre panier' : 'Ces articles ne sont plus en vente', { icone: n ? 'sac' : 'alerte' }); if (n) naviguer('/panier'); }}><Icone n="sac" />Commander à nouveau</button> : null}
             </section>
           </div>

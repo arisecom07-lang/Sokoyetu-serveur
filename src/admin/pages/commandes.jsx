@@ -162,11 +162,19 @@ export function Commande() {
             <dl class="montants espace-haut">
               <div><dt>Sous-total</dt><dd class="num">{dollars(o.subtotal)}</dd></div>
               {o.discount ? <div><dt>Code {o.discount.code}</dt><dd class="moins num">−{dollars(o.discount.amount)}</dd></div> : null}
+              {o.referral ? <div><dt>Cadeau de bienvenue · parrainage {o.referral.code}</dt><dd class="moins num">−{dollars(o.referral.amount)}</dd></div> : null}
+              {o.wallet && o.wallet.used ? <div><dt>Payé avec la cagnotte du client</dt><dd class="moins num">−{dollars(o.wallet.used)}</dd></div> : null}
               <div><dt>Livraison · {o.shipping && o.shipping.zoneName}{R.num(o.weight) ? ` · colis ${String(R.arrondi(o.weight)).replace('.', ',')} kg` : ''}</dt><dd class="num">{o.shippingFee ? dollars(o.shippingFee) : 'Gratuite'}</dd></div>
               {o.serviceFee ? <div><dt>Frais de service ({R.num(o.serviceFeePct)} %)</dt><dd class="num">{dollars(o.serviceFee)}</dd></div> : null}
               <div class="total"><dt class="lib">{R.estPayee(o) ? 'Total payé' : 'Total'}</dt><dd class="num">{dollars(o.total)}</dd></div>
               {m.couts ? <div><dt>Marge estimée (frais de service compris, hors livraison){m.connue ? '' : ' · coûts incomplets'}</dt><dd class="num" style={{ color: m.marge >= 0 ? 'var(--ok)' : 'var(--danger)', fontWeight: 750 }}>{dollars(m.marge)}</dd></div> : null}
             </dl>
+            {o.status !== 'cancelled' && ((o.loyalty && R.num(o.loyalty.amount)) || (o.referral && R.num(o.referral.reward))) ? (
+              <p class="discret petit rangee espace-haut"><Icone n="tirelire" taille={15} />{[
+                o.loyalty && R.num(o.loyalty.amount) ? `${dollars(o.loyalty.amount)} pour la cagnotte du client` : '',
+                o.referral && R.num(o.referral.reward) ? `${dollars(o.referral.reward)} pour son parrain` : ''
+              ].filter(Boolean).join(' et ')}{o.fulfillment === 'delivered' ? ' : versés à la livraison.' : ' : à verser à la livraison.'}</p>
+            ) : null}
           </section>
           <section class="carte">
             <h2 class="carte-titre"><Icone n="horloge" />Historique</h2>

@@ -36,13 +36,13 @@ const ETATS = [
 function exporter(liste, nom) {
   const cellule = (v) => { const s = String(v == null ? '' : v); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const montant = (v) => R.num(v).toFixed(2).replace('.', ',');
-  const lignes = [['Numéro', 'Payée le', 'Client', 'Téléphone', 'Zone', 'Articles', 'Sous-total', 'Remise', 'Livraison', 'Frais de service', 'Total', 'Paiement', 'Transaction', 'Statut']];
+  const lignes = [['Numéro', 'Payée le', 'Client', 'Téléphone', 'Zone', 'Articles', 'Sous-total', 'Remise', 'Cadeau parrainage', 'Cagnotte utilisée', 'Livraison', 'Frais de service', 'Total', 'Paiement', 'Transaction', 'Statut']];
   liste.forEach((o) => {
     const sf = statutPreparation(o);
     lignes.push([
       o.number, new Date(quand(o)).toLocaleString('fr-FR'), o.customer && o.customer.name, telephone(o.customer && o.customer.phone), o.shipping && o.shipping.zoneName,
       (o.items || []).map((i) => `${i.title}${i.color || i.size ? ` (${[i.color, i.size].filter(Boolean).join(' / ')})` : ''} × ${i.qty}`).join(' | '),
-      montant(o.subtotal), o.discount ? montant(o.discount.amount) : '', montant(o.shippingFee), montant(o.serviceFee), montant(o.total),
+      montant(o.subtotal), o.discount ? montant(o.discount.amount) : '', o.referral ? montant(o.referral.amount) : '', o.wallet && o.wallet.used ? montant(o.wallet.used) : '', montant(o.shippingFee), montant(o.serviceFee), montant(o.total),
       o.payment && o.payment.label, o.payment && o.payment.reference, o.status === 'cancelled' ? statutPaiement(o).label : sf ? sf.label : 'Payée'
     ]);
   });
