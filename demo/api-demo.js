@@ -27,7 +27,7 @@ export class ErreurApi extends Error {
 
 const CONFIG_DEMO = {
   name: 'Sokoyetu', city: 'Bukavu', whatsapp: '0991234567', ownerName: 'Messir', setup: { livraison: true },
-  payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false } },
+  payments: { mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false }, carte: { enabled: true } },
   serviceFeePct: 2, payment: { holdMinutes: 30 },
   // Cagnotte de fidélité et parrainage ouverts dans la démo (fermés sur une nouvelle boutique).
   loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 },
@@ -175,7 +175,7 @@ function commandePublique(doc) {
   const d = R.copie(doc);
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
-  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; delete d.payment.simulation; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
   if (d.referral) { delete d.referral.by; delete d.referral.byPhone; delete d.referral.reward; }
   if (d.loyalty) delete d.loyalty.phone;
@@ -451,17 +451,27 @@ async function serveur(chemin, method, corps) {
     demanderPaiement(b, b.cols.orders[id], {});
     return reponseClient(b.cols.orders[id]);
   }
+  // Page de test du paiement par carte (comme la route carte-test du serveur en mode test) : { issue: ok | refus | annule }.
+  if ((m = p.match(/^sokoyetu\/paiement\/([^/]+)\/carte-test$/))) {
+    const rec = b.cols.orders[decodeURIComponent(m[1])];
+    if (!rec || rec.token !== q.get('t')) throw new ErreurApi(404, 'Commande introuvable.');
+    if (!R.estCarte(rec.doc.payment.method)) throw new ErreurApi(404, 'Page de test indisponible.');
+    if (!['ok', 'refus', 'annule'].includes(corps.issue)) throw new ErreurApi(400, 'Issue inconnue.');
+    if (R.enAttentePaiement(rec.doc) && rec.doc.payment.status === 'pending') { rec.doc.payment.simulation = { id: rec.doc.payment.providerId, issue: corps.issue }; rec.doc.payment.checkedAt = 0; }
+    suivrePaiement(b, rec);
+    return reponseClient(rec);
+  }
   if ((m = p.match(/^sokoyetu\/paiement\/([^/]+)(\/relancer)?$/))) {
     const rec = b.cols.orders[decodeURIComponent(m[1])];
     if (!rec || (!gerant() && rec.token !== q.get('t'))) throw new ErreurApi(404, 'Commande introuvable.');
     suivrePaiement(b, rec);
     if (!m[2]) return reponseClient(rec);
     const raison = R.relancePossible(rec.doc); if (raison) throw new ErreurApi(400, raison);
-    if (rec.doc.payment.status === 'pending' && Date.now() - Number(rec.doc.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
+    if (rec.doc.payment.status === 'pending' && !R.estCarte(rec.doc.payment.method) && Date.now() - Number(rec.doc.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) throw new ErreurApi(400, 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.');
     const moyen = R.moyensDePaiement(cfg()).find((x) => x.k === ((corps && corps.method) || rec.doc.payment.method));
     if (!moyen) throw new ErreurApi(400, 'Ce mode de paiement n’est pas disponible.', { champ: 'method' });
-    const tel = R.valider.mobileMoney((corps && corps.phone) || rec.doc.payment.phone);
-    if (!tel) throw new ErreurApi(400, `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, { champ: 'payphone' });
+    const tel = moyen.carte ? '' : R.valider.mobileMoney((corps && corps.phone) || rec.doc.payment.phone);
+    if (!moyen.carte && !tel) throw new ErreurApi(400, `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, { champ: 'payphone' });
     demanderPaiement(b, rec, { methode: moyen.k, label: moyen.label, telephone: tel });
     return reponseClient(rec);
   }
@@ -1097,6 +1107,12 @@ function effacerCagnotteDemo(b, tel) {
 /* ---------- Paiement en mode test (comme serveur/pb_hooks/lib/commandes.js) ---------- */
 
 function verifierSimulation(d) {
+  // Carte : l'issue choisie sur la page de test, pour la demande en cours.
+  if (R.estCarte(d.payment.method)) {
+    const x = d.payment.simulation;
+    if (!x || x.id !== d.payment.providerId) return { etat: 'en_attente' };
+    return x.issue === 'ok' ? { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) } : { etat: 'echec', message: x.issue === 'refus' ? 'Carte refusée (simulation).' : 'Paiement par carte annulé.' };
+  }
   if (Date.now() - Number(d.payment.startedAt || 0) < DELAI_PAIEMENT) return { etat: 'en_attente' };
   if (/0000$/.test(String(d.payment.phone || ''))) return { etat: 'echec', message: 'Solde insuffisant (simulation).' };
   return { etat: 'paye', reference: 'TEST' + String(Date.now()).slice(-8) };
@@ -1124,12 +1140,15 @@ function suivrePaiement(b, rec) {
 }
 function demanderPaiement(b, rec, opts) {
   const now = Date.now();
-  rec.doc = R.paiementEnvoye(rec.doc, { maintenant: now, providerId: `SIM-${rec.doc.number}-${R.int(rec.doc.payment.attempts) + 1}`, ...opts });
+  // Carte : la page de test de la boutique tient lieu de page sécurisée du fournisseur.
+  const url = R.estCarte(opts.methode || rec.doc.payment.method) ? '/paiement/' + rec.id + '/carte-test' : '';
+  rec.doc = R.paiementEnvoye(rec.doc, { maintenant: now, providerId: `SIM-${rec.doc.number}-${R.int(rec.doc.payment.attempts) + 1}`, ...opts, url });
   rec.updated = now; enregistrer(b); diffuser('orders', rec.id, 'update');
 }
 function reponseClient(rec) {
   const d = rec.doc; const p = d.payment || {};
-  return { id: rec.id, order: commandePublique(d), paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: R.int(p.attempts), relance: R.relancePossible(d) === '', test: true } };
+  return { id: rec.id, order: commandePublique(d), paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: R.int(p.attempts), relance: R.relancePossible(d) === '', test: true,
+    url: R.estCarte(p.method) && p.status === 'pending' && d.status === 'open' ? String(p.url || '') : '' } };
 }
 // Comme les tâches du serveur : les paiements en cours avancent même si le client a fermé la page ; les paniers laissés
 // sont rappelés (chaque minute dans la démo).

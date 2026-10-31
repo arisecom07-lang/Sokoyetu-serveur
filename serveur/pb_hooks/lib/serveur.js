@@ -85,7 +85,7 @@ function commandePublique(doc) {
   const aVerifier = Array.isArray(d.issues) && d.issues.length > 0;
   delete d.adminNote; delete d.issues; delete d.reserved; delete d.stockApplied; delete d.declaredTotal;
   // Références internes des demandes de paiement : jamais montrées au client.
-  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; }
+  if (d.payment) { delete d.payment.providerId; delete d.payment.checkedAt; delete d.payment.previous; delete d.payment.paidId; delete d.payment.duplicates; delete d.payment.duplicatesRefundedAt; delete d.payment.simulation; }
   (d.items || []).forEach((i) => { delete i.cost; delete i.available; });
   // Parrainage : qui a parrainé le client et ce qu'il y gagne restent à la boutique.
   if (d.referral) { delete d.referral.by; delete d.referral.byPhone; delete d.referral.reward; }

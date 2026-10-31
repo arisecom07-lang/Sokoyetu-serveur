@@ -167,6 +167,33 @@ test('paiement automatique : demande, refus, nouvelle tentative, confirmation', 
   assert.match(R.relancePossible(r.commande), /déjà payée/);
 });
 
+test('paiement par carte : proposé une fois ouvert, sans numéro à débiter, page sécurisée, passage au Mobile Money', () => {
+  const t0 = Date.now();
+  assert.equal(R.moyensDePaiement(cfg).some((m) => m.carte), false, 'fermée par défaut');
+  const cfgCarte = R.config({ payments: { mpesa: { enabled: true }, airtel: { enabled: false }, orange: { enabled: false }, carte: { enabled: true } }, freeShippingOver: 50, payment: { provider: 'flexpay' } });
+  assert.deepEqual(R.moyensDePaiement(cfgCarte).map((m) => m.k), ['mpesa', 'carte']);
+  assert.equal(R.estCarte('carte'), true); assert.equal(R.estCarte('mpesa'), false);
+  // Aucun numéro Mobile Money exigé, même avec un numéro de contact étranger.
+  let o = R.preparerCommande({ cfg: cfgCarte, produit, saisie: saisie({ customer: { name: 'Grâce Mapendo', phone: '+250788123456' }, payment: { method: 'carte', phone: '' } }), numero: 'CARTE1', maintenant: t0 }).commande;
+  assert.equal(o.payment.method, 'carte'); assert.equal(o.payment.phone, ''); assert.equal(o.payment.label, 'Carte bancaire');
+  o = R.paiementEnvoye(o, { maintenant: t0, providerId: 'FP-1', url: 'https://cardpayment.flexpay.cd/vpos/pay/FP-1' });
+  assert.equal(o.payment.url, 'https://cardpayment.flexpay.cd/vpos/pay/FP-1');
+  assert.match(o.timeline[o.timeline.length - 1].text, /carte bancaire ouvert sur la page sécurisée/);
+  o = R.paiementEchoue(o, { maintenant: t0 + 1000, raison: 'Carte refusée ou paiement annulé.' });
+  assert.equal(o.payment.url, undefined, 'la page d’un paiement refusé ne sert plus');
+  // Le client passe au Mobile Money : son numéro est repris, la page de la carte oubliée.
+  o = R.paiementEnvoye(o, { maintenant: t0 + 2000, providerId: 'FP-2', methode: 'mpesa', label: 'M-Pesa', telephone: '0812345678', url: 'https://ignoree' });
+  assert.equal(o.payment.phone, '0812345678'); assert.equal(o.payment.url, '');
+  // Et revient à la carte : aucun numéro gardé.
+  o = R.paiementEnvoye(o, { maintenant: t0 + 3000, providerId: 'FP-3', methode: 'carte', label: 'Carte bancaire', url: 'https://cardpayment.flexpay.cd/vpos/pay/FP-3' });
+  assert.equal(o.payment.phone, ''); assert.deepEqual(o.payment.previous, ['FP-1', 'FP-2']);
+  const r = R.paiementConfirme(o, { maintenant: t0 + 4000, reference: 'VPOS-123' });
+  assert.equal(r.commande.payment.status, 'paid'); assert.equal(r.commande.payment.url, undefined);
+  // Payée deux fois par carte : remboursement sur la carte.
+  const d = R.paiementConfirme(r.commande, { maintenant: t0 + 5000, id: 'FP-2', reference: 'VPOS-124' });
+  assert.equal(d.double, true); assert.match(d.commande.issues.join(' '), /sur sa carte/);
+});
+
 test('paiement non reçu à temps : annulation automatique, stock rendu ; paiement tardif : commande rouverte', () => {
   const t0 = Date.now();
   let o = R.paiementEnvoye(R.preparerCommande({ cfg, produit, saisie: saisie(), numero: 'BBBBBB', maintenant: t0 }).commande, { maintenant: t0, providerId: 'SIM-3' });

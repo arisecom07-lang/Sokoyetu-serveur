@@ -13,22 +13,29 @@
 
 /* ---------- Constantes ---------- */
 
-/* exemple : format de numéro montré dans le champ du paiement (préfixes courants de l'opérateur). */
+/*
+ * Moyens de paiement. exemple : format de numéro montré dans le champ du paiement (préfixes courants de l'opérateur).
+ * carte : paiement par carte Visa / Mastercard, saisie sur la page sécurisée du fournisseur (jamais dans la boutique).
+ */
 const OPERATEURS = {
   mpesa: { label: 'M-Pesa', sub: 'Vodacom', color: '#E11D2A', init: 'M', exemple: '081 234 5678' },
   airtel: { label: 'Airtel Money', sub: 'Airtel', color: '#D9001B', init: 'A', exemple: '099 123 4567' },
   orange: { label: 'Orange Money', sub: 'Orange', color: '#F07800', init: 'O', exemple: '084 123 4567' },
   afrimoney: { label: 'Afrimoney', sub: 'Africell', color: '#6B2C91', init: 'A', exemple: '090 123 4567' },
-  illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I', exemple: '099 123 4567' }
+  illico: { label: 'Illico Cash', sub: 'Rawbank', color: '#B8860B', init: 'I', exemple: '099 123 4567' },
+  carte: { label: 'Carte bancaire', sub: 'Visa, Mastercard', color: '#1F3A93', init: 'C', exemple: '', carte: true }
 };
+const estCarte = (k) => !!(OPERATEURS[k] && OPERATEURS[k].carte);
+/* « M-Pesa », « par carte bancaire » : le moyen dans une phrase du journal de la commande. */
+const moyenDuPaiement = (p) => (estCarte(p.method) ? 'par carte bancaire' : p.label || '');
 
 /*
  * Fournisseurs de paiement automatique. Le serveur choisit le sien (fichier sokoyetu.env, script paiement.sh) ;
  * sans fournisseur, la boutique n'encaisse pas. « simulation » sert aux essais : aucun argent ne circule.
  */
 const FOURNISSEURS = {
-  simulation: { label: 'Mode test (simulation)', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'illico'] },
-  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney'] }
+  simulation: { label: 'Mode test (simulation)', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'illico', 'carte'] },
+  flexpay: { label: 'FlexPay', operateurs: ['mpesa', 'airtel', 'orange', 'afrimoney', 'carte'] }
 };
 
 const ZONES_DEFAUT = [
@@ -52,7 +59,9 @@ const CONFIG_DEFAUT = {
   returns: 'Échange possible sous 7 jours sur les articles non portés, avec leur étiquette.',
   zones: ZONES_DEFAUT,
   payments: {
-    mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false }
+    mpesa: { enabled: true }, airtel: { enabled: true }, orange: { enabled: true }, afrimoney: { enabled: false }, illico: { enabled: false },
+    // Carte : à ouvrir quand le fournisseur a activé le paiement par carte sur le compte marchand.
+    carte: { enabled: false }
   },
   /* Paiement automatique : le client paie dans l'application, la commande n'est validée qu'après confirmation du fournisseur. */
   payment: { provider: '', holdMinutes: 30 },
@@ -453,8 +462,9 @@ function preparerCommande(opts) {
   if (!cfg.payment || !FOURNISSEURS[cfg.payment.provider]) stop('Le paiement en ligne n’est pas encore ouvert. Revenez bientôt.', 'method');
   const moyen = moyensDePaiement(cfg).find((m) => m.k === pay.method);
   if (!moyen) stop('Ce mode de paiement n’est pas disponible. Choisissez-en un autre.', 'method');
-  const payeur = valider.mobileMoney(pay.phone || client.phone);
-  if (!payeur) stop(`Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, 'payphone');
+  // Carte : aucun numéro à débiter, le client saisit sa carte sur la page sécurisée du fournisseur.
+  const payeur = moyen.carte ? '' : valider.mobileMoney(pay.phone || client.phone);
+  if (!moyen.carte && !payeur) stop(`Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, 'payphone');
 
   // Fidélité (lib/fidelite.js) : opts.parrainage, cadeau vérifié pour ce compte ; opts.cagnotte, solde du client connecté.
   const pa = opts.parrainage || null;
@@ -547,16 +557,23 @@ function relancePossible(o, maintenant) {
   if (int(o.payment && o.payment.attempts) >= MAX_TENTATIVES) return 'Trop de tentatives de paiement pour cette commande. Repassez votre commande.';
   return '';
 }
-/* Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, methode, label, telephone } */
+/*
+ * Une demande de paiement vient d'être envoyée au fournisseur. opts = { maintenant, providerId, methode, label, telephone, url }
+ * url : page sécurisée du fournisseur où le client saisit sa carte (paiement par carte).
+ */
 function paiementEnvoye(o, opts) {
   const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
   const relance = int(c.payment.attempts) > 0;
   if (opts.methode) { c.payment.method = opts.methode; c.payment.label = opts.label || c.payment.label; }
   if (opts.telephone) c.payment.phone = opts.telephone;
+  const carte = estCarte(c.payment.method);
+  if (carte) c.payment.phone = '';
   if (c.payment.providerId) c.payment.previous = (Array.isArray(c.payment.previous) ? c.payment.previous : []).concat([c.payment.providerId]).slice(-MAX_TENTATIVES);
   c.payment.status = 'pending'; c.payment.providerId = String(opts.providerId || ''); c.payment.attempts = int(c.payment.attempts) + 1;
-  c.payment.startedAt = now; c.payment.error = ''; c.payment.checkedAt = 0;
-  c.timeline.push({ at: now, text: `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
+  c.payment.startedAt = now; c.payment.error = ''; c.payment.checkedAt = 0; c.payment.url = carte ? String(opts.url || '').slice(0, 500) : '';
+  delete c.payment.simulation;
+  c.timeline.push({ at: now, text: carte ? `${relance ? 'Nouveau paiement' : 'Paiement'} par carte bancaire ouvert sur la page sécurisée`
+    : `${relance ? 'Nouvelle demande' : 'Demande'} de paiement ${c.payment.label} envoyée au ${c.payment.phone}` });
   return c;
 }
 /* Double paiement signalé et pas encore remboursé (deux demandes de la même commande validées par le client). */
@@ -578,8 +595,9 @@ function paiementConfirme(o, opts) {
     const ref = String(opts.reference || id).slice(0, 80);
     c.payment.duplicates = doubles.concat([{ id, reference: ref, at: now }]).slice(-MAX_TENTATIVES);
     delete c.payment.duplicatesRefundedAt;
-    c.issues = (Array.isArray(c.issues) ? c.issues : []).concat([`${TEXTE_DOUBLON} (référence ${ref}) : remboursez ${dollars(c.total)} au client sur son numéro ${c.payment.label || 'Mobile Money'}, puis notez-le.`]);
-    c.timeline.push({ at: now, text: `Deuxième paiement ${c.payment.label || ''} reçu (référence ${ref}) : à rembourser au client` });
+    const ou = estCarte(c.payment.method) ? 'sur sa carte, depuis votre espace marchand' : `sur son numéro ${c.payment.label || 'Mobile Money'}`;
+    c.issues = (Array.isArray(c.issues) ? c.issues : []).concat([`${TEXTE_DOUBLON} (référence ${ref}) : remboursez ${dollars(c.total)} au client ${ou}, puis notez-le.`]);
+    c.timeline.push({ at: now, text: `Deuxième paiement ${moyenDuPaiement(c.payment)} reçu (référence ${ref}) : à rembourser au client` });
     return { commande: c, stock: '', entrees: [], double: true };
   }
   c.payment.paidId = id;
@@ -589,18 +607,18 @@ function paiementConfirme(o, opts) {
     if (!c.stockApplied) { entrees = Array.isArray(c.reserved) ? c.reserved : []; c.stockApplied = true; stock = 'reserver'; }
     c.issues = (c.issues || []).concat(['Paiement confirmé après l’annulation automatique : vérifiez que les articles sont toujours disponibles.']);
   }
-  c.payment.status = 'paid'; c.payment.paidAt = now; c.payment.error = '';
+  c.payment.status = 'paid'; c.payment.paidAt = now; c.payment.error = ''; delete c.payment.url;
   if (opts.reference) c.payment.reference = String(opts.reference).slice(0, 80);
   // Le délai de livraison court à partir du paiement.
   if (c.delivery && c.delivery.days !== undefined) c.delivery = Object.assign({}, c.delivery, { at: now + int(c.delivery.days) * JOUR });
-  c.timeline.push({ at: now, text: `Paiement ${c.payment.label} confirmé${c.payment.test ? ' (mode test)' : ''}` });
+  c.timeline.push({ at: now, text: `Paiement ${moyenDuPaiement(c.payment)} confirmé${c.payment.test ? ' (mode test)' : ''}` });
   return { commande: c, stock, entrees };
 }
 /* Le fournisseur refuse le paiement (solde insuffisant, code annulé…) : le client peut réessayer tant que la commande n'a pas expiré. */
 function paiementEchoue(o, opts) {
   const c = copie(o); const now = opts.maintenant || Date.now(); c.payment = c.payment || {}; c.timeline = Array.isArray(c.timeline) ? c.timeline : [];
   if (estPayee(c) || c.status !== 'open') return c;
-  c.payment.status = 'failed'; c.payment.error = nettoyer(opts.raison, 160) || 'Paiement refusé ou annulé.'; c.payment.failedAt = now;
+  c.payment.status = 'failed'; c.payment.error = nettoyer(opts.raison, 160) || 'Paiement refusé ou annulé.'; c.payment.failedAt = now; delete c.payment.url;
   c.timeline.push({ at: now, text: `Paiement non abouti : ${c.payment.error}` });
   return c;
 }
@@ -1082,7 +1100,7 @@ function raisonParrainage(raison, dv, min) {
 }
 
 module.exports = {
-  OPERATEURS, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
+  OPERATEURS, estCarte, FOURNISSEURS, ZONES_DEFAUT, CONFIG_DEFAUT, MAX_LIGNES, MAX_QTE, MAX_TENTATIVES, RELANCE_APRES_S, ACTIONS, JOUR,
   ROLES, roleNettoye, DROITS, peut, etapePermise, pourLivreur,
   num, int, arrondi, chiffres, nettoyer, estObjet, copie, fusion, pluriel, slug, dollars, valider,
   config, zoneDe, estRetrait, moyensDePaiement, fraisService,

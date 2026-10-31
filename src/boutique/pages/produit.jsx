@@ -6,7 +6,7 @@ import { Photo, urlMedia } from '../../commun/js/medias.jsx';
 import { toast, Quantite, Note, ouvrirFeuille } from '../../commun/js/interface.jsx';
 import { dollars, francs, pluriel, classes, date, JOUR } from '../../commun/js/outils.js';
 import { lien, route, retour } from '../routeur.js';
-import { cfg, produitsParId, produits, catalogueAJour, catalogueErreur, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement, panier } from '../etat.js';
+import { cfg, produitsParId, produits, catalogueAJour, catalogueErreur, ajouterAuPanier, quantiteDansPanier, nbArticles, moyensPaiement, carteAcceptee, panier } from '../etat.js';
 import { EnteteBoutique, BarreAction, Pied, ouvrirLivraisonPaiement } from '../composants/cadre.jsx';
 import { BoutonFavori, CompteARebours, ErreurCatalogue, GrilleProduits, delai, epuise, lienProduit, lienRayon, nomRayon, PuceOperateur, trier } from '../composants/produits.jsx';
 import { mesurerEvenement } from '../mesure.js';
@@ -179,7 +179,7 @@ function Livraison({ p }) {
       ) : (
         <div class="zones-mini">{c.zones.map((z) => { const v = R.num(z.fee) + (z.pickup ? 0 : R.num(z.perKg) * R.poidsDe(p)); return <span key={z.id}><b>{z.name}</b>{v ? dollars(v) : 'gratuit'}</span>; })}</div>
       )}
-      <div class="info-ligne"><span class="info-icone"><Icone n="bouclier" /></span><div><b>Paiement Mobile Money sécurisé</b><p>Payé à la commande, vérifié par la boutique. Nous ne demandons jamais votre code PIN.</p></div></div>
+      <div class="info-ligne"><span class="info-icone"><Icone n="bouclier" /></span><div>{carteAcceptee.value ? <><b>Paiement sécurisé</b><p>Mobile Money ou carte bancaire, payé à la commande. Nous ne demandons jamais votre code PIN, ni le numéro de votre carte.</p></> : <><b>Paiement Mobile Money sécurisé</b><p>Payé à la commande, vérifié par la boutique. Nous ne demandons jamais votre code PIN.</p></>}</div></div>
       {moyensPaiement.value.length ? <div class="operateurs">{moyensPaiement.value.map((m) => <PuceOperateur key={m.k} m={m} />)}</div> : null}
       {c.returns ? <div class="info-ligne"><span class="info-icone"><Icone n="echange" /></span><div><b>Échanges</b><p>{c.returns}</p></div></div> : null}
       <button class="lien petit" style={{ justifySelf: 'start' }} onClick={ouvrirLivraisonPaiement}>Livraison et paiement en détail</button>

@@ -6,7 +6,7 @@ import { Photo } from '../../commun/js/medias.jsx';
 import { Vide, Quantite, toast } from '../../commun/js/interface.jsx';
 import { dollars, francs, pluriel } from '../../commun/js/outils.js';
 import { lien, naviguer, route } from '../routeur.js';
-import { cfg, lignesPanier, nbArticles, nbACommander, aCommander, changerQuantite, cocherLigne, cocherSeulement, produitsParId, produits, panier, nettoyerPanier, catalogueAJour, catalogueErreur, cleLigne, quantiteDansPanier, mettreDansLePanier } from '../etat.js';
+import { cfg, carteAcceptee, lignesPanier, nbArticles, nbACommander, aCommander, changerQuantite, cocherLigne, cocherSeulement, produitsParId, produits, panier, nettoyerPanier, catalogueAJour, catalogueErreur, cleLigne, quantiteDansPanier, mettreDansLePanier } from '../etat.js';
 import { EnteteBoutique, BarreAction, Pied } from '../composants/cadre.jsx';
 import { GrilleProduits, ErreurCatalogue, lienProduit, trier } from '../composants/produits.jsx';
 import { mesurerEvenement } from '../mesure.js';
@@ -150,7 +150,7 @@ export function Panier() {
               {!n ? <p class="note ton-alerte espace-haut"><Icone n="info" /><span>Cochez les articles que vous voulez commander maintenant.</span></p>
                 : restent ? <p class="note ton-info espace-haut"><Icone n="sac" /><span>{pluriel(restent, 'article')} non coché{restent > 1 ? 's restent' : ' reste'} dans votre panier pour une prochaine commande.</span></p> : null}
               <button class="btn btn-primaire btn-l btn-bloc seulement-ordi espace-haut" disabled={bloque} onClick={commander}>{restent && n ? `Commander ${pluriel(n, 'article')}` : 'Commander'}<Icone n="droite" /></button>
-              <p class="note ton-info espace-haut"><Icone n="bouclier" /><span>Paiement Mobile Money dans l’application : vous validez le montant sur votre téléphone, avec votre code PIN.</span></p>
+              <p class="note ton-info espace-haut"><Icone n="bouclier" /><span>{carteAcceptee.value ? 'Paiement dans l’application : Mobile Money, validé sur votre téléphone avec votre code PIN, ou carte Visa / Mastercard sur une page sécurisée.' : 'Paiement Mobile Money dans l’application : vous validez le montant sur votre téléphone, avec votre code PIN.'}</span></p>
             </div>
           </aside>
         </div>

@@ -437,8 +437,8 @@ export function Suivi() {
           <div class="pile-l">
             {attente ? (
               <a class="carte encours attente-paiement" href={lien('/paiement/' + o.id)}>
-                <span class="menu-icone"><Icone n="mobile" /></span>
-                <span class="menu-texte"><b>{o.payment.status === 'failed' ? 'Paiement non abouti' : 'Paiement à valider'}</b><small>{o.payment.status === 'failed' ? 'Réessayez pour confirmer la commande' : `Validez la demande ${o.payment.label} sur votre téléphone`}</small></span>
+                <span class="menu-icone"><Icone n={R.estCarte(o.payment.method) ? 'carte' : 'mobile'} /></span>
+                <span class="menu-texte"><b>{o.payment.status === 'failed' ? 'Paiement non abouti' : 'Paiement à valider'}</b><small>{o.payment.status === 'failed' ? 'Réessayez pour confirmer la commande' : R.estCarte(o.payment.method) ? 'Terminez le paiement par carte' : `Validez la demande ${o.payment.label} sur votre téléphone`}</small></span>
                 <Icone n="droite" classe="chevron" />
               </a>
             ) : null}

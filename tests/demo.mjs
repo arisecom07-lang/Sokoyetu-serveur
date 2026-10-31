@@ -33,8 +33,9 @@ await client.goto(BASE + '/boutique/index.html#/commander'); await client.waitFo
 await client.click('button:has-text("Continuer sans compte")'); await client.waitForSelector('.page-commande');
 await client.fill('input[autocomplete="name"]', 'Amani Bahati'); await client.fill('input[type=tel]', '0997654321');
 await client.click('[aria-label="Zone de livraison"] .choix >> nth=0'); await client.fill('input[autocomplete="street-address"]', 'Nguba, av. de la Mission 7');
-await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Opérateur Mobile Money"]');
-await client.click('[aria-label="Opérateur Mobile Money"] .choix >> nth=0');
+// La démo accepte aussi la carte : le choix s'appelle « Moyen de paiement ».
+await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Moyen de paiement"]');
+await client.click('[aria-label="Moyen de paiement"] .choix >> nth=0');
 await client.fill('[aria-label="Code promo"]', 'BIENVENUE10'); await client.click('button:has-text("Appliquer")'); await client.waitForSelector('text=Code BIENVENUE10 appliqué');
 await client.click('.case .case-boite');
 await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.paiement-attente', { timeout: 15000 });
@@ -141,6 +142,27 @@ await admin.click('.feuille button:has-text("Offrir")'); await admin.waitForSele
 await admin.waitForSelector('.liste-simple li:has-text("Geste de la boutique : Merci pour votre fidélité")');
 await admin.screenshot({ path: SORTIE + 'demo-cagnotte-admin.png' });
 etape('parrainage : lien de Grâce ouvert par un proche (cadeau annoncé), sa cagnotte vue par l’équipe, geste de la boutique ajouté');
+
+// Paiement par carte (page de test de la démo, à la place de la page sécurisée de FlexPay) : carte refusée, nouvel essai, payé.
+await client.bringToFront();
+await client.goto(BASE + '/boutique/index.html#/p/ex-p17/montre-classique-bracelet-cuir'); await client.waitForSelector('.produit-titre');
+await client.click('.barre-action .btn-primaire'); await client.waitForTimeout(400);
+await client.goto(BASE + '/boutique/index.html#/commander'); await client.waitForSelector('.page-commande');
+await client.click('.barre-action .btn-primaire'); await client.waitForSelector('[aria-label="Moyen de paiement"]');
+await client.click('[aria-label="Moyen de paiement"] .choix:has-text("Carte bancaire")');
+assert.equal(await client.locator('.carte-paiement input[type=tel]').count(), 0, 'aucun numéro à débiter pour la carte');
+await client.screenshot({ path: SORTIE + 'demo-carte-choix.png' });
+await client.click('.case:has-text("J’accepte les") .case-boite');
+await client.click('.barre-action .btn-primaire'); await client.waitForSelector('.page-carte-test .carte-test-visuel');
+await client.screenshot({ path: SORTIE + 'demo-carte-test.png' });
+await client.click('button:has-text("Simuler une carte refusée")'); await client.waitForSelector('.paiement-attente.en-echec:has-text("Carte refusée")');
+await client.waitForTimeout(700); await client.screenshot({ path: SORTIE + 'demo-carte-refusee.png' });
+await client.click('button:has-text("Réessayer par carte")'); await client.waitForSelector('.page-carte-test');
+await client.click('.page-carte-test .btn-primaire'); await client.waitForSelector('.recu', { timeout: 20000 });
+const numeroCarte = (await client.locator('.recu-numero .code').innerText()).trim();
+await admin.bringToFront();
+await admin.waitForSelector(`.toast:has-text("Commande payée #${numeroCarte}")`, { timeout: 8000 });
+etape(`paiement par carte (page de test) : carte refusée, nouvel essai, commande #${numeroCarte} payée`);
 
 // Accueil de la démo, ordinateur et téléphone
 // La page d'accueil est publiée sans en-tête : l'hébergeur l'enveloppe (encodage, largeur d'écran). On fait de même ici.

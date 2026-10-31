@@ -296,6 +296,58 @@ test('nouvelle demande de paiement : une seule à la fois, même avec deux appui
   assert.equal((await etatPaiement(r.json.id, t)).json.paiement.tentatives, 2, 'une seule nouvelle demande envoyée');
 });
 
+test('paiement par carte (mode test) : page sécurisée, carte refusée puis acceptée, passage au Mobile Money', async () => {
+  const cfg0 = (await api('/api/collections/config/records/store', { auth: true })).json.doc;
+  const montre = { items: [{ productId: 't-montre', qty: 1 }], discountCode: '', total: 17.3 };
+  const ferme = await commander(saisie({ token: secret(), ...montre, payment: { method: 'carte', phone: '' } }));
+  assert.deepEqual([ferme.status, ferme.json.champ], [400, 'method'], 'carte fermée tant que la boutique ne l’a pas ouverte');
+  assert.equal((await ecrire('config', 'store', { ...cfg0, payments: { ...cfg0.payments, carte: { enabled: true } } })).status, 200);
+  const carteTest = (id, t, issue) => api(`/api/sokoyetu/paiement/${id}/carte-test?t=${t}`, { method: 'POST', body: { issue } });
+  const relancer = (id, t, corps) => api(`/api/sokoyetu/paiement/${id}/relancer?t=${t}`, { method: 'POST', body: corps });
+
+  // Aucun numéro à débiter : le client part sur la page sécurisée (ici, la page de test de la boutique).
+  const t = secret();
+  const r = await commander(saisie({ token: t, customer: { name: 'Client Carte', phone: '0812345680' }, ...montre, payment: { method: 'carte', phone: '' } }));
+  assert.equal(r.status, 200, r.texte);
+  const id = r.json.id;
+  assert.deepEqual([r.json.paiement.etat, r.json.paiement.url, r.json.order.payment.method, r.json.order.payment.phone, r.json.order.payment.label], ['pending', `/paiement/${id}/carte-test`, 'carte', '', 'Carte bancaire']);
+  await pause(1500);
+  assert.equal((await etatPaiement(id, t)).json.paiement.etat, 'pending', 'rien n’est payé tant que la carte n’est pas passée');
+  assert.equal((await carteTest(id, secret(), 'ok')).status, 404);
+  assert.equal((await carteTest(id, t, 'peut-etre')).status, 400);
+
+  const refus = await carteTest(id, t, 'refus');
+  assert.equal(refus.status, 200, refus.texte);
+  assert.deepEqual([refus.json.paiement.etat, refus.json.paiement.relance, refus.json.paiement.url], ['failed', true, '']);
+  assert.match(refus.json.paiement.message, /Carte refusée/);
+  // Retour de la page sécurisée : nouvel essai par carte sans attendre.
+  const bis = await relancer(id, t, { method: 'carte' });
+  assert.equal(bis.status, 200, bis.texte);
+  assert.deepEqual([bis.json.paiement.etat, bis.json.paiement.tentatives, bis.json.paiement.url], ['pending', 2, `/paiement/${id}/carte-test`]);
+  const annule = await carteTest(id, t, 'annule');
+  assert.match(annule.json.paiement.message, /annulé/);
+  // Puis le Mobile Money : le numéro est demandé de nouveau, la page de test ne sert plus.
+  assert.deepEqual([(await relancer(id, t, { method: 'mpesa' })).json.champ, (await relancer(id, t, { method: 'mpesa', phone: '12' })).json.champ], ['payphone', 'payphone']);
+  const mm = await relancer(id, t, { method: 'mpesa', phone: '0991112233' });
+  assert.deepEqual([mm.status, mm.json.order.payment.method, mm.json.order.payment.phone, mm.json.paiement.url], [200, 'mpesa', '0991112233', '']);
+  assert.equal((await carteTest(id, t, 'ok')).status, 404);
+  assert.equal((await attendre(id, t, 'paid')).json.order.payment.label, 'M-Pesa');
+
+  // Carte acceptée du premier coup.
+  const t2 = secret();
+  const o = await commander(saisie({ token: t2, customer: { name: 'Client Carte', phone: '0812345680' }, ...montre, payment: { method: 'carte', phone: '' } }));
+  assert.equal(o.status, 200, o.texte);
+  const ok = await carteTest(o.json.id, t2, 'ok');
+  assert.deepEqual([ok.json.paiement.etat, ok.json.paiement.url, ok.json.paiement.relance], ['paid', '', false], ok.texte);
+  assert.match(ok.json.order.payment.reference, /^TEST\d{8}$/);
+  const rec = await enregistrement(o.json.id);
+  assert.equal(rec.pay_status, 'paid');
+  assert.match(rec.doc.timeline.map((e) => e.text).join(' | '), /carte bancaire ouvert sur la page sécurisée.*Paiement par carte bancaire confirmé/);
+  assert.equal(rec.doc.payment.url, undefined);
+  assert.equal((await carteTest(o.json.id, t2, 'refus')).json.paiement.etat, 'paid', 'une carte payée ne se refuse plus');
+  assert.equal((await ecrire('config', 'store', cfg0)).status, 200);
+});
+
 test('surveillance : état du serveur, erreurs des navigateurs gardées au journal', async () => {
   const s = await api('/api/sokoyetu/sante');
   assert.deepEqual([s.status, s.json.ok, s.json.details], [200, true, undefined]);

@@ -13,7 +13,7 @@ import { useFormulaire } from './catalogue.jsx';
 
 const OUTILS = { ga4: ['Google Analytics 4', /^G-[A-Z0-9]{4,12}$/, 'Identifiant de mesure, ex. G-ABC123XYZ'], plausible: ['Plausible (sans cookie)', /^[a-z0-9.-]+\.[a-z]{2,}$/, 'Votre domaine, ex. sokoyakwetu.com'], goatcounter: ['GoatCounter (sans cookie)', /^[a-z0-9-]{2,40}$/, 'Votre code, ex. sokoyetu'] };
 const NOM_FOURNISSEUR = { flexpay: 'FlexPay', simulation: 'le mode test' };
-const TITRES = { boutique: ['Identité de la boutique', 'boutique'], paiements: ['Paiements Mobile Money', 'portefeuille'], livraison: ['Livraison', 'camion'], general: ['Général', 'reglages'], legal: ['Informations légales', 'recu'] };
+const TITRES = { boutique: ['Identité de la boutique', 'boutique'], paiements: ['Paiements', 'portefeuille'], livraison: ['Livraison', 'camion'], general: ['Général', 'reglages'], legal: ['Informations légales', 'recu'] };
 
 /* Remet les textes légaux d'origine sous leurs nouvelles clés. */
 function textesLegaux(c) {
@@ -44,7 +44,7 @@ function Formulaire({ section }) {
     // Paiement automatique : seulement les opérateurs proposés, les frais de service et le délai pour payer.
     // Le fournisseur et ses clés restent sur le serveur (paiement.sh), jamais dans ces réglages.
     for (const k of Object.keys(R.OPERATEURS)) d.payments[k] = { enabled: !!(d.payments[k] && d.payments[k].enabled) };
-    if (section === 'paiements' && !Object.keys(R.OPERATEURS).some((k) => d.payments[k].enabled) && stop('Gardez au moins un opérateur actif')) return;
+    if (section === 'paiements' && !Object.keys(R.OPERATEURS).some((k) => d.payments[k].enabled) && stop('Gardez au moins un moyen de paiement actif')) return;
     d.serviceFeePct = R.num(d.serviceFeePct); if ((d.serviceFeePct < 0 || d.serviceFeePct > 20) && stop('Frais de service : entre 0 et 20 %')) return;
     const delai = R.int(d.payment && d.payment.holdMinutes); if ((delai < 5 || delai > 120) && stop('Délai pour payer : entre 5 et 120 minutes')) return;
     d.payment = { holdMinutes: delai };
@@ -122,12 +122,13 @@ function Formulaire({ section }) {
                   <Champ libelle="Délai pour payer (minutes)" aide="Articles réservés pendant ce délai ; sans paiement, la commande s’annule toute seule.">{(a) => <input class="saisie" {...a} type="number" inputmode="numeric" min="5" max="120" value={f.payment.holdMinutes} onInput={(e) => maj({ payment: { ...f.payment, holdMinutes: e.currentTarget.value } })} />}</Champ>
                 </div>
               </section>
-              <p class="intertitre">Opérateurs proposés aux clients</p>
+              <p class="intertitre">Moyens de paiement proposés aux clients</p>
               {Object.entries(R.OPERATEURS).map(([k, o]) => {
                 const p = f.payments[k] || {}; const possible = proposes.includes(k);
                 return (
                   <section key={k} class="carte">
-                    <div class="operateur-tete"><LogoOperateur k={k} m={o} taille={44} /><Bascule actif={possible && !!p.enabled} desactive={!possible} onClick={() => pay(k, 'enabled', !p.enabled)} libelle={o.label} sous={!possible ? `Non proposé par ${NOM_FOURNISSEUR[fournisseur]}` : p.enabled ? 'Proposé aux clients' : 'Désactivé'} /></div>
+                    <div class="operateur-tete"><LogoOperateur k={k} m={o} taille={44} /><Bascule actif={possible && !!p.enabled} desactive={!possible} onClick={() => pay(k, 'enabled', !p.enabled)} libelle={o.carte ? 'Carte Visa / Mastercard' : o.label} sous={!possible ? `Non proposé par ${NOM_FOURNISSEUR[fournisseur]}` : p.enabled ? 'Proposé aux clients' : 'Désactivé'} /></div>
+                    {o.carte && possible ? <p class="attenue petit espace-haut">Le client saisit sa carte sur la page sécurisée de FlexPay, puis revient sur la boutique : vous ne voyez jamais son numéro. Activez-la quand FlexPay a ouvert le paiement par carte sur votre compte marchand.{ps.test ? ' En mode test, une page d’essai remplace celle de FlexPay.' : ''}</p> : null}
                   </section>
                 );
               })}

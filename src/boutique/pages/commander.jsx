@@ -1,4 +1,4 @@
-// Sokoyetu (boutique) — commande en 3 étapes : livraison, paiement Mobile Money dans l'application, reçu.
+// Sokoyetu (boutique) — commande en 3 étapes : livraison, paiement Mobile Money (ou carte, sur la page sécurisée du fournisseur), reçu.
 // Le montant est confirmé par le serveur juste avant la demande de paiement ; l'envoi est sans risque de doublon (jeton unique).
 // La commande n'est validée que lorsque l'opérateur confirme le paiement (page « paiement »).
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -9,8 +9,8 @@ import { Champ, Choix, CaseACocher, LogoOperateur, Etapes, Note, Vide, toast, ou
 import { requete } from '../../commun/js/api.js';
 import { Local } from '../../commun/js/stockage.js';
 import { dollars, francs, telephone, secret, pluriel, classes } from '../../commun/js/outils.js';
-import { lien, naviguer } from '../routeur.js';
-import { cfg, lignesACommander, aCommander, moyensPaiement, profil, enregistrerProfil, retirerCommandes, suivreCommande, recevoirCommande, comptesOuverts, connecte, sansCompte, continuerSansCompte, client } from '../etat.js';
+import { lien, naviguer, route } from '../routeur.js';
+import { cfg, lignesACommander, aCommander, moyensPaiement, carteAcceptee, profil, enregistrerProfil, retirerCommandes, suivreCommande, recevoirCommande, comptesOuverts, connecte, sansCompte, continuerSansCompte, client } from '../etat.js';
 import { InvitationCompte } from './connexion.jsx';
 import { EntetePage, BarreAction } from '../composants/cadre.jsx';
 import { mesurerEvenement } from '../mesure.js';
@@ -53,21 +53,31 @@ export function Montants({ m, zone, libelleTotal = 'Total' }) {
   );
 }
 
-/* Choix de l'opérateur et du numéro Mobile Money à débiter (commande, nouvelle tentative). */
+/* Paiement par carte : la page sécurisée du fournisseur (hors de la boutique), ou sa page de test ; la page de paiement de
+   la commande reste derrière, pour le retour arrière. */
+export function allerVersCarte(id, url) {
+  if (route.peek().nom !== 'paiement') naviguer('/paiement/' + id, { remplacer: true });
+  if (url.startsWith('/')) naviguer(url);
+  else location.assign(url);
+}
+
+/* Choix de l'opérateur et du numéro Mobile Money à débiter, ou de la carte (commande, nouvelle tentative). */
 export function ChoixPaiement({ ms, methode, tel, erreurs, onMethode, onTel, telContact }) {
   const moyen = ms.find((m) => m.k === methode);
   return (
     <>
-      <div class="choix-liste" role="radiogroup" aria-label="Opérateur Mobile Money">
+      <div class="choix-liste" role="radiogroup" aria-label={ms.some((m) => m.carte) ? 'Moyen de paiement' : 'Opérateur Mobile Money'}>
         {ms.map((m) => <Choix key={m.k} actif={methode === m.k} onClick={() => onMethode(m.k)} icone={<LogoOperateur m={m} />} titre={m.label} sous={m.sub} />)}
       </div>
       {erreurs.method ? <p class="champ-erreur"><Icone n="alerte" />{erreurs.method}</p> : null}
+      {moyen && moyen.carte ? <Note ton="info" icone="cadenas" classe="espace-haut">Vous saisirez votre carte sur la page sécurisée de notre partenaire de paiement : la boutique ne voit jamais son numéro.</Note> : (
       <div class="formulaire espace-haut">
         <Champ libelle={`Entrez le numéro de votre compte ${moyen ? moyen.label : 'Mobile Money'}`} erreur={erreurs.payphone}
           aide={`La demande de paiement arrive sur ce téléphone : vous la validez avec votre code PIN.${telContact ? ` Laissé vide, nous utilisons votre numéro ${telephone(telContact)}.` : ''}`}>
           {(a) => <input class="saisie saisie-numero" {...a} value={tel} onInput={(e) => onTel(e.currentTarget.value)} type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder={`Ex. ${(moyen && moyen.exemple) || '099 123 4567'}`} />}
         </Champ>
       </div>
+      )}
     </>
   );
 }
@@ -100,8 +110,8 @@ function CarteFidelite({ dv, utiliser, onUtiliser }) {
   );
 }
 
-export function NoteModeTest() {
-  return <Note ton="info" icone="info"><b>Mode test.</b> Aucun argent n’est débité : le paiement est confirmé tout seul après quelques secondes (refusé si le numéro se termine par 0000).</Note>;
+export function NoteModeTest({ carte }) {
+  return <Note ton="info" icone="info"><b>Mode test.</b> Aucun argent n’est débité : {carte ? 'une page de test remplace la page sécurisée de la carte, et vous y choisissez l’issue du paiement.' : 'le paiement est confirmé tout seul après quelques secondes (refusé si le numéro se termine par 0000).'}</Note>;
 }
 
 export function Commander() {
@@ -223,8 +233,8 @@ export function Commander() {
   }
   async function payerUneFois() {
     const e = {};
-    if (!moyen) e.method = 'Choisissez votre opérateur Mobile Money.';
-    else if (!R.valider.mobileMoney(telDebite)) e.payphone = `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`;
+    if (!moyen) e.method = carteAcceptee.value ? 'Choisissez votre moyen de paiement.' : 'Choisissez votre opérateur Mobile Money.';
+    else if (!moyen.carte && !R.valider.mobileMoney(telDebite)) e.payphone = `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`;
     if (!f.conditions) e.terms = 'Cochez cette case pour payer.';
     if (Object.keys(e).length) { maj({ erreurs: e }); montrerErreur(); return; }
     maj({ envoi: true, erreurs: {} });
@@ -235,18 +245,19 @@ export function Commander() {
       token: f.jeton, termsAccepted: true, website: document.getElementById('site-web')?.value || '',
       customer: { name: f.nom, phone: f.tel }, shipping: { zoneId: f.zoneId, address: f.adresse, landmark: f.repere }, note: f.note,
       items: aCommander.value.map(({ productId, color, size, qty }) => ({ productId, color, size, qty })),
-      discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: telDebite }, total: devis.total,
+      discountCode: f.remise ? f.remise.code : '', payment: { method: f.methode, phone: moyen.carte ? '' : telDebite }, total: devis.total,
       appareil: jetonAppareil(), ...fidelite
     };
     mesurerEvenement('add_payment_info', { value: devis.total, currency: 'USD', payment_type: moyen.label });
     try {
       const r = await requete('sokoyetu/commander', { method: 'POST', corps, delai: 45000 });
       suivreCommande(r.id, f.jeton); recevoirCommande(r.id, r.order);
-      enregistrerProfil({ name: R.valider.nom(f.nom), phone: R.valider.telephone(f.tel), zoneId: f.zoneId, address: f.adresse, landmark: f.repere, payMethod: f.methode, payPhone: R.valider.mobileMoney(telDebite) });
+      enregistrerProfil({ name: R.valider.nom(f.nom), phone: R.valider.telephone(f.tel), zoneId: f.zoneId, address: f.adresse, landmark: f.repere, payMethod: f.methode, ...(moyen.carte ? {} : { payPhone: R.valider.mobileMoney(telDebite) }) });
       retirerCommandes(corps.items); Local.retirer('commandeEnCours');
       // Cadeau de bienvenue reçu : il ne servira plus ; la cagnotte a pu changer.
       if (r.order && r.order.referral) oublierParrain();
       if (client.value && cagnotteOuverte.value) chargerCagnotte().catch(() => { });
+      if (r.paiement && r.paiement.url) { allerVersCarte(r.id, r.paiement.url); return; }
       naviguer('/paiement/' + r.id, { remplacer: true });
     } catch (err) {
       maj({ envoi: false });
@@ -328,12 +339,14 @@ export function Commander() {
 
             {f.etape === 2 ? (
               <>
-                {enTest && ouvert ? <NoteModeTest /> : null}
+                {enTest && ouvert ? <NoteModeTest carte={!!(moyen && moyen.carte)} /> : null}
                 <section class="carte carte-paiement entree-avant" style={moyen ? { '--op': moyen.color } : undefined}>
-                  <h2 class="carte-titre"><Icone n="portefeuille" />Payer par Mobile Money</h2>
+                  <h2 class="carte-titre"><Icone n="portefeuille" />{carteAcceptee.value ? 'Paiement' : 'Payer par Mobile Money'}</h2>
                   {ouvert ? (
                     <>
-                      <p class="attenue petit intro-paiement">Choisissez votre opérateur : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. La commande est confirmée dès que l’opérateur valide le paiement.</p>
+                      <p class="attenue petit intro-paiement">{carteAcceptee.value
+                        ? 'Mobile Money : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. Carte Visa ou Mastercard : vous la saisissez sur une page sécurisée. La commande est confirmée dès que le paiement est validé.'
+                        : 'Choisissez votre opérateur : la demande de paiement s’affiche sur votre téléphone et vous la validez avec votre code PIN. La commande est confirmée dès que l’opérateur valide le paiement.'}</p>
                       <ChoixPaiement ms={ms} methode={f.methode} tel={f.telPaiement} erreurs={f.erreurs} telContact={R.valider.mobileMoney(f.tel) ? f.tel : ''}
                         onMethode={(k) => maj({ methode: k, erreurs: { ...f.erreurs, method: '' } })} onTel={(v) => maj({ telPaiement: v, erreurs: { ...f.erreurs, payphone: '' } })} />
                     </>
@@ -360,7 +373,7 @@ export function Commander() {
                   </CaseACocher>
                   {f.erreurs.terms ? <p class="champ-erreur espace-haut"><Icone n="alerte" />{f.erreurs.terms}</p> : null}
                 </section>
-                <Note ton="info" icone="bouclier">Paiement sécurisé : vous seul validez le montant sur votre téléphone. Personne ne vous demandera jamais votre code PIN.</Note>
+                <Note ton="info" icone="bouclier">{moyen && moyen.carte ? 'Paiement sécurisé : votre carte est saisie sur la page de notre partenaire de paiement, jamais dans la boutique.' : 'Paiement sécurisé : vous seul validez le montant sur votre téléphone. Personne ne vous demandera jamais votre code PIN.'}</Note>
               </>
             ) : null}
           </div>

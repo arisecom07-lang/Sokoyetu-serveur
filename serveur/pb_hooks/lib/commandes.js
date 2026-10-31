@@ -1,5 +1,5 @@
 /*
- * Sokoyetu — suivi des commandes payées par Mobile Money, côté serveur.
+ * Sokoyetu — suivi des commandes payées par Mobile Money ou par carte, côté serveur.
  * La commande naît « en attente de paiement » (stock réservé). Elle est validée quand le fournisseur confirme ;
  * sans paiement dans le délai (réglage holdMinutes), elle s'annule d'elle-même et ses articles reviennent en vente.
  */
@@ -16,6 +16,9 @@ function appliquer(app, id, r) {
     const rec = tx.findRecordById('orders', id);
     let d = S.lire(rec); const now = Date.now();
     d.payment = d.payment || {}; d.payment.checkedAt = now;
+    // Carte : si le fournisseur n'a pas donné son numéro de transaction à l'ouverture, celui de sa notification (vérifié
+    // auprès de lui, pour cette commande) devient celui de la demande en cours.
+    if (r && r.id && !d.payment.providerId && (r.etat === 'paye' || r.etat === 'echec')) d.payment.providerId = r.id;
     if (r && r.etat === 'paye') {
       const x = R.paiementConfirme(d, { maintenant: now, reference: r.reference, id: r.id });
       if (x.stock === 'reserver') S.appliquerStock(tx, x.entrees, -1);
@@ -54,18 +57,21 @@ function suivre(app, rec, opts) {
   return appliquer(app, rec.id, Object.assign({ id: d.payment.providerId }, P.verifier(d)));
 }
 
-/* Envoie une (nouvelle) demande de paiement au fournisseur. opts = { callbackUrl, methode, label, telephone } */
+/*
+ * Envoie une (nouvelle) demande de paiement au fournisseur. opts = { callbackUrl, retour, pageTest, methode, label, telephone } ;
+ * retour et pageTest : adresses du paiement par carte (adressesCarte).
+ */
 function demander(app, rec, opts) {
   const d0 = S.lire(rec);
   const essai = R.copie(d0);
   if (opts.methode) { essai.payment.method = opts.methode; essai.payment.label = opts.label; }
   if (opts.telephone) essai.payment.phone = opts.telephone;
-  const r = P.demarrer(essai, { callbackUrl: opts.callbackUrl });
+  const r = P.demarrer(essai, { callbackUrl: opts.callbackUrl, retour: opts.retour, pageTest: opts.pageTest });
   let doc = null;
   app.runInTransaction((tx) => {
     const frais = tx.findRecordById('orders', rec.id);
     const now = Date.now();
-    let d = R.paiementEnvoye(S.lire(frais), { maintenant: now, providerId: r.id || '', methode: opts.methode, label: opts.label, telephone: opts.telephone });
+    let d = R.paiementEnvoye(S.lire(frais), { maintenant: now, providerId: r.id || '', methode: opts.methode, label: opts.label, telephone: opts.telephone, url: r.url });
     if (r.etat === 'echec') d = R.paiementEchoue(d, { maintenant: now, raison: r.message });
     if (r.etat === 'paye') d = R.paiementConfirme(d, { maintenant: now, reference: r.reference }).commande;
     S.enregistrerCommande(tx, frais, d);
@@ -74,12 +80,13 @@ function demander(app, rec, opts) {
   return doc;
 }
 
-/* Ce que le client reçoit : sa commande (vue publique) et l'état du paiement. */
+/* Ce que le client reçoit : sa commande (vue publique) et l'état du paiement ; url : la page où payer par carte. */
 function reponseClient(id, d) {
   const p = d.payment || {};
   return {
     id, order: S.commandePublique(d),
-    paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: Number(p.attempts) || 0, relance: R.relancePossible(d) === '', test: !!p.test }
+    paiement: { etat: p.status || '', message: p.error || '', expireA: Number(d.expiresAt) || 0, tentatives: Number(p.attempts) || 0, relance: R.relancePossible(d) === '', test: !!p.test,
+      url: R.estCarte(p.method) && p.status === 'pending' && d.status === 'open' ? String(p.url || '') : '' }
   };
 }
 
@@ -92,10 +99,19 @@ function commandeDuClient(e) {
   return rec;
 }
 
+/* Domaine de la boutique (sans www ni admin). */
+const hote = (e) => String($os.getenv('SOKOYETU_DOMAINE') || e.request.host || '').replace(/^(www|admin)\./, '').split(':')[0];
 /* Adresse à laquelle le fournisseur annonce le résultat d'un paiement. */
 function adresseNotification(e) {
-  const hote = String($os.getenv('SOKOYETU_DOMAINE') || e.request.host || '').replace(/^(www|admin)\./, '').split(':')[0];
-  return `https://${hote}/api/sokoyetu/notification/${P.fournisseur()}`;
+  return `https://${hote(e)}/api/sokoyetu/notification/${P.fournisseur()}`;
+}
+/*
+ * Paiement par carte : pages de la boutique où la page sécurisée du fournisseur renvoie le client (payé, annulé, refusé),
+ * et page de test qui la remplace en mode test. Le jeton de la commande n'y figure pas : il reste sur le téléphone du client.
+ */
+function adressesCarte(e, id) {
+  const page = '/paiement/' + encodeURIComponent(id); const base = `https://${hote(e)}`;
+  return { retour: { ok: base + page + '?carte=ok', annule: base + page + '?carte=annule', refuse: base + page + '?carte=refuse', accueil: base + '/' }, pageTest: page + '/carte-test' };
 }
 
 /*
@@ -164,4 +180,4 @@ function notification(app, nom, corps) {
   return true;
 }
 
-module.exports = { suivre, demander, appliquer, reponseClient, commandeDuClient, adresseNotification, surveiller, notification };
+module.exports = { suivre, demander, appliquer, reponseClient, commandeDuClient, adresseNotification, adressesCarte, surveiller, notification };

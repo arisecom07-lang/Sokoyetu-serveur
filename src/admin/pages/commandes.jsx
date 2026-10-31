@@ -89,8 +89,8 @@ export function Commande() {
   // Pas de message au client tant que la commande n'est pas payée : le paiement se fait seul, dans la boutique.
   const wa = R.estPayee(o) || o.payment.status === 'refunded' ? lienWhatsApp(o.customer && o.customer.phone, messageClient(o)) : '';
   const agir = async (action, extra) => {
-    if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: R.estPayee(o) ? 'Les articles retournent en stock. Le client a payé : remboursez-le sur son numéro Mobile Money, puis notez-le ici.' : 'Les articles retournent en stock. Si le client valide le paiement malgré tout, la commande se rouvrira avec un point à vérifier.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
-    if (action === 'doublon' && !(await confirmer({ titre: 'Le client a bien été remboursé ?', texte: `Confirmez seulement après lui avoir renvoyé ${doubles.length > 1 ? `${doubles.length} × ` : ''}${dollars(o.total)} sur son numéro ${o.payment.label}${o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}. La commande, elle, reste payée.`, ok: 'Oui, c’est remboursé', annuler: 'Retour' }))) return;
+    if (action === 'cancel' && !(await confirmer({ titre: `Annuler la commande #${o.number} ?`, texte: R.estPayee(o) ? `Les articles retournent en stock. Le client a payé : remboursez-le ${R.estCarte(o.payment.method) ? 'sur sa carte, depuis votre espace FlexPay' : 'sur son numéro Mobile Money'}, puis notez-le ici.` : 'Les articles retournent en stock. Si le client valide le paiement malgré tout, la commande se rouvrira avec un point à vérifier.', ok: 'Annuler la commande', annuler: 'Garder', danger: true }))) return;
+    if (action === 'doublon' && !(await confirmer({ titre: 'Le client a bien été remboursé ?', texte: `Confirmez seulement après lui avoir renvoyé ${doubles.length > 1 ? `${doubles.length} × ` : ''}${dollars(o.total)} ${R.estCarte(o.payment.method) ? 'sur sa carte' : `sur son numéro ${o.payment.label}${o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}`}. La commande, elle, reste payée.`, ok: 'Oui, c’est remboursé', annuler: 'Retour' }))) return;
     if (action === 'paid' && !(await confirmer({ titre: 'Marquer comme payée à la main ?', texte: `Seulement si vous avez reçu ${dollars(o.total)} en dehors de l’application : vérifiez d’abord dans votre compte ${o.payment.label}. D’habitude, la commande se confirme toute seule dès que l’opérateur valide le paiement.`, ok: 'Oui, j’ai reçu l’argent', annuler: 'Retour' }))) return;
     setOccupe(action);
     try {
@@ -130,7 +130,7 @@ export function Commande() {
           {doubles.length ? (
             <Note ton="danger" icone="portefeuille">
               <b>Paiement reçu {doubles.length > 1 ? `${doubles.length + 1} fois` : 'deux fois'}</b>
-              <p>Le client a validé {doubles.length > 1 ? 'plusieurs paiements' : 'un deuxième paiement'} pour cette commande. Renvoyez-lui {doubles.length > 1 ? `${doubles.length} × ` : ''}<b>{dollars(o.total)}</b> sur son numéro {o.payment.label}{o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}, puis confirmez ici.</p>
+              <p>Le client a validé {doubles.length > 1 ? 'plusieurs paiements' : 'un deuxième paiement'} pour cette commande. Renvoyez-lui {doubles.length > 1 ? `${doubles.length} × ` : ''}<b>{dollars(o.total)}</b> {R.estCarte(o.payment.method) ? 'sur sa carte (depuis votre espace FlexPay)' : <>sur son numéro {o.payment.label}{o.payment.phone ? ` (${telephone(o.payment.phone)})` : ''}</>}, puis confirmez ici.</p>
               <ul class="points">{doubles.map((d, i) => <li key={i}>Référence <span class="code">{d.reference || d.id}</span>{d.at ? ` · ${dateHeure(d.at)}` : ''}</li>)}</ul>
               <div class="rangee-l espace-haut">{bouton('doublon', 'coche', 'Double paiement remboursé', false)}</div>
             </Note>

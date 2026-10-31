@@ -204,7 +204,7 @@ export function Plus() {
           <>
             <p class="intertitre">Réglages</p>
             <div class="menu">
-              {item(lien('/reglages/paiements'), 'portefeuille', 'Paiements Mobile Money', ms.length ? ms.map((m) => m.label).join(', ') : 'À configurer')}
+              {item(lien('/reglages/paiements'), 'portefeuille', 'Paiements', ms.length ? ms.map((m) => m.label).join(', ') : 'À configurer')}
               {item(lien('/reglages/livraison'), 'camion', 'Livraison', c.zones.map((z) => z.name).join(', '))}
               {item(lien('/reglages/general'), 'reglages', 'Général', 'Contact, devise, échanges, statistiques, exemples')}
               {item(lien('/reglages/legal'), 'recu', 'Informations légales', 'RCCM, adresse, conditions de vente')}

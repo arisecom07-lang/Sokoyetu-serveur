@@ -393,6 +393,8 @@ html:not(.vt) .appli { animation: fondu var(--moyen) ease both; }
 .attente-onde .ic { --ic: 34px; }
 .attente-onde::before, .attente-onde::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--op) 45%, transparent); animation: onde 2.4s var(--sortie) infinite; }
 .attente-onde::after { animation-delay: 1.2s; }
+/* Carte : son bleu, éclairci sur fond sombre pour rester lisible. */
+:root[data-theme="dark"] .attente-carte { --op: #7F9BEA; }
 .attente-logo { position: absolute; right: -6px; bottom: -4px; z-index: 1; box-shadow: 0 0 0 3px var(--surface); }
 .attente-logo[data-op="mpesa"] { box-shadow: inset 0 0 0 1px rgba(26, 18, 12, .12), 0 0 0 3px var(--surface); }
 @keyframes onde { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
@@ -404,6 +406,11 @@ html:not(.vt) .appli { animation: fondu var(--moyen) ease both; }
 .paiement-icone { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); }
 .paiement-icone .ic { --ic: 36px; }
 .paiement-icone.danger { background: var(--danger-doux); color: var(--danger); }
+/* Page de test du paiement par carte (mode test) : une carte dessinée, sans marque. */
+.carte-test-visuel { width: 100%; max-width: 340px; aspect-ratio: 1.586; margin: 0 auto var(--e4); padding: 18px 20px; border-radius: 16px; display: grid; align-content: space-between; color: #fff; background: linear-gradient(135deg, #2B4CB0, #14275F); box-shadow: var(--ombre-2); }
+.carte-test-puce { width: 40px; height: 30px; border-radius: 6px; background: linear-gradient(135deg, #E8C877, #B8913A); }
+.carte-test-numero { font-size: 20px; letter-spacing: .1em; font-weight: 600; }
+.carte-test-bas { display: flex; justify-content: space-between; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
 .attente-paiement { border-color: color-mix(in srgb, var(--alerte) 40%, var(--ligne)); background: var(--alerte-doux); margin-top: 0; }
 .attente-paiement .menu-icone { color: var(--alerte); }
 

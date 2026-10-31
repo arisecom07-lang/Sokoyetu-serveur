@@ -140,7 +140,7 @@ routerAdd('POST', '/api/sokoyetu/commander', (e) => {
   }
   if (deja) return e.json(200, C.reponseClient(deja.id, C.suivre(e.app, deja)));
   if (erreur) return e.json(400, erreur);
-  const doc = C.demander(e.app, e.app.findRecordById('orders', id), { callbackUrl: C.adresseNotification(e) });
+  const doc = C.demander(e.app, e.app.findRecordById('orders', id), Object.assign({ callbackUrl: C.adresseNotification(e) }, C.adressesCarte(e, id)));
   return e.json(200, C.reponseClient(id, doc));
 }, LIMITE.commande);
 
@@ -151,7 +151,7 @@ routerAdd('GET', '/api/sokoyetu/paiement/{id}', (e) => {
   return e.json(200, C.reponseClient(rec.id, C.suivre(e.app, rec)));
 });
 
-// Nouvelle demande de paiement (refusée, rien reçu sur le téléphone, autre opérateur ou autre numéro), même commande.
+// Nouvelle demande de paiement (refusée, rien reçu sur le téléphone, autre opérateur ou autre numéro, carte), même commande.
 // Une seule nouvelle demande à la fois par commande (double appui, deux onglets) : sinon deux demandes valides en même temps.
 routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
   const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
@@ -163,15 +163,36 @@ routerAdd('POST', '/api/sokoyetu/paiement/{id}/relancer', (e) => {
     const d = C.suivre(e.app, rec);
     const raison = R.relancePossible(d);
     if (raison) return e.json(400, { message: raison });
-    if (d.payment.status === 'pending' && Date.now() - Number(d.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
+    // Carte en cours : le client revient de la page sécurisée (annulé, refusé) et peut repartir tout de suite.
+    if (d.payment.status === 'pending' && !R.estCarte(d.payment.method) && Date.now() - Number(d.payment.startedAt || 0) < R.RELANCE_APRES_S * 1000) return e.json(400, { message: 'La demande de paiement vient d’être envoyée : regardez votre téléphone, puis réessayez dans quelques secondes si rien n’arrive.' });
     const b = S.corps(e);
     const moyen = R.moyensDePaiement(S.configuration(e.app)).find((m) => m.k === (b.method || d.payment.method));
     if (!moyen) return e.json(400, { message: 'Ce mode de paiement n’est pas disponible.', champ: 'method' });
-    const tel = R.valider.mobileMoney(b.phone || d.payment.phone);
-    if (!tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
-    const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), { callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel });
+    const tel = moyen.carte ? '' : R.valider.mobileMoney(b.phone || d.payment.phone);
+    if (!moyen.carte && !tel) return e.json(400, { message: `Numéro ${moyen.label} invalide : 10 chiffres, commençant par 08 ou 09.`, champ: 'payphone' });
+    const doc = C.demander(e.app, e.app.findRecordById('orders', rec.id), Object.assign({ callbackUrl: C.adresseNotification(e), methode: moyen.k, label: moyen.label, telephone: tel }, C.adressesCarte(e, rec.id)));
     return e.json(200, C.reponseClient(rec.id, doc));
   } finally { st.remove(cle); }
+}, LIMITE.petite);
+
+// Mode test : la page de paiement par carte de la boutique remplace celle du fournisseur ; { issue: ok | refus | annule }.
+// Fermée dès qu'un vrai fournisseur encaisse.
+routerAdd('POST', '/api/sokoyetu/paiement/{id}/carte-test', (e) => {
+  const S = require(`${__hooks}/lib/serveur.js`); const R = S.R;
+  const C = require(`${__hooks}/lib/commandes.js`); const P = require(`${__hooks}/lib/paiement.js`);
+  const rec = C.commandeDuClient(e);
+  const d = S.lire(rec); const issue = String(S.corps(e).issue || '');
+  if (P.fournisseur() !== 'simulation' || !d.payment || d.payment.provider !== 'simulation' || !R.estCarte(d.payment.method)) return e.json(404, { message: 'Page de test indisponible : le paiement par carte passe par la page sécurisée du fournisseur.' });
+  if (['ok', 'refus', 'annule'].indexOf(issue) < 0) return e.json(400, { message: 'Issue inconnue.' });
+  if (d.status === 'open' && d.payment.status === 'pending') {
+    e.app.runInTransaction((tx) => {
+      const r = tx.findRecordById('orders', rec.id); const x = S.lire(r);
+      if (x.payment.status !== 'pending' || x.payment.providerId !== d.payment.providerId) return;
+      x.payment.simulation = { id: x.payment.providerId, issue };
+      S.enregistrerCommande(tx, r, x);
+    });
+  }
+  return e.json(200, C.reponseClient(rec.id, C.suivre(e.app, e.app.findRecordById('orders', rec.id), { intervalle: 1 })));
 }, LIMITE.petite);
 
 // Le fournisseur annonce le résultat d'un paiement. Toujours revérifié auprès de lui ; toujours répondu 200.

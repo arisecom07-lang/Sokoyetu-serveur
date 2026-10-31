@@ -36,6 +36,7 @@ const P = {
   boutique: <><path d="M4 9.5 5.5 4h13L20 9.5a3 3 0 0 1-5.3 1.8A3 3 0 0 1 12 12.5a3 3 0 0 1-2.7-1.2A3 3 0 0 1 4 9.5z" /><path d="M5.5 12.5V20h13v-7.5M10 20v-4h4v4" /></>,
   horloge: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4.5l3 1.8" /></>,
   portefeuille: <><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><rect x="4" y="8" width="16" height="11" rx="2.6" /><path d="M16 13.5h1.5" /></>,
+  carte: <><rect x="3" y="5.5" width="18" height="13" rx="2.4" /><path d="M3 9.8h18M6.5 14.6h4" /></>,
   repere: <><path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></>,
   plusieurs: <><circle cx="6" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="18" cy="12" r="1.4" /></>,
   lune: <path d="M19.5 14.2A7.6 7.6 0 0 1 9.8 4.5a7.6 7.6 0 1 0 9.7 9.7z" />,

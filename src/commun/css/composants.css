@@ -110,6 +110,8 @@ select.saisie { padding-right: 40px; background-image: url("data:image/svg+xml,%
 .logo-op[data-op="airtel"] { background-image: url(../marque/operateurs/airtel.webp); }
 .logo-op[data-op="orange"] { background-image: url(../marque/operateurs/orange.webp); }
 :root[data-theme="dark"] .logo-op[data-op="orange"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+.logo-op[data-op="carte"] { background-image: linear-gradient(135deg, #2B4CB0, #14275F); }
+.logo-op[data-op="carte"] .ic { --ic: calc(var(--t) * .62); }
 .choix-icone .logo-op { --t: 42px; }
 .mode-op { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
 .mode-op .logo-op { --t: 22px; }

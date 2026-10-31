@@ -34,6 +34,8 @@ export const rayons = computed(() => catalogue.value.collections.filter((c) => c
 export const rayonsParId = computed(() => new Map(catalogue.value.collections.map((c) => [c.id, c])));
 export const bannieres = computed(() => catalogue.value.banners.filter((b) => b.active !== false).sort(parOrdre));
 export const moyensPaiement = computed(() => R.moyensDePaiement(cfg.value));
+/* La boutique accepte la carte Visa / Mastercard (en plus du Mobile Money). */
+export const carteAcceptee = computed(() => moyensPaiement.value.some((m) => m.carte));
 /* Comptes clients : proposés seulement quand le serveur peut envoyer les codes (WhatsApp d'abord, SMS en secours). */
 export const comptesOuverts = computed(() => !!(catalogue.value.config && catalogue.value.config.accounts && catalogue.value.config.accounts.open));
 export const canauxCodes = computed(() => (catalogue.value.config && catalogue.value.config.accounts && catalogue.value.config.accounts.channels) || ['sms']);

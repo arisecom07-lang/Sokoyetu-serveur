@@ -18,7 +18,7 @@ import { Rayons, Rayon, Nouveautes, Provenance, Recherche, Favoris } from './pag
 import { Produit } from './pages/produit.jsx';
 import { Panier, PanierPartage } from './pages/panier.jsx';
 import { Commander } from './pages/commander.jsx';
-import { Paiement } from './pages/paiement.jsx';
+import { Paiement, CarteTest } from './pages/paiement.jsx';
 import { Merci, Compte, Commandes, Suivi, Retrouver } from './pages/compte.jsx';
 import { Connexion } from './pages/connexion.jsx';
 import { Infos } from './pages/infos.jsx';
@@ -29,9 +29,9 @@ import { MesAvis } from './pages/avis.jsx';
 import { MaCagnotte, ouvrirCadeauBienvenue } from './pages/cagnotte.jsx';
 import { lireLienParrainage } from './fidelite.js';
 
-const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos, notifications: Notifications, discussion: Discussion, avis: MesAvis, cagnotte: MaCagnotte };
+const PAGES = { accueil: Accueil, rayons: Rayons, rayon: Rayon, nouveautes: Nouveautes, 'en-stock': Provenance, 'import-chine': Provenance, recherche: Recherche, favoris: Favoris, produit: Produit, panier: Panier, 'panier-partage': PanierPartage, commander: Commander, paiement: Paiement, 'carte-test': CarteTest, merci: Merci, compte: Compte, commandes: Commandes, retrouver: Retrouver, connexion: Connexion, suivi: Suivi, infos: Infos, notifications: Notifications, discussion: Discussion, avis: MesAvis, cagnotte: MaCagnotte };
 /* Ce qui occupe le bas de l'écran du téléphone : navigation, barre d'action, ou les deux. */
-const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', 'panier-partage': 'barre', paiement: '', merci: '', recherche: '', discussion: 'barre' };
+const BAS = { produit: 'barre', commander: 'barre', panier: 'nav-barre', 'panier-partage': 'barre', paiement: '', 'carte-test': '', merci: '', recherche: '', discussion: 'barre' };
 
 function Consentement() {
   const c = cfg.value;

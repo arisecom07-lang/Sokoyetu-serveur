@@ -32,22 +32,22 @@ await controler('Boutique · fenêtre de partage', BASE + '/p/ex-p03/sac-bandoul
 await controler('Boutique · infos', BASE + '/infos/conditions', '.page');
 // Paiement, reçu et suivi : deux commandes de test (paiement accepté, paiement refusé), suivies sur ce téléphone.
 const json = (corps) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
-async function commande(payeur) {
+async function commande(payeur, method = 'mpesa') {
   const items = [{ productId: 'ex-p15', qty: 1 }];
   const dv = await (await fetch(BASE + '/api/sokoyetu/devis', json({ items, zoneId: 'retrait' }))).json();
   const t = 'axe' + Date.now() + Math.random().toString(16).slice(2, 12) + 'abcdefghij';
-  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: '0991231234' }, shipping: { zoneId: 'retrait' }, items, payment: { method: 'mpesa', phone: payeur }, total: dv.total }))).json();
+  const r = await (await fetch(BASE + '/api/sokoyetu/commander', json({ token: t, termsAccepted: true, customer: { name: 'Essai Accès', phone: '0991231234' }, shipping: { zoneId: 'retrait' }, items, payment: { method, phone: payeur }, total: dv.total }))).json();
   return { id: r.id, t };
 }
 const jetonAdmin = (await (await fetch(BASE + '/api/collections/admins/auth-with-password', json({ identity: 'admin@sokoyetu.test', password: 'Sokoyetu-2026' }))).json()).token;
-// Cagnotte de fidélité et parrainage ouverts le temps du contrôle (réglages remis à la fin).
+// Paiement par carte, cagnotte de fidélité et parrainage ouverts le temps du contrôle (réglages remis à la fin).
 const reglages = (doc) => fetch(BASE + '/api/collections/config/records/store', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc }) });
 const config = (await (await fetch(BASE + '/api/collections/config/records/store', { headers: { Authorization: jetonAdmin } })).json()).doc;
-await reglages({ ...config, loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } });
+await reglages({ ...config, payments: { ...config.payments, carte: { enabled: true } }, loyalty: { enabled: true, pct: 2 }, referral: { enabled: true, reward: 3, welcome: 2, min: 10 } });
 const article = await (await fetch(BASE + '/api/collections/products/records/ex-p15', { headers: { Authorization: jetonAdmin } })).json();
 await fetch(BASE + '/api/collections/products/records/ex-p15', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: jetonAdmin }, body: JSON.stringify({ doc: { ...article.doc, stock: 10 } }) });
-const payee = await commande('0991231234'); const refusee = await commande('0991230000');
-await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee]);
+const payee = await commande('0991231234'); const refusee = await commande('0991230000'); const parCarte = await commande('', 'carte');
+await p.evaluate((l) => { localStorage.setItem('sokoyetu:mesCommandes', JSON.stringify(l)); localStorage.setItem('sokoyetu:panier', JSON.stringify([{ productId: 'ex-p15', qty: 1 }])); }, [payee, refusee, parCarte]);
 await controler('Boutique · commande : avec ou sans compte', BASE + '/commander', '.page-choix-compte');
 await controler('Boutique · créer un compte', BASE + '/compte/connexion?pour=commande&retour=/commander', '.page-connexion');
 await controler('Boutique · code de connexion', BASE + '/compte/connexion?retour=/compte', '.page-connexion', async () => {
@@ -58,7 +58,15 @@ await controler('Boutique · commande, paiement', BASE + '/commander', '.page-co
   await p.fill('input[autocomplete="name"]', 'Essai Accès'); await p.fill('input[type=tel]', '0991231234'); await p.click('.choix >> text=Retrait');
   await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement');
 });
+await controler('Boutique · commande, paiement par carte', BASE + '/commander', '.page-commande', async () => {
+  await p.click('.barre-action .btn-primaire'); await p.waitForSelector('.carte-paiement'); await p.click('.choix:has-text("Carte bancaire")'); await p.waitForSelector('.carte-paiement .note');
+});
 await controler('Boutique · paiement refusé', BASE + '/paiement/' + refusee.id, '.paiement-attente.en-echec');
+await controler('Boutique · paiement par carte à terminer', BASE + '/paiement/' + parCarte.id, '.paiement-attente:has-text("Terminez le paiement par carte")');
+await controler('Boutique · page de test de la carte', BASE + '/paiement/' + parCarte.id + '/carte-test', '.carte-test-visuel');
+await controler('Boutique · carte refusée', BASE + '/paiement/' + parCarte.id + '/carte-test', '.carte-test-visuel', async () => {
+  await p.click('button:has-text("Simuler une carte refusée")'); await p.waitForSelector('.paiement-attente.en-echec');
+});
 await controler('Boutique · reçu', BASE + '/merci/' + payee.id, '.recu');
 await controler('Boutique · suivi', BASE + '/suivi/' + payee.id, '.page-suivi');
 await controler('Boutique · retrouver une commande', BASE + '/compte/retrouver', '.page-retrouver');

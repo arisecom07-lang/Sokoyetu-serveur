@@ -4,7 +4,7 @@ Sokoyetu, ce sont **deux applications séparées** qui partagent la même base d
 
 | Adresse | Pour qui | Contenu |
 |---|---|---|
-| **https://sokoyakwetu.com** | vos clients | la boutique : rayons, articles, panier, paiement Mobile Money dans l'application, reçu, suivi de commande |
+| **https://sokoyakwetu.com** | vos clients | la boutique : rayons, articles, panier, paiement Mobile Money (ou carte Visa / Mastercard) dans l'application, reçu, suivi de commande |
 | **https://admin.sokoyakwetu.com** | vous | l'administration : commandes payées en direct, préparation, produits, stock, réglages |
 
 La boutique ne contient aucun lien ni aucun code de l'administration. Depuis l'administration, le bouton **Voir la boutique** ouvre le site comme vos clients le voient.
@@ -22,7 +22,7 @@ Le fichier **`sokoyetu-serveur.zip`** contient tout :
 | `installer.sh` | Installation complète : PocketBase 0.40.5 (empreinte vérifiée), pare-feu, service automatique, HTTPS, compte administrateur |
 | `mise-a-jour.sh` | Installe une nouvelle version ; sauvegarde la base avant ; garde produits, commandes, photos et réglages |
 | `mot-de-passe.sh` | Nouveau mot de passe administrateur (mot de passe oublié) |
-| `paiement.sh` | Branche le paiement Mobile Money (FlexPay) ou le mode test |
+| `paiement.sh` | Branche le paiement Mobile Money et carte (FlexPay) ou le mode test |
 | `codes.sh` | Envoi des codes de connexion des comptes clients (WhatsApp, SMS de secours) |
 | `ia.sh` | Active ou retire l'assistant IA des fiches produits, règle son plafond du jour |
 | `sauvegarde.sh` | Liste, crée, vérifie et restaure les sauvegardes de la base |
@@ -148,7 +148,7 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 3. Dès que l'opérateur confirme, la commande est **validée** et le client reçoit son **reçu** : numéro de commande unique (6 caractères, ex. `K7M2QX`), articles, frais, total payé, référence de la transaction et date de livraison prévue. Il peut le partager ou l'enregistrer en PDF.
 4. Avec ce numéro et son téléphone, il **retrouve sa commande** depuis n'importe quel appareil (**Mon compte → Retrouver une commande**).
 
-- **Frais de service** : 2 % du panier (après réduction, hors livraison) sont ajoutés au total avant le paiement. Ils vous reviennent (ce ne sont pas les frais de FlexPay). Le pourcentage se règle dans **Réglages → Paiements Mobile Money** (0 à 20 %).
+- **Frais de service** : 2 % du panier (après réduction, hors livraison) sont ajoutés au total avant le paiement. Ils vous reviennent (ce ne sont pas les frais de FlexPay). Le pourcentage se règle dans **Réglages → Paiements** (0 à 20 %). Il est le même pour la carte.
 - **Stock réservé** pendant le paiement (30 minutes par défaut, réglable de 5 à 120). Sans paiement dans ce délai, la commande s'annule toute seule et les articles reviennent en vente. Paiement refusé (solde insuffisant, PIN annulé…) : le client réessaie sur la même commande, avec le même ou un autre numéro.
 - **Administration** : la commande apparaît « Paiement en cours » pendant que le client valide, puis l'alerte **Commande payée** sonne (écran, son, notification) dès la confirmation. Vous n'avez rien à vérifier : **Commencer la préparation → Expédier → Livrée**. Les tableaux de bord ne comptent que les commandes payées.
 - Le serveur ne croit jamais une notification sur parole : il revérifie chaque paiement auprès de FlexPay, et revérifie aussi chaque minute les paiements en cours.
@@ -156,7 +156,7 @@ La première fois, l'ancien script installe le nouveau ; la deuxième fois, le n
 ### Brancher FlexPay (une fois)
 
 1. Ouvrez un **compte marchand FlexPay** (flexpay.cd). Vous recevez un **code marchand** et un **jeton d'accès** (token).
-2. Donnez à FlexPay l'adresse de notification : `https://sokoyakwetu.com/api/sokoyetu/notification/flexpay` (aussi affichée, avec un bouton Copier, dans **Réglages → Paiements Mobile Money**).
+2. Donnez à FlexPay l'adresse de notification : `https://sokoyakwetu.com/api/sokoyetu/notification/flexpay` (aussi affichée, avec un bouton Copier, dans **Réglages → Paiements**).
 3. Si FlexPay vous donne un accès de test, essayez d'abord : `sudo /opt/sokoyetu/paiement.sh flexpay-essai CODE_MARCHAND 'JETON'`, puis passez une commande de quelques centimes.
 4. Pour encaisser pour de vrai : `sudo /opt/sokoyetu/paiement.sh flexpay CODE_MARCHAND 'JETON'`.
 
@@ -165,6 +165,17 @@ Le jeton reste sur le serveur (`/opt/sokoyetu/sokoyetu.env`, lisible par l'admin
 **Mode test** (`sudo /opt/sokoyetu/paiement.sh test`) : aucun argent ; le paiement est confirmé tout seul après quelques secondes, refusé si le numéro se termine par 0000. Un bandeau « Mode test » s'affiche dans la boutique et l'administration. Ne l'ouvrez pas au public dans ce mode.
 
 À confirmer avec FlexPay à l'ouverture du compte : les opérateurs proposés, la devise (USD) et le format exact de leurs réponses. L'adaptateur suit leur documentation publique ; un essai sur leur environnement de test le valide avant d'encaisser.
+
+### Paiement par carte Visa / Mastercard (facultatif)
+
+Le client choisit **Carte bancaire** à la place d'un opérateur : il n'a aucun numéro à saisir. La boutique l'envoie sur la **page sécurisée de FlexPay**, où il tape sa carte (la boutique ne voit jamais son numéro), puis il revient sur la boutique, qui revérifie le paiement auprès de FlexPay avant de valider la commande. Carte refusée ou page quittée : il réessaie, ou paie par Mobile Money, sur la même commande.
+
+1. Demandez à FlexPay d'ouvrir le **paiement par carte** (VPOS) sur votre compte marchand, et leur commission sur la carte (souvent plus élevée que sur le Mobile Money).
+2. Dans l'administration, **Réglages → Paiements → Carte Visa / Mastercard** : activez-la. Elle reste fermée tant que vous ne l'activez pas.
+3. Si FlexPay vous donne une autre adresse que `https://cardpayment.flexpay.cd/v1.1/pay` pour le paiement par carte : `sudo /opt/sokoyetu/paiement.sh carte 'https://…'` (sans adresse, la commande remet celle par défaut).
+4. Passez une commande de quelques centimes par carte avant de l'annoncer.
+
+Remboursement d'un paiement par carte (doublon, commande annulée) : depuis votre espace marchand FlexPay, sur la carte du client. **En mode test**, une page de test de la boutique remplace celle de FlexPay : on y choisit « Payer », « Carte refusée » ou « Annuler », sans argent.
 
 ---
 

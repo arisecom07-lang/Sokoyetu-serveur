@@ -189,10 +189,13 @@ export function CaseACocher({ coche, onClick, children }) {
   );
 }
 
-/* Logo d'un opérateur Mobile Money (images : commun/marque/operateurs/, styles .logo-op). Sans logo : son initiale sur sa couleur. */
+/*
+ * Logo d'un opérateur Mobile Money (images : commun/marque/operateurs/, styles .logo-op). Sans logo : son initiale sur sa couleur.
+ * Carte bancaire : une carte dessinée, sans logo de marque.
+ */
 export function LogoOperateur({ k, m, taille, classe }) {
-  const o = m || {};
-  return <span class={classes('logo-op', classe)} data-op={k || o.k} style={{ '--op': o.color, '--t': taille ? `${taille}px` : undefined }} aria-hidden="true">{o.init || String(o.label || 'M')[0]}</span>;
+  const o = m || {}; const op = k || o.k;
+  return <span class={classes('logo-op', classe)} data-op={op} style={{ '--op': o.color, '--t': taille ? `${taille}px` : undefined }} aria-hidden="true">{op === 'carte' || o.carte ? <Icone n="carte" /> : o.init || String(o.label || 'M')[0]}</span>;
 }
 
 export function Choix({ actif, onClick, icone, couleur, titre, sous, desactive }) {
